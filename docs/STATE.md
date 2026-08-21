@@ -14,15 +14,15 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | P6 (Changes & approval) in progress |
-| **Last completed** | `P6.3` Bulk merit upload (`POST /changes/bulk-upload`) — `[x]`, 105/105 backend tests. |
-| **Next step** | `P6.4` — Propose-change dialog with the live impact panel; note required outside band. |
+| **Last completed** | `P6.4` Propose-change dialog with the live impact panel — `[x]`, 107/107 backend tests. |
+| **Next step** | `P6.5` — Changes screen with tabs in the URL and inline approve/reject. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
-Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6.1`–`P6.3`.
-Blocked: `P0.3`. Untouched: `P6.4`–`P9`.
+Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6.1`–`P6.4`.
+Blocked: `P0.3`. Untouched: `P6.5`–`P9`.
 
 ---
 

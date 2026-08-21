@@ -166,6 +166,17 @@ public class EffectiveDating {
 		return saved;
 	}
 
+	/**
+	 * P6.4: computes exactly what {@link #apply} would produce — annualisation, FX normalisation,
+	 * band lookup, compa-ratio, range penetration — without persisting anything. The propose-change
+	 * dialog's live impact panel calls this so its figures are never client-side arithmetic; the
+	 * returned {@link CompensationRecord} is never saved and carries no id.
+	 */
+	public CompensationRecord preview(UUID employeeId, LocalDate effectiveFrom, BigDecimal amount, String currency) {
+		Employee employee = employeeRepository.findById(employeeId).orElseThrow(NoSuchElementException::new);
+		return buildRecord(employee, effectiveFrom, null, amount, currency, "ANNUAL", null, null, null);
+	}
+
 	private CompensationRecord buildRecord(
 			Employee employee, LocalDate effectiveFrom, LocalDate effectiveTo, BigDecimal amount, String currency,
 			String payFrequency, String changeReason, UUID changeId, UUID createdBy) {

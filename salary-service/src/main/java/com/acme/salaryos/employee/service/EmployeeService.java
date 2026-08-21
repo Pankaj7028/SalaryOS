@@ -22,6 +22,7 @@ import com.acme.salaryos.employee.dto.EmployeeDetailResponse;
 import com.acme.salaryos.employee.dto.EmployeeSummaryResponse;
 import com.acme.salaryos.employee.dto.EmployeeUpdateRequest;
 import com.acme.salaryos.employee.dto.PeerComparisonResponse;
+import com.acme.salaryos.employee.dto.PeerImpactPreview;
 import com.acme.salaryos.employee.repository.EmployeeRepository;
 import com.acme.salaryos.employee.spec.EmployeeSpecifications;
 import com.acme.salaryos.reference.domain.Location;
@@ -165,6 +166,59 @@ public class EmployeeService {
 	 */
 	public PeerComparisonResponse peers(UUID id) {
 		Employee employee = employeeRepository.findById(id).orElseThrow(NoSuchElementException::new);
+		CohortComps cohort = fetchCohort(employee);
+
+		if (cohort.normalizedBases().size() < PEER_COHORT_SUPPRESSION_THRESHOLD) {
+			return new PeerComparisonResponse(cohort.normalizedBases().size(), true, null, null, null, null);
+		}
+
+		BigDecimal selfValue = cohort.byEmployeeId().containsKey(id) ? cohort.byEmployeeId().get(id).getNormalizedAnnualBase() : null;
+		String baseCurrency = "USD";
+		Money p25 = new Money(percentile(cohort.normalizedBases(), 0.25), baseCurrency);
+		Money median = new Money(percentile(cohort.normalizedBases(), 0.50), baseCurrency);
+		Money p75 = new Money(percentile(cohort.normalizedBases(), 0.75), baseCurrency);
+		Integer percentileRank = selfValue == null ? null : percentileRankOf(cohort.normalizedBases(), selfValue);
+
+		return new PeerComparisonResponse(cohort.normalizedBases().size(), false, p25, median, p75, percentileRank);
+	}
+
+	/**
+	 * P6.4: the propose-change dialog's "peer percentile before and after" — same cohort and same
+	 * p25/median/p75 as {@link #peers}, since one person's hypothetical raise doesn't move the
+	 * market. Only the rank changes: {@code hypotheticalNormalizedAnnualBase} replaces this
+	 * employee's own current contribution to the distribution before the "after" rank is computed,
+	 * so a raise never appears to move anyone else's position.
+	 */
+	public PeerImpactPreview peersImpact(UUID id, BigDecimal hypotheticalNormalizedAnnualBase) {
+		Employee employee = employeeRepository.findById(id).orElseThrow(NoSuchElementException::new);
+		CohortComps cohort = fetchCohort(employee);
+
+		if (cohort.normalizedBases().size() < PEER_COHORT_SUPPRESSION_THRESHOLD) {
+			return new PeerImpactPreview(cohort.normalizedBases().size(), true, null, null, null, null, null);
+		}
+
+		BigDecimal selfValue = cohort.byEmployeeId().containsKey(id) ? cohort.byEmployeeId().get(id).getNormalizedAnnualBase() : null;
+		String baseCurrency = "USD";
+		Money p25 = new Money(percentile(cohort.normalizedBases(), 0.25), baseCurrency);
+		Money median = new Money(percentile(cohort.normalizedBases(), 0.50), baseCurrency);
+		Money p75 = new Money(percentile(cohort.normalizedBases(), 0.75), baseCurrency);
+		Integer percentileBefore = selfValue == null ? null : percentileRankOf(cohort.normalizedBases(), selfValue);
+
+		List<BigDecimal> afterBases = new java.util.ArrayList<>(cohort.normalizedBases());
+		if (selfValue != null) {
+			afterBases.remove(selfValue);
+		}
+		afterBases.add(hypotheticalNormalizedAnnualBase);
+		afterBases.sort(java.util.Comparator.naturalOrder());
+		Integer percentileAfter = percentileRankOf(afterBases, hypotheticalNormalizedAnnualBase);
+
+		return new PeerImpactPreview(cohort.normalizedBases().size(), false, p25, median, p75, percentileBefore, percentileAfter);
+	}
+
+	private record CohortComps(List<BigDecimal> normalizedBases, Map<UUID, EmployeeCurrentComp> byEmployeeId) {
+	}
+
+	private CohortComps fetchCohort(Employee employee) {
 		Location location = locationRepository.findById(employee.getLocationId()).orElseThrow(NoSuchElementException::new);
 		List<UUID> countryLocationIds = locationRepository.findByCountryCode(location.getCountryCode()).stream()
 				.map(Location::getId)
@@ -184,19 +238,7 @@ public class EmployeeService {
 				.sorted()
 				.toList();
 
-		int cohortSize = normalizedBases.size();
-		if (cohortSize < PEER_COHORT_SUPPRESSION_THRESHOLD) {
-			return new PeerComparisonResponse(cohortSize, true, null, null, null, null);
-		}
-
-		BigDecimal selfValue = comps.containsKey(id) ? comps.get(id).getNormalizedAnnualBase() : null;
-		String baseCurrency = "USD";
-		Money p25 = new Money(percentile(normalizedBases, 0.25), baseCurrency);
-		Money median = new Money(percentile(normalizedBases, 0.50), baseCurrency);
-		Money p75 = new Money(percentile(normalizedBases, 0.75), baseCurrency);
-		Integer percentileRank = selfValue == null ? null : percentileRankOf(normalizedBases, selfValue);
-
-		return new PeerComparisonResponse(cohortSize, false, p25, median, p75, percentileRank);
+		return new CohortComps(normalizedBases, comps);
 	}
 
 	/** FR-6.7: the full ledger, newest period first. */

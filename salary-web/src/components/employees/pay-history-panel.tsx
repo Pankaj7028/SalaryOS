@@ -5,17 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Money } from "@/components/comp/money";
 import { EmptyState, TableSkeleton } from "@/components/feedback/states";
 import { useCompensationHistory } from "@/lib/api/employees-queries";
-
-const REASON_LABEL: Record<string, string> = {
-  INITIAL: "Initial hire",
-  MERIT: "Merit increase",
-  PROMOTION: "Promotion",
-  MARKET_ADJUSTMENT: "Market adjustment",
-  ROLE_CHANGE: "Role change",
-  LOCATION_CHANGE: "Location change",
-  CORRECTION: "Correction",
-  DEMOTION: "Demotion",
-};
+import { CHANGE_REASON_LABEL as REASON_LABEL } from "@/lib/change-reasons";
 
 /**
  * Pay history (ui doc §8.3): the ledger, one dated entry per period. A `<Delta>` per change is

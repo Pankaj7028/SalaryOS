@@ -892,9 +892,43 @@ verified.
   >
   > Observed: `./mvnw clean verify` → `Tests run: 105, Failures: 0, Errors: 0`, `BUILD SUCCESS`
   > (1 new test in `ChangeBulkUploadTest`, 104 pre-existing).
-- [ ] **P6.4** Propose-change dialog with the live impact panel (delta, resulting compa-ratio, band
+- [x] **P6.4** Propose-change dialog with the live impact panel (delta, resulting compa-ratio, band
   marker movement, peer percentile, annualised cost); note required outside band.
   *Verify:* the panel figures match the API's computed values exactly — no client arithmetic.
+  > **Done (2026-08-21):** `EffectiveDating.preview(employeeId, effectiveFrom, amount, currency)` —
+  > reuses the private `buildRecord` helper `apply()`/`correct()` already call, so the preview is
+  > provably the exact same annualisation/FX-normalisation/band-lookup/compa-ratio math a real
+  > `apply()` would use; the returned `CompensationRecord` is never saved. `EmployeeService`'s peer
+  > cohort fetch factored out into `fetchCohort()` so `peers()` (P4.4) and the new
+  > `peersImpact(id, hypotheticalNormalizedAnnualBase)` share one cohort query — the "after" rank
+  > swaps this employee's own contribution to the distribution for the hypothetical value before
+  > re-ranking, so a raise never appears to move anyone else's percentile. `ChangeService
+  > .previewImpact()` composes both plus the band/note-required rule (reusing `EffectiveDating
+  > .bandStatus`, same as `propose()` itself) into `ChangeImpactPreviewResponse`. New endpoint
+  > `GET /changes/impact-preview` — `ADMIN_MANAGER_ANALYST`, same roles as proposing itself;
+  > `RolePermissionMatrixTest` extended to cover it.
+  >
+  > **Frontend:** `ProposeChangeDialog` (React Hook Form + Zod, `proposeChangeFormSchema` mirrors
+  > `ProposeChangeRequest`) — debounces effective date + amount 400ms, calls `impact-preview`, and
+  > renders current→proposed `<Money>`/`<Delta>`, compa-ratio, both `<BandBar>` positions (current
+  > and proposed), and peer percentile before/after, all straight from the response (no client
+  > arithmetic — CLAUDE.md §6.1). Note field becomes required precisely when `preview.data
+  > .noteRequired` is true, submit is disabled until then. `CHANGE_REASON_LABEL` deduplicated out of
+  > `PayHistoryPanel` into `src/lib/change-reasons.ts` so the ledger's history view and the propose
+  > dialog can't drift on reason labels. Employee detail's "Propose change" button is enabled
+  > whenever the employee has current comp (was `disabled` unconditionally since P4.4/P3.3).
+  >
+  > **Verified:** `./mvnw clean verify` → `Tests run: 107, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (2 new tests in `ChangeImpactPreviewTest`, 105 pre-existing). `npm run typecheck`/`lint`/`build`
+  > clean (lint: 0 errors, 3 expected library-incompatibility warnings, same category as every prior
+  > RHF/TanStack-Table warning this build). Live end-to-end against a throwaway local Postgres 17 dev
+  > DB (recipe in `docs/STATE.md`) signed in as the seeded HR_ADMIN: `impact-preview` for a raise
+  > landing in-band (105000→120000: compa-ratio 0.9545→1.0909, `noteRequired: false`) and one landing
+  > above max (105000→140000: `proposedBandStatus: ABOVE_MAX`, `noteRequired: true`) both matched the
+  > expected math exactly; confirmed the one-open-change 409 fires correctly on an employee who
+  > already had a pending change from earlier testing; proposed + submitted a real change for a
+  > second employee end to end (`DRAFT` → `PENDING`). No live browser pass this session — Chrome
+  > browser tools were not enabled; the API-level verification above is real, not assumed.
 - [ ] **P6.5** Changes screen with tabs in the URL and inline approve/reject.
   *Verify:* an approver-less role sees the tab without the actions.
 
@@ -950,8 +984,8 @@ After completion of complete P8 stop executing next P9 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P6.3` Bulk merit upload (`POST /changes/bulk-upload`) — done, `[x]`, 105/105 backend tests (2026-08-21) |
-| **Current step** | `P6.4` — Propose-change dialog with the live impact panel (delta, resulting compa-ratio, band marker movement, peer percentile, annualised cost); note required outside band. |
+| **Last completed** | `P6.4` Propose-change dialog with the live impact panel — done, `[x]`, 107/107 backend tests (2026-08-21) |
+| **Current step** | `P6.5` — Changes screen with tabs in the URL and inline approve/reject. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._

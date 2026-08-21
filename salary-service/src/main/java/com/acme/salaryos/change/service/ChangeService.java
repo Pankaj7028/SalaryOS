@@ -8,6 +8,7 @@ import com.acme.salaryos.change.dto.ChangeBulkUploadRowResult;
 import com.acme.salaryos.change.dto.ChangeResponse;
 import com.acme.salaryos.change.dto.ProposeChangeRequest;
 import com.acme.salaryos.change.dto.UpdateDraftRequest;
+import com.acme.salaryos.change.dto.ChangeImpactPreviewResponse;
 import com.acme.salaryos.change.repository.CompensationChangeRepository;
 import com.acme.salaryos.common.money.Money;
 import com.acme.salaryos.compensation.domain.CompensationRecord;
@@ -15,8 +16,11 @@ import com.acme.salaryos.compensation.domain.EmployeeCurrentComp;
 import com.acme.salaryos.compensation.effective.ApplyCommand;
 import com.acme.salaryos.compensation.effective.EffectiveDating;
 import com.acme.salaryos.compensation.repository.EmployeeCurrentCompRepository;
+import com.acme.salaryos.employee.dto.BandBoundaries;
+import com.acme.salaryos.employee.dto.PeerImpactPreview;
 import com.acme.salaryos.employee.domain.Employee;
 import com.acme.salaryos.employee.repository.EmployeeRepository;
+import com.acme.salaryos.employee.service.EmployeeService;
 import com.acme.salaryos.reference.domain.Location;
 import com.acme.salaryos.reference.repository.LocationRepository;
 import org.springframework.data.domain.Sort;
@@ -29,6 +33,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -53,6 +58,7 @@ public class ChangeService {
 	private final LocationRepository locationRepository;
 	private final SalaryBandRepository salaryBandRepository;
 	private final EffectiveDating effectiveDating;
+	private final EmployeeService employeeService;
 
 	public ChangeService(
 			CompensationChangeRepository changeRepository,
@@ -60,13 +66,15 @@ public class ChangeService {
 			EmployeeCurrentCompRepository employeeCurrentCompRepository,
 			LocationRepository locationRepository,
 			SalaryBandRepository salaryBandRepository,
-			EffectiveDating effectiveDating) {
+			EffectiveDating effectiveDating,
+			EmployeeService employeeService) {
 		this.changeRepository = changeRepository;
 		this.employeeRepository = employeeRepository;
 		this.employeeCurrentCompRepository = employeeCurrentCompRepository;
 		this.locationRepository = locationRepository;
 		this.salaryBandRepository = salaryBandRepository;
 		this.effectiveDating = effectiveDating;
+		this.employeeService = employeeService;
 	}
 
 	public List<ChangeResponse> list(UUID employeeId, String status, LocalDate fromDate, LocalDate toDate) {
@@ -79,6 +87,40 @@ public class ChangeService {
 		return changeRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "proposedAt")).stream()
 				.map(this::toResponse)
 				.toList();
+	}
+
+	/**
+	 * ui doc §8.4: the propose-change dialog's live impact panel. Computes what {@code propose()}
+	 * would produce if this exact request were submitted — delta, resulting compa-ratio, band
+	 * status, peer percentile before/after — without creating a DRAFT. Requires an existing current
+	 * comp record, same as {@code propose()} itself; a hire with no comp yet has nothing to preview
+	 * against.
+	 */
+	public ChangeImpactPreviewResponse previewImpact(UUID employeeId, LocalDate effectiveDate, BigDecimal newBaseAmount, String currency) {
+		EmployeeCurrentComp current = employeeCurrentCompRepository.findById(employeeId)
+				.orElseThrow(NoCurrentCompensationException::new);
+		CompensationRecord proposed = effectiveDating.preview(employeeId, effectiveDate, newBaseAmount, currency);
+
+		BigDecimal deltaAnnual = proposed.getAnnualBaseAmount().subtract(current.getAnnualBaseAmount());
+		BigDecimal deltaPercent = current.getAnnualBaseAmount().signum() == 0
+				? BigDecimal.ZERO
+				: deltaAnnual.divide(current.getAnnualBaseAmount(), 6, RoundingMode.HALF_UP);
+
+		SalaryBand band = proposed.getBandId() == null ? null : salaryBandRepository.findById(proposed.getBandId()).orElse(null);
+		BandBoundaries boundaries = band == null ? null : new BandBoundaries(
+				new Money(band.getMinAmount(), band.getCurrency()),
+				new Money(band.getMidAmount(), band.getCurrency()),
+				new Money(band.getMaxAmount(), band.getCurrency()));
+		String proposedBandStatus = EffectiveDating.bandStatus(proposed.getAnnualBaseAmount(), band);
+		boolean noteRequired = band != null && !"IN_BAND".equals(proposedBandStatus);
+
+		PeerImpactPreview peers = employeeService.peersImpact(employeeId, proposed.getNormalizedAnnualBase().amount());
+
+		return new ChangeImpactPreviewResponse(
+				current.getBase(), new Money(newBaseAmount, currency), new Money(deltaAnnual, currency), deltaPercent,
+				current.getCompaRatio(), proposed.getCompaRatio(), current.getRangePenetration(), proposed.getRangePenetration(),
+				current.getBandStatus(), proposedBandStatus, boundaries, noteRequired,
+				peers.cohortSize(), peers.suppressed(), peers.percentileBefore(), peers.percentileAfter());
 	}
 
 	@Transactional

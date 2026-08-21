@@ -24,3 +24,7 @@ export const employeeKeys = {
 export const bandKeys = {
   list: () => ["bands", "list"] as const,
 };
+
+export const changeKeys = {
+  impactPreview: (params: Record<string, string | undefined>) => ["changes", "impactPreview", params] as const,
+};

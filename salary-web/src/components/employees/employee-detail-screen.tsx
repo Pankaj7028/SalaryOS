@@ -1,11 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ErrorState, TableSkeleton } from "@/components/feedback/states";
 import { CurrentPayPanel } from "@/components/employees/current-pay-panel";
 import { PayHistoryPanel } from "@/components/employees/pay-history-panel";
 import { PeersPanel } from "@/components/employees/peers-panel";
+import { ProposeChangeDialog } from "@/components/changes/propose-change-dialog";
 import { ApiError } from "@/lib/api/client";
 import { useEmployee } from "@/lib/api/employees-queries";
 import { useDepartments, useJobLevels, useLocations } from "@/lib/api/reference-queries";
@@ -16,17 +18,14 @@ const STATUS_LABEL: Record<string, string> = {
   TERMINATED: "Terminated",
 };
 
-/**
- * `/employees/[id]` (ui doc §8.3). Header + Current pay + Pay history + Peers. "Propose change" is
- * disabled for the same reason as the Overview page's button (P3.3): the change-lifecycle
- * endpoints are P6, not built yet.
- */
+/** `/employees/[id]` (ui doc §8.3). Header + Current pay + Pay history + Peers + propose-change dialog (P6.4). */
 export function EmployeeDetailScreen({ id }: { id: string }) {
   const employee = useEmployee(id);
   const manager = useEmployee(employee.data?.managerId ?? "", { enabled: !!employee.data?.managerId });
   const departments = useDepartments();
   const locations = useLocations();
   const jobLevels = useJobLevels();
+  const [proposing, setProposing] = useState(false);
 
   if (employee.isLoading) {
     return <TableSkeleton columns={["300px"]} rows={6} rowHeight={32} />;
@@ -77,7 +76,7 @@ export function EmployeeDetailScreen({ id }: { id: string }) {
             <p className="type-caption text-muted-foreground">Reports to {managerName}</p>
           ) : null}
         </div>
-        <Button size="sm" disabled>
+        <Button size="sm" disabled={!person.currentBasePay} onClick={() => setProposing(true)}>
           Propose change
         </Button>
       </header>
@@ -89,6 +88,10 @@ export function EmployeeDetailScreen({ id }: { id: string }) {
           <PayHistoryPanel employeeId={person.id} />
         </div>
       </div>
+
+      {proposing ? (
+        <ProposeChangeDialog open={proposing} onOpenChange={setProposing} employee={person} />
+      ) : null}
     </div>
   );
 }

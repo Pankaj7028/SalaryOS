@@ -3,6 +3,7 @@ package com.acme.salaryos.change.web;
 import com.acme.salaryos.change.ApplyDueChangesJob;
 import com.acme.salaryos.change.dto.ApplyDueChangesResult;
 import com.acme.salaryos.change.dto.ChangeBulkUploadResult;
+import com.acme.salaryos.change.dto.ChangeImpactPreviewResponse;
 import com.acme.salaryos.change.dto.ChangeResponse;
 import com.acme.salaryos.change.dto.DecisionRequest;
 import com.acme.salaryos.change.dto.ProposeChangeRequest;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -56,6 +58,15 @@ public class ChangeController {
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
 	public ChangeResponse propose(@Valid @RequestBody ProposeChangeRequest request, @AuthenticationPrincipal UUID currentUserId) {
 		return changeService.propose(request, currentUserId);
+	}
+
+	/** ui doc §8.4: the propose-change dialog's live impact panel — same roles as proposing itself. */
+	@GetMapping("/impact-preview")
+	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
+	public ChangeImpactPreviewResponse previewImpact(
+			@RequestParam UUID employeeId, @RequestParam LocalDate effectiveDate,
+			@RequestParam BigDecimal newBaseAmount, @RequestParam String currency) {
+		return changeService.previewImpact(employeeId, effectiveDate, newBaseAmount, currency);
 	}
 
 	@PatchMapping("/{id}")
