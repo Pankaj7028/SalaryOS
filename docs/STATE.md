@@ -13,17 +13,17 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 
 | | |
 |---|---|
-| **Phase** | P7 (Insights) in progress |
-| **Last completed** | `P7.6` Overview + Pay analysis screens — `[x]`, `npm run verify` clean. Recharts installed. |
-| **Next step** | `P7.7` — Equity review screen (suppression notice, unadjusted/level-adjusted columns). |
+| **Phase** | P8 (Admin, audit, import) — not yet started |
+| **Last completed** | `P7.7` Equity review screen — `[x]`. **P7 (Insights) is fully complete.** |
+| **Next step** | `P8.1` — Users and roles admin; admin-issued reset tokens; last-HR-Admin protection. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
 Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6` (all) ·
-`P7.1`–`P7.6`.
-Blocked: `P0.3`. Untouched: `P7.7`–`P9`.
+`P7` (all).
+Blocked: `P0.3`. Untouched: `P8`–`P9`.
 
 ---
 

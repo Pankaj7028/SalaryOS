@@ -1200,8 +1200,34 @@ verified.
   > browser pass this session** — Chrome browser tools were not enabled; chart rendering, the theme-
   > switch recolour, and CSV download were verified by code review and the data-layer checks above,
   > not by eye. `next start` is up on `:3100` against the live backend if a visual check is wanted.
-- [ ] **P7.7** Equity review screen with the suppression notice and separate unadjusted /
+- [x] **P7.7** Equity review screen with the suppression notice and separate unadjusted /
   level-adjusted columns. *Verify:* the suppressed count is non-zero against the seed and is shown.
+  > **Done (2026-08-21):** `/insights/equity` — reuses P7.4's `usePayGap()` hook directly (same
+  > cache key as anywhere else it's called; no new endpoint). Unadjusted and level-adjusted render
+  > as two separately-headed sections, never merged into one figure or one row's two columns — per
+  > this step's own P7.4 methodology decision (asked and confirmed with the user there): unadjusted
+  > is the org-wide group comparison, level-adjusted is the cohort table. The suppression notice
+  > renders unconditionally, even at zero ("no cohorts were suppressed" is itself a stated, checked
+  > fact, not a silent absence) — ui doc §8.8's "with one line explaining why" is literal here: the
+  > notice names both suppression reasons (a group under five, or only one group represented).
+  >
+  > **Verified live, not just unit-tested:** hand-seeded `employee_demographics.gender` for 7 of the
+  > throwaway dev DB's active employees (asked the user first whether to keep or discard the seeded
+  > data afterward — kept, so `/insights/equity`/`/insights/pay` have something real to look at).
+  > `curl`-verified `/api/analytics/pay-gap` against this real data: `suppressedCohorts: 2` (non-zero,
+  > this step's own Verify clause) — one cohort suppressed because its two gender groups both fell
+  > under five, two more because each had only one person. Also surfaced a genuine, pre-existing dev-
+  > seed data-quality fact along the way, not a bug: one ACTIVE employee (Deepa, E-0004) has no
+  > `employee_current_comp` row at all (never had a comp record set), which is exactly why she's
+  > invisible to every analytics query that joins through the projection — correct behaviour,
+  > worth knowing about when eyeballing these screens' numbers. `/insights/equity` returns `200`
+  > with the real suppressed-cohort data rendered server-side into the RSC payload. `npm run verify`
+  > clean (lint 0 errors, same 3 pre-existing warnings; 28/28 vitest; build includes the new route).
+  > **No live browser pass this session** — Chrome browser tools were not enabled.
+  >
+  > **P7 (Insights) — complete.** All six `/api/analytics/*` endpoints, `/employees/{id}/peers`
+  > (P4.4), and three screens (`/`, `/insights/pay`, `/insights/equity`) are real, tested, and
+  > curl-verified against a live throwaway dev DB.
 
 ## P8 — Admin, audit, import
 
@@ -1238,8 +1264,8 @@ After completion of complete P8 stop executing next P9 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P7.6` Overview and Pay analysis screens — done, `[x]`, `npm run verify` clean (2026-08-21) |
-| **Current step** | `P7.7` — Equity review screen with the suppression notice and separate unadjusted/level-adjusted columns. |
+| **Last completed** | `P7.7` Equity review screen — done, `[x]`, `npm run verify` clean, suppressedCohorts=2 curl-verified (2026-08-21). **P7 complete.** |
+| **Current step** | `P8.1` — Users and roles admin; admin-issued reset tokens; last-HR-Admin protection. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._
