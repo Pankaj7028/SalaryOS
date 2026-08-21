@@ -163,8 +163,18 @@ verified.
   > the same cached container. Filtered to that test's own row instead.
   > Observed: `./mvnw clean verify` → `Tests run: 37, Failures: 0, Errors: 0`, `BUILD SUCCESS` (9.9s).
   > `grep -rn '\bdouble\b'` in `src/main` and `src/test`: only two comment mentions, no primitive use.
-- [ ] **P1.10** `NativeQuerySchemaQualificationTest`. *Verify:* it fails when you temporarily
+- [x] **P1.10** `NativeQuerySchemaQualificationTest`. *Verify:* it fails when you temporarily
   unqualify a table name, and passes when you restore it. Prove both directions.
+  > **Done (2026-08-21):** heuristic regex scanner (not a SQL parser) over every `.java` file in
+  > `src/main/java` — reconstructs the concatenated string literal(s) passed to `@Query(nativeQuery
+  > = true, ...)` or a `jdbcTemplate.<method>(...)` call, then checks each of the 19 known table
+  > names for a bare `\btable\b` not immediately preceded by `salary_schema.`. "Prove both
+  > directions" is 4 unit tests against crafted fixtures (unqualified fails / qualified passes, for
+  > both `@Query` and `JdbcTemplate`), not a one-off manual edit — reproducible in CI. A 5th test
+  > scans the real tree (currently zero native queries exist, so it trivially passes; it starts
+  > earning its keep at P4+ when analytics/native SQL appears).
+  > Observed: `./mvnw clean verify` → `Tests run: 42, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
+  > **P1 — Data model & migrations — is now complete.**
 
 ## P2 — Auth end to end
 
@@ -295,8 +305,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P1.9` JPA entities + repositories (19 entities), `Money` value type — **P1 complete** (2026-08-21) |
-| **Current step** | `P1.10` — `NativeQuerySchemaQualificationTest` |
-| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by P1) |
+| **Last completed** | `P1.10` `NativeQuerySchemaQualificationTest` — **P1 complete** (2026-08-21) |
+| **Current step** | `P2.1` — `SecurityConfig`, `SessionCookieAuthFilter`, JWT mint/validate, Argon2id |
+| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (P2 needs it for a running app, but P2.1's unit tests for token validity/expiry/tampering don't) |
 
 _Update both rows on every completed step._
