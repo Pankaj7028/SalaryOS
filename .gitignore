@@ -1,0 +1,44 @@
+# ── Java / Maven ─────────────────────────────────────────────
+target/
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+*.class
+*.jar
+!**/gradle/wrapper/gradle-wrapper.jar
+
+# ── Secrets & local config ───────────────────────────────────
+# application-local.yml holds the Neon DATABASE_URL (CLAUDE.md §10)
+salary-service/src/main/resources/application-local.yml
+.env
+.env.local
+.env*.local
+!.env.example
+
+# ── Node / Next.js ───────────────────────────────────────────
+node_modules/
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+.eslintcache
+
+# ── Test / coverage ──────────────────────────────────────────
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+
+# ── Editors & OS ─────────────────────────────────────────────
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+*.swp
+
+# ── Claude Code (keep shared config, ignore personal overrides)
+.claude/settings.local.json

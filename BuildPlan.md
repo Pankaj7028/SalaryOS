@@ -10,10 +10,14 @@ verified.
 
 ## Session prompts (ready to paste)
 
-**Start / resume:**
-> Read `CLAUDE.md`, then `BuildPlan.md`. Find the first `[ ]` or `[~]` step. Read the layer doc it
-> references. Implement it, run its Verify, mark it `[x]`, commit as `<ID> <desc>`, and continue to
-> the next step. Stop on a failed Verify or when context runs short, and summarise.
+**Start / resume:** run **`/sos-start`**. Outside Claude Code, paste:
+> Read `CLAUDE.md`, then `docs/STATE.md`, then `BuildPlan.md`. Find the first `[ ]` or `[~]` step.
+> Read the section it references with `scripts/doc.sh <doc> <section>` — not the whole doc.
+> Implement it, run its Verify, mark it `[x]`, commit as `<ID> <desc>`, and continue to the next
+> step. Stop on a failed Verify or when context runs short, and summarise.
+
+**Finish:** run **`/sos-wrap`** — it persists carry-over into `docs/STATE.md` so the next session
+(new model, new account, new machine) starts where this one stopped.
 
 **Close a phase:**
 > Run the full backend suite and `npm run lint && npm run typecheck && npm run build`. Report the
@@ -23,7 +27,7 @@ verified.
 
 ## P0 — Foundations
 
-- [ ] **P0.1** Create the repo skeleton per `CLAUDE.md §2`: `salary-service/`, `salary-web/`,
+- [x] **P0.1** Create the repo skeleton per `CLAUDE.md §2`: `salary-service/`, `salary-web/`,
   `docs/`, and place the five planning docs. Root `.gitignore`, `.editorconfig`, `README.md`.
   *Verify:* `git status` clean after the initial commit; the tree matches §2 exactly.
 - [ ] **P0.2** Spring Boot 4.0.3 project (`com.acme.salaryos`), Java 17+, dependencies: web, data-jpa,
@@ -194,8 +198,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | — (not started) |
-| **Current step** | `P0.1` |
+| **Last completed** | `P0.1` repo skeleton (2026-08-21) |
+| **Current step** | `P0.2` Spring Boot 4.0.3 project |
 | **Blockers** | none |
 
 _Update both rows on every completed step._

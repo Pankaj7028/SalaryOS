@@ -11,12 +11,29 @@
 
 ## 0. Session start (MANDATORY — do this FIRST, every session)
 
+**Run `/sos-start`.** It gathers the state below in one shot and tells you what to do. The rest of
+this section is what it does, for when you are not in Claude Code.
+
 1. Read this file.
-2. Read `BuildPlan.md`. **The first `[ ]` (or `[~]`) step is the current step.** `git log --oneline -1`
+2. Read `docs/STATE.md` (~60 lines) — carry-over that is not derivable from the code or `git log`:
+   environment facts, decisions taken outside the docs, gotchas, and open questions for the human.
+3. Read `BuildPlan.md`. **The first `[ ]` (or `[~]`) step is the current step.** `git log --oneline -1`
    confirms the last completed step ID.
-3. Read the layer doc for that step — `docs/salary-management-backend.md` or
-   `docs/salary-management-ui.md` — plus `Technical-Requirements.md` for the FR/NFR it implements.
-4. Then work. Do not start a step whose layer doc you have not read this session.
+4. Read **the section you need**, not the whole doc. The binding docs total ~70KB; reading one end to
+   end to answer a question about one component spends context the step itself needs.
+
+   ```bash
+   scripts/doc.sh toc ui        # headings + line counts
+   scripts/doc.sh ui 7.1        # just <BandBar>
+   scripts/doc.sh be 2.3        # just the exclusion constraint
+   scripts/doc.sh tr FR-6       # just that requirement
+   scripts/doc.sh grep compa    # search every doc
+   ```
+
+   Aliases: `ui` `be` `tr` `one` `claude` `plan` `state`. Read a whole doc only when the step really
+   spans it — a new screen legitimately needs `ui §6`+`§7`+`§8.x`, and §12's checklist is not optional.
+5. Then work. Do not start a step whose governing section you have not read this session.
+6. At the end of the session, run `/sos-wrap` so the next one starts where this one stopped.
 
 There is one developer and one build track. There is no per-developer module assignment — if you
 have come from a project that had one, drop that habit here.
@@ -60,11 +77,20 @@ salary-os/
 ├── docs/
 │   ├── salary-management-backend.md       ← BINDING for all salary-service work
 │   ├── salary-management-ui.md            ← BINDING for all salary-web work (design system lives here)
+│   ├── STATE.md                           ← session carry-over (§0); keep it under ~120 lines
 │   └── adr/                               ← one file per reversed or contested decision
+├── scripts/
+│   └── doc.sh                             ← print ONE section of a doc (§0) — read slices, not files
+├── .claude/
+│   ├── settings.json                      ← shared permission allowlist (committed)
+│   └── commands/                          ← /sos-start · /sos-wrap
 ├── salary-service/                        ← Spring Boot 4.0.3
 │   └── src/main/resources/db/migration/   ← Flyway, salary_schema
 └── salary-web/                            ← Next.js 16 + shadcn/ui + Tailwind v4
 ```
+
+`.claude/settings.local.json` is git-ignored — personal permission overrides go there, not in the
+committed `settings.json`.
 
 ---
 
@@ -382,3 +408,5 @@ npx shadcn@latest add <component>
 - **Build tracker:** `BuildPlan.md`
 - **Backend (BINDING):** `docs/salary-management-backend.md`
 - **UI + design system (BINDING):** `docs/salary-management-ui.md`
+- **Session carry-over:** `docs/STATE.md` · **section reader:** `scripts/doc.sh` · **commands:**
+  `/sos-start`, `/sos-wrap`
