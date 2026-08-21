@@ -50,4 +50,13 @@ public class UserSession {
 	/** {@code inet} in the database — Hibernate maps {@code InetAddress} to it natively. */
 	private InetAddress ip;
 
+	/** No {@code @Setter}: state changes go through named domain methods (CLAUDE.md §9). */
+	public void revoke(Instant at) {
+		this.revokedAt = at;
+	}
+
+	public boolean isRevoked() {
+		return revokedAt != null;
+	}
+
 }

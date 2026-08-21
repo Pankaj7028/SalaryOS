@@ -17,6 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
@@ -35,14 +36,23 @@ public class SecurityConfig {
 	private final ObjectMapper objectMapper;
 
 	@Bean
-	SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-		CookieCsrfTokenRepository csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
-		csrfTokenRepository.setCookieName("sos_csrf");
-		csrfTokenRepository.setHeaderName("X-CSRF-Token");
+	CookieCsrfTokenRepository csrfTokenRepository() {
+		CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+		repository.setCookieName("sos_csrf");
+		repository.setHeaderName("X-CSRF-Token");
+		return repository;
+	}
 
+	@Bean
+	SecurityFilterChain filterChain(HttpSecurity http, CookieCsrfTokenRepository csrfTokenRepository) throws Exception {
 		return http
 				.csrf(csrf -> csrf
 						.csrfTokenRepository(csrfTokenRepository)
+						// Plain (non-XOR'd) handler: sos_csrf holds the raw token, and the client
+						// echoes that exact value back in X-CSRF-Token — the classic double-submit
+						// pattern (CLAUDE.md §4.1). The default XorCsrfTokenRequestAttributeHandler
+						// expects the BREACH-masked value instead, which a plain cookie echo fails.
+						.csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())
 						.ignoringRequestMatchers("/api/auth/login", "/api/auth/refresh"))
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.addFilterBefore(

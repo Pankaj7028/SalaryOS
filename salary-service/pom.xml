@@ -53,6 +53,14 @@
 			<scope>runtime</scope>
 		</dependency>
 		<dependency>
+			<!-- Spring Security's Argon2PasswordEncoder delegates to Bouncy Castle; not brought in
+			     transitively by spring-boot-starter-security, so add it explicitly. -->
+			<groupId>org.bouncycastle</groupId>
+			<artifactId>bcprov-jdk18on</artifactId>
+			<version>1.80</version>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
 			<groupId>io.jsonwebtoken</groupId>
 			<artifactId>jjwt-api</artifactId>
 			<version>0.12.6</version>

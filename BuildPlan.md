@@ -198,9 +198,24 @@ verified.
   > now hard-requires `UserSessionRepository`, so the P0.2 "boots with no datasource" scenario is no
   > longer reachable — persistence is required to authenticate any request from here on.
   > Observed: `./mvnw clean verify` → `Tests run: 51, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
-- [ ] **P2.2** `POST /auth/login`, `/logout`, `/refresh` with rotation and family revocation on
+- [x] **P2.2** `POST /auth/login`, `/logout`, `/refresh` with rotation and family revocation on
   reuse; `GET /auth/me`. *Verify:* integration test covering the full cycle **plus** the reuse case
   revoking the family.
+  > **Done (2026-08-21):** `auth/service/AuthService` (login/refresh/logout/me),
+  > `auth/service/RefreshTokens` (opaque random secret, SHA-256 hash stored — not a JWT),
+  > `auth/web/AuthController`, `common/error/ApiExceptionHandler` (`BadCredentialsException` → 401
+  > `ProblemDetail`). Refresh token stays scoped to `Path=/api/auth`.
+  > **Two real bugs found and fixed while writing the integration test:**
+  > 1. `refresh()`'s reuse-detected branch revoked the family, then threw — but `@Transactional`
+  >    rolls back on any unchecked exception by default, silently undoing the very revocation the
+  >    throw was reporting. Fixed with `@Transactional(noRollbackFor = BadCredentialsException.class)`.
+  > 2. Spring Security's default CSRF handler (`XorCsrfTokenRequestAttributeHandler`) BREACH-masks
+  >    the token, so a client echoing the raw `sos_csrf` cookie value straight into `X-CSRF-Token`
+  >    (the classic double-submit pattern CLAUDE.md §4.1 describes) got a 403. Explicit
+  >    `.csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler())` restores plain matching.
+  > Also needed `org.bouncycastle:bcprov-jdk18on` — `Argon2PasswordEncoder` delegates to it and it
+  > is not pulled in transitively by `spring-boot-starter-security`.
+  > Observed: `./mvnw clean verify` → `Tests run: 53, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
 - [ ] **P2.3** Lockout after 5 failures, uniform response and timing for wrong password / unknown
   email / locked. *Verify:* a test asserting identical status, body, and comparable timing.
 - [ ] **P2.4** `@PreAuthorize` on every endpoint stub + `RolePermissionMatrixTest` against
@@ -323,8 +338,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P2.1` SecurityConfig, SessionCookieAuthFilter, JWT mint/validate, Argon2id (2026-08-21) |
-| **Current step** | `P2.2` — `POST /auth/login`, `/logout`, `/refresh`, `GET /auth/me` |
+| **Last completed** | `P2.2` login/logout/refresh (with rotation + family revocation), `GET /auth/me` (2026-08-21) |
+| **Current step** | `P2.3` — lockout after 5 failures, uniform response/timing |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by Testcontainers-backed integration tests) |
 
 _Update both rows on every completed step._
