@@ -232,8 +232,28 @@ verified.
   > assertions are inherently a little noisy — this is about proving no gross oracle exists, not
   > microsecond parity).
   > Observed: `./mvnw clean verify` → `Tests run: 56, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
-- [ ] **P2.4** `@PreAuthorize` on every endpoint stub + `RolePermissionMatrixTest` against
+- [x] **P2.4** `@PreAuthorize` on every endpoint stub + `RolePermissionMatrixTest` against
   `CLAUDE.md §7`. *Verify:* it fails when you delete one annotation.
+  > **Done (2026-08-21):** stub controllers for every endpoint in `Technical-Requirements.md §5`
+  > not yet built — `EmployeeController`, `BandController`, `ChangeController`,
+  > `AnalyticsController`, `ReferenceController`, `UserAdminController` (`/admin/users`),
+  > `AuditController` (`/admin/audit`), `ProjectionAdminController` (`/admin/rebuild-projection`),
+  > `FxRateController` (`/admin/fx-rates`) — ~30 methods, each `@PreAuthorize`'d per-method (not
+  > class-level, so the guard scans every controller identically), bodies `501` until P4+ builds
+  > them for real. Added `@EnableMethodSecurity` to `SecurityConfig` — without it `@PreAuthorize`
+  > is silently inert, not an error, so this was worth double-checking directly.
+  > **Mapped ambiguously** (not a literal §7 row): `GET /bands`, `GET /reference/*`, `GET
+  > /admin/fx-rates` → same viewers as "View employees & their pay" (band/FX context belongs next to
+  > every salary shown, and reference data feeds every screen's filters); `POST /changes/apply-due`,
+  > `POST /admin/rebuild-projection` → HR Admin only, as the other system-level action (import/bulk
+  > upload) already is; `POST/PATCH /admin/fx-rates` → same as "Manage salary bands & levels". Flag
+  > these for a human sanity-check against product intent — they're not guesses about mechanics, but
+  > they are judgment calls about policy `§7` doesn't literally spell out.
+  > `RolePermissionMatrixTest`: one test asserts every mapped method has `@PreAuthorize`, a second
+  > asserts its exact role set matches the table above. **Verify actually run, not assumed:**
+  > deleted `EmployeeController#list`'s annotation, confirmed both tests failed naming that exact
+  > method, restored it, confirmed both passed again.
+  > Observed: `./mvnw clean verify` → `Tests run: 58, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
 - [ ] **P2.5** Frontend: `proxy.ts` (Next 16's `middleware.ts`) redirecting unauthenticated routes,
   sign-in page, `useSession`, fetch wrapper with CSRF header, central 401/403/network handling.
   *Verify:* sign in as each seeded role, land on `/`, sign out, protected route bounces.
@@ -352,8 +372,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P2.3` lockout after 5 failures, uniform response/timing (2026-08-21) |
-| **Current step** | `P2.4` — `@PreAuthorize` on every endpoint stub + `RolePermissionMatrixTest` |
-| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by Testcontainers-backed integration tests) |
+| **Last completed** | `P2.4` `@PreAuthorize` on every endpoint stub + `RolePermissionMatrixTest` — **P2 complete** (2026-08-21) |
+| **Current step** | `P2.5` — frontend: `proxy.ts`, sign-in page, `useSession`, fetch wrapper, 401/403 handling |
+| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by Testcontainers-backed backend tests; P2.5 is frontend and needs a running backend to test against manually) |
 
 _Update both rows on every completed step._
