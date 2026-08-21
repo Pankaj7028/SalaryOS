@@ -29,5 +29,7 @@ public record EmployeeSummaryResponse(
 		boolean bandMismatched,
 		Money currentBasePay,
 		BigDecimal compaRatio,
-		String bandStatus) {
+		BigDecimal rangePenetration,
+		String bandStatus,
+		BandBoundaries band) {
 }

@@ -27,5 +27,6 @@ public record EmployeeDetailResponse(
 		Money currentBasePay,
 		BigDecimal compaRatio,
 		BigDecimal rangePenetration,
-		String bandStatus) {
+		String bandStatus,
+		BandBoundaries band) {
 }

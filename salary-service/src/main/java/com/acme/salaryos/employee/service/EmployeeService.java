@@ -1,5 +1,8 @@
 package com.acme.salaryos.employee.service;
 
+import com.acme.salaryos.band.domain.SalaryBand;
+import com.acme.salaryos.band.repository.SalaryBandRepository;
+import com.acme.salaryos.common.money.Money;
 import com.acme.salaryos.common.paging.Cursor;
 import com.acme.salaryos.common.paging.CursorCodec;
 import com.acme.salaryos.common.paging.KeysetPage;
@@ -7,6 +10,7 @@ import com.acme.salaryos.compensation.domain.EmployeeCurrentComp;
 import com.acme.salaryos.compensation.repository.CompensationRecordRepository;
 import com.acme.salaryos.compensation.repository.EmployeeCurrentCompRepository;
 import com.acme.salaryos.employee.domain.Employee;
+import com.acme.salaryos.employee.dto.BandBoundaries;
 import com.acme.salaryos.employee.dto.EmployeeCreateRequest;
 import com.acme.salaryos.employee.dto.EmployeeDetailResponse;
 import com.acme.salaryos.employee.dto.EmployeeSummaryResponse;
@@ -37,16 +41,19 @@ public class EmployeeService {
 	private final EmployeeRepository employeeRepository;
 	private final EmployeeCurrentCompRepository employeeCurrentCompRepository;
 	private final CompensationRecordRepository compensationRecordRepository;
+	private final SalaryBandRepository salaryBandRepository;
 	private final CursorCodec cursorCodec;
 
 	public EmployeeService(
 			EmployeeRepository employeeRepository,
 			EmployeeCurrentCompRepository employeeCurrentCompRepository,
 			CompensationRecordRepository compensationRecordRepository,
+			SalaryBandRepository salaryBandRepository,
 			CursorCodec cursorCodec) {
 		this.employeeRepository = employeeRepository;
 		this.employeeCurrentCompRepository = employeeCurrentCompRepository;
 		this.compensationRecordRepository = compensationRecordRepository;
+		this.salaryBandRepository = salaryBandRepository;
 		this.cursorCodec = cursorCodec;
 	}
 
@@ -75,9 +82,14 @@ public class EmployeeService {
 				.findAllById(employees.stream().map(Employee::getId).toList())
 				.stream()
 				.collect(Collectors.toMap(EmployeeCurrentComp::getEmployeeId, c -> c));
+		Map<UUID, SalaryBand> bands = fetchBands(currentComp.values());
 
 		List<EmployeeSummaryResponse> items = employees.stream()
-				.map(employee -> toSummary(employee, currentComp.get(employee.getId())))
+				.map(employee -> {
+					EmployeeCurrentComp comp = currentComp.get(employee.getId());
+					SalaryBand band = comp == null || comp.getBandId() == null ? null : bands.get(comp.getBandId());
+					return toSummary(employee, comp, band);
+				})
 				.toList();
 
 		String nextCursor = null;
@@ -88,10 +100,38 @@ public class EmployeeService {
 		return new KeysetPage<>(items, nextCursor);
 	}
 
+	/** FR-2.7: same filters as {@link #list}, unpaginated — the export always matches the on-screen filter. */
+	public List<EmployeeSummaryResponse> exportAll(
+			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId, String status) {
+
+		Specification<Employee> spec = Specification.<Employee>unrestricted()
+				.and(nonNullOrUnrestricted(EmployeeSpecifications.search(query)))
+				.and(nonNullOrUnrestricted(EmployeeSpecifications.departmentId(departmentId)))
+				.and(nonNullOrUnrestricted(EmployeeSpecifications.locationId(locationId)))
+				.and(nonNullOrUnrestricted(EmployeeSpecifications.countryCode(countryCode)))
+				.and(nonNullOrUnrestricted(EmployeeSpecifications.jobLevelId(jobLevelId)))
+				.and(nonNullOrUnrestricted(EmployeeSpecifications.status(status)));
+
+		List<Employee> employees = employeeRepository.findAll(spec, SORT);
+		Map<UUID, EmployeeCurrentComp> currentComp = employeeCurrentCompRepository
+				.findAllById(employees.stream().map(Employee::getId).toList())
+				.stream()
+				.collect(Collectors.toMap(EmployeeCurrentComp::getEmployeeId, c -> c));
+		Map<UUID, SalaryBand> bands = fetchBands(currentComp.values());
+
+		return employees.stream()
+				.map(employee -> {
+					EmployeeCurrentComp comp = currentComp.get(employee.getId());
+					SalaryBand band = comp == null || comp.getBandId() == null ? null : bands.get(comp.getBandId());
+					return toSummary(employee, comp, band);
+				})
+				.toList();
+	}
+
 	public EmployeeDetailResponse get(UUID id) {
 		Employee employee = employeeRepository.findById(id).orElseThrow(NoSuchElementException::new);
 		EmployeeCurrentComp comp = employeeCurrentCompRepository.findById(id).orElse(null);
-		return toDetail(employee, comp);
+		return toDetail(employee, comp, findBand(comp));
 	}
 
 	@Transactional
@@ -111,7 +151,7 @@ public class EmployeeService {
 				.fte(request.fte())
 				.build();
 		employeeRepository.save(employee);
-		return toDetail(employee, null);
+		return toDetail(employee, null, null);
 	}
 
 	/** FR-2.5: editing job level or location never touches pay — see {@link Employee#updateProfile}. */
@@ -124,7 +164,7 @@ public class EmployeeService {
 				request.employmentType(), request.fte());
 		employeeRepository.save(employee);
 		EmployeeCurrentComp comp = employeeCurrentCompRepository.findById(id).orElse(null);
-		return toDetail(employee, comp);
+		return toDetail(employee, comp, findBand(comp));
 	}
 
 	/** FR-2.6: sets status and closes the open comp period on the termination date, if one exists. */
@@ -140,7 +180,7 @@ public class EmployeeService {
 		});
 
 		EmployeeCurrentComp comp = employeeCurrentCompRepository.findById(id).orElse(null);
-		return toDetail(employee, comp);
+		return toDetail(employee, comp, findBand(comp));
 	}
 
 	private Specification<Employee> nonNullOrUnrestricted(Specification<Employee> spec) {
@@ -168,7 +208,35 @@ public class EmployeeService {
 				"id", String.valueOf(keys.get("id")))));
 	}
 
-	private EmployeeSummaryResponse toSummary(Employee employee, EmployeeCurrentComp comp) {
+	private Map<UUID, SalaryBand> fetchBands(java.util.Collection<EmployeeCurrentComp> comps) {
+		List<UUID> bandIds = comps.stream()
+				.map(EmployeeCurrentComp::getBandId)
+				.filter(java.util.Objects::nonNull)
+				.distinct()
+				.toList();
+		return salaryBandRepository.findAllById(bandIds).stream()
+				.collect(Collectors.toMap(SalaryBand::getId, b -> b));
+	}
+
+	private SalaryBand findBand(EmployeeCurrentComp comp) {
+		if (comp == null || comp.getBandId() == null) {
+			return null;
+		}
+		return salaryBandRepository.findById(comp.getBandId()).orElse(null);
+	}
+
+	private BandBoundaries toBoundaries(SalaryBand band) {
+		if (band == null) {
+			return null;
+		}
+		String currency = band.getCurrency();
+		return new BandBoundaries(
+				new Money(band.getMinAmount(), currency),
+				new Money(band.getMidAmount(), currency),
+				new Money(band.getMaxAmount(), currency));
+	}
+
+	private EmployeeSummaryResponse toSummary(Employee employee, EmployeeCurrentComp comp, SalaryBand band) {
 		return new EmployeeSummaryResponse(
 				employee.getId(), employee.getEmployeeNumber(), employee.getFirstName(), employee.getLastName(),
 				employee.getWorkEmail(), employee.getDepartmentId(), employee.getLocationId(), employee.getJobLevelId(),
@@ -176,10 +244,12 @@ public class EmployeeService {
 				employee.getTerminationDate(), employee.isBandMismatched(),
 				comp == null ? null : comp.getBase(),
 				comp == null ? null : comp.getCompaRatio(),
-				comp == null ? null : comp.getBandStatus());
+				comp == null ? null : comp.getRangePenetration(),
+				comp == null ? null : comp.getBandStatus(),
+				toBoundaries(band));
 	}
 
-	private EmployeeDetailResponse toDetail(Employee employee, EmployeeCurrentComp comp) {
+	private EmployeeDetailResponse toDetail(Employee employee, EmployeeCurrentComp comp, SalaryBand band) {
 		return new EmployeeDetailResponse(
 				employee.getId(), employee.getEmployeeNumber(), employee.getFirstName(), employee.getLastName(),
 				employee.getWorkEmail(), employee.getDepartmentId(), employee.getLocationId(),
@@ -189,7 +259,8 @@ public class EmployeeService {
 				comp == null ? null : comp.getBase(),
 				comp == null ? null : comp.getCompaRatio(),
 				comp == null ? null : comp.getRangePenetration(),
-				comp == null ? null : comp.getBandStatus());
+				comp == null ? null : comp.getBandStatus(),
+				toBoundaries(band));
 	}
 
 }
