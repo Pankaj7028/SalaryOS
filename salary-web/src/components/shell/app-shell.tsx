@@ -6,6 +6,7 @@ import { Topbar } from "./topbar";
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="app-shell">
+      {/* async server component — reads the theme cookie */}
       <Topbar />
       <div className="app-body">
         <Sidebar />

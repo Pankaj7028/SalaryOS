@@ -1,12 +1,23 @@
+import { Suspense } from "react";
+import { cookies } from "next/headers";
+import { THEME_COOKIE, parseTheme } from "@/lib/theme";
 import { Brand } from "./brand";
+import { CommandPalette } from "./command-palette";
+import { CurrencyToggle } from "./currency-toggle";
 import { MobileNav } from "./mobile-nav";
+import { ThemeMenu } from "./theme-menu";
+import { UserMenu } from "./user-menu";
 
 /**
- * Topbar (§6.1). The right cluster — ⌘K search, currency toggle, theme menu and
- * avatar — is built at P3.4; the slots below hold its shape so the shell can be
- * checked at 375px now.
+ * Topbar (§6.1). Right cluster in the order the doc specifies: search, currency,
+ * theme, avatar.
+ *
+ * The theme is read here on the server so the menu opens already showing the
+ * current choice, matching the class the server put on <html>.
  */
-export function Topbar() {
+export async function Topbar() {
+  const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
+
   return (
     <header className="app-topbar flex items-center gap-3 px-4">
       <MobileNav />
@@ -14,15 +25,13 @@ export function Topbar() {
 
       <div className="flex-1" />
 
-      <div aria-hidden className="flex items-center gap-2">
-        <div className="border-border text-muted-foreground type-body-sm hidden h-8 w-[320px] items-center justify-between rounded-md border px-3 lg:flex">
-          <span>Search employees</span>
-          <kbd className="figure-sm text-muted-foreground">⌘K</kbd>
-        </div>
-        <div className="border-border text-muted-foreground type-body-sm flex h-8 items-center rounded-md border px-3">
-          USD
-        </div>
-        <div className="bg-muted size-8 rounded-full" />
+      <div className="flex items-center gap-2">
+        <CommandPalette />
+        <Suspense fallback={<div className="h-8 w-[104px]" />}>
+          <CurrencyToggle />
+        </Suspense>
+        <ThemeMenu initial={theme} />
+        <UserMenu />
       </div>
     </header>
   );

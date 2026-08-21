@@ -107,7 +107,7 @@ verified.
   *Verify:* a column of mixed-width figures aligns; slashed zero renders.
 - [x] **P3.3** `.app-shell` / `.app-topbar` / `.app-body` / `.app-sidebar` / `.app-content`,
   collapse with persistence, mobile Sheet. *Verify:* collapse persists across reload; 375px pass.
-- [ ] **P3.4** Topbar: brand, ⌘K command palette (stub results), currency toggle wired to
+- [x] **P3.4** Topbar: brand, ⌘K command palette (stub results), currency toggle wired to
   `?ccy=`, theme menu (System default, cookie-persisted, no flash), avatar menu.
   *Verify:* server-rendered HTML already carries `.app-dark` when the cookie says so.
 - [ ] **P3.5** `src/lib/auth/roles.ts` with `AREA_ACCESS` and `NAV_VISIBILITY`, role-filtered
@@ -212,8 +212,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P3.3` application shell (2026-08-21) |
-| **Current step** | `P3.4` topbar controls |
+| **Last completed** | `P3.4` topbar controls (2026-08-21) |
+| **Current step** | `P3.5` roles.ts + nav filtering |
 | **Blockers** | `P0.3` no Neon/`DATABASE_URL`; `P0.5`+`P1.*` no Docker for Testcontainers |
 
 _Update both rows on every completed step._
