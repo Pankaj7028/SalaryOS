@@ -94,10 +94,15 @@ verified.
   > — tables present, and `band_ordered` rejects `min_amount(200000) > mid_amount(150000)` with
   > `DataIntegrityViolationException`, while an ordered row inserts cleanly.
   > Observed: `./mvnw verify` → `Tests run: 10, Failures: 0, Errors: 0`, `BUILD SUCCESS` (7.6s).
-- [ ] **P1.5** `V6` — `compensation_records` with the generated `validity` column and the
+- [x] **P1.5** `V6` — `compensation_records` with the generated `validity` column and the
   `EXCLUDE USING gist` constraint, plus `compensation_components`.
   *Verify:* an integration test inserting two overlapping periods for one employee **fails at the
   database**, and the error surfaces as the constraint name.
+  > **Done (2026-08-21):** `V6__compensation_records.sql` (DDL per `salary-management-backend.md
+  > §2.3`, verbatim) + `V6CompensationRecordsMigrationTest`. A second, later-starting open-ended
+  > period for the same employee throws `DataIntegrityViolationException` with message containing
+  > `comp_no_overlap`; only 1 row persists.
+  > Observed: `./mvnw verify` → `Tests run: 12, Failures: 0, Errors: 0`, `BUILD SUCCESS` (8.0s).
 - [ ] **P1.6** `V7` — `compensation_changes` + the partial unique index for one open change.
   *Verify:* a second `PENDING` change for the same employee is rejected by the index.
 - [ ] **P1.7** `V8` + `V9` — `audit_events` (append-only grants), `employee_current_comp`.
@@ -238,8 +243,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P1.4` `V4`+`V5` salary_bands, fx_rates migration (2026-08-21) |
-| **Current step** | `P1.5` — `V6` compensation_records (exclusion constraint) |
+| **Last completed** | `P1.5` `V6` compensation_records (exclusion constraint) migration (2026-08-21) |
+| **Current step** | `P1.6` — `V7` compensation_changes |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by P1) |
 
 _Update both rows on every completed step._
