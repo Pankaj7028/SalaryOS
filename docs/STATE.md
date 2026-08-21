@@ -14,16 +14,16 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | P7 (Insights) in progress |
-| **Last completed** | `P7.4` `pay-gap` (FR-6.4) — `[x]`, 119/119 backend tests. |
-| **Next step** | `P7.5` — `increase-cycle` (FR-6.5) and employee `peers` (FR-6.6, already built at P4.4). |
+| **Last completed** | `P7.5` `increase-cycle` (FR-6.5) — `[x]`, 121/121 backend tests. All six `/api/analytics/*` endpoints are now real. |
+| **Next step** | `P7.6` — Overview and Pay analysis screens; charts themed from CSS variables. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
 Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6` (all) ·
-`P7.1`–`P7.4`.
-Blocked: `P0.3`. Untouched: `P7.5`–`P9`.
+`P7.1`–`P7.5`.
+Blocked: `P0.3`. Untouched: `P7.6`–`P9`.
 
 ---
 

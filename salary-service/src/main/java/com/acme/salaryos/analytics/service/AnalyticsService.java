@@ -4,6 +4,7 @@ import com.acme.salaryos.analytics.dto.AnalyticsPopulation;
 import com.acme.salaryos.analytics.dto.CompaRatioDistributionResponse;
 import com.acme.salaryos.analytics.dto.HeadcountGroup;
 import com.acme.salaryos.analytics.dto.HeadcountResponse;
+import com.acme.salaryos.analytics.dto.IncreaseCycleResponse;
 import com.acme.salaryos.analytics.dto.OutOfBandResponse;
 import com.acme.salaryos.analytics.dto.OutOfBandRow;
 import com.acme.salaryos.analytics.dto.PayGapCohortRow;
@@ -12,6 +13,7 @@ import com.acme.salaryos.analytics.dto.PayGapResponse;
 import com.acme.salaryos.analytics.dto.PayrollCostResponse;
 import com.acme.salaryos.analytics.query.CompaRatioDistributionQuery;
 import com.acme.salaryos.analytics.query.HeadcountQuery;
+import com.acme.salaryos.analytics.query.IncreaseCycleQuery;
 import com.acme.salaryos.analytics.query.OutOfBandQuery;
 import com.acme.salaryos.analytics.query.PayGapQuery;
 import com.acme.salaryos.analytics.query.PayrollCostQuery;
@@ -40,18 +42,21 @@ public class AnalyticsService {
 	private final OutOfBandQuery outOfBandQuery;
 	private final CompaRatioDistributionQuery compaRatioDistributionQuery;
 	private final PayGapQuery payGapQuery;
+	private final IncreaseCycleQuery increaseCycleQuery;
 	private final Clock clock;
 	private final String baseCurrency;
 
 	public AnalyticsService(
 			PayrollCostQuery payrollCostQuery, HeadcountQuery headcountQuery, OutOfBandQuery outOfBandQuery,
-			CompaRatioDistributionQuery compaRatioDistributionQuery, PayGapQuery payGapQuery, Clock clock,
+			CompaRatioDistributionQuery compaRatioDistributionQuery, PayGapQuery payGapQuery,
+			IncreaseCycleQuery increaseCycleQuery, Clock clock,
 			@Value("${app.base-currency}") String baseCurrency) {
 		this.payrollCostQuery = payrollCostQuery;
 		this.headcountQuery = headcountQuery;
 		this.outOfBandQuery = outOfBandQuery;
 		this.compaRatioDistributionQuery = compaRatioDistributionQuery;
 		this.payGapQuery = payGapQuery;
+		this.increaseCycleQuery = increaseCycleQuery;
 		this.clock = clock;
 		this.baseCurrency = baseCurrency;
 	}
@@ -141,6 +146,21 @@ public class AnalyticsService {
 				LocalDate.now(clock), baseCurrency, population,
 				unadjustedGroups, new Money(unadjustedGap[0], baseCurrency), unadjustedGap[1],
 				cohorts, suppressedCohorts);
+	}
+
+	public IncreaseCycleResponse increaseCycle(LocalDate fromDate, LocalDate toDate, BigDecimal budget) {
+		var overall = increaseCycleQuery.overall(fromDate, toDate);
+		AnalyticsPopulation population = new AnalyticsPopulation(overall.count(), Map.of());
+
+		BigDecimal burnPercent = (budget == null || budget.signum() == 0)
+				? null
+				: overall.total().divide(budget, 6, RoundingMode.HALF_UP);
+
+		return new IncreaseCycleResponse(
+				LocalDate.now(clock), fromDate, toDate, baseCurrency, population,
+				new Money(overall.total(), baseCurrency), overall.avgPercent(), overall.medianPercent(),
+				increaseCycleQuery.byReason(fromDate, toDate, baseCurrency),
+				budget == null ? null : new Money(budget, baseCurrency), burnPercent);
 	}
 
 	/** {@code [gapAmount, gapPercent]} between the highest and lowest group median — the widest

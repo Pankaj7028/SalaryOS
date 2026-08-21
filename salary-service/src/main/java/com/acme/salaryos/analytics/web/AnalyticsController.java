@@ -2,18 +2,19 @@ package com.acme.salaryos.analytics.web;
 
 import com.acme.salaryos.analytics.dto.CompaRatioDistributionResponse;
 import com.acme.salaryos.analytics.dto.HeadcountResponse;
+import com.acme.salaryos.analytics.dto.IncreaseCycleResponse;
 import com.acme.salaryos.analytics.dto.OutOfBandResponse;
 import com.acme.salaryos.analytics.dto.PayGapResponse;
 import com.acme.salaryos.analytics.dto.PayrollCostResponse;
 import com.acme.salaryos.analytics.service.AnalyticsService;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 /**
@@ -66,12 +67,10 @@ public class AnalyticsController {
 
 	@GetMapping("/increase-cycle")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
-	public ResponseEntity<Void> increaseCycle() {
-		return notImplemented();
-	}
-
-	private ResponseEntity<Void> notImplemented() {
-		return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+	public IncreaseCycleResponse increaseCycle(
+			@RequestParam LocalDate fromDate, @RequestParam LocalDate toDate,
+			@RequestParam(required = false) BigDecimal budget) {
+		return analyticsService.increaseCycle(fromDate, toDate, budget);
 	}
 
 }

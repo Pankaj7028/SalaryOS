@@ -1123,8 +1123,30 @@ verified.
   > Observed: `./mvnw clean verify` → `Tests run: 119, Failures: 0, Errors: 0`, `BUILD SUCCESS`
   > (2 new tests in `PayGapTest`, 117 pre-existing). No `DemographicsIsolationTest` yet (P9.3) — every
   > pay-gap DTO lives in `analytics/dto`, the one package that test will exempt.
-- [ ] **P7.5** `increase-cycle` (FR-6.5) and employee `peers` (FR-6.6).
+- [x] **P7.5** `increase-cycle` (FR-6.5) and employee `peers` (FR-6.6).
   *Verify:* increase spend for the seeded cycle matches a SQL sum.
+  > **Done (2026-08-21):** `peers` (FR-6.6) was already built at P4.4 — this step's real scope was
+  > only `increase-cycle`. `analytics/query/IncreaseCycleQuery` joins each `APPLIED`
+  > `compensation_changes` row to the ledger row it actually produced via `applied_record_id`
+  > (direct, not a `change_id` lookup) to reuse that row's already-pinned FX rate for normalising the
+  > delta — the same trick P7.2's `totalCostToMinimum` uses. Only `APPLIED` counts
+  > (CLAUDE.md §8 — an `APPROVED` change with a future effective date is a promise, not spend yet),
+  > proven by its own test: a change approved but never applied contributes nothing to the total.
+  > `byReason` breaks total spend, count, and avg/median increase percent down per `change_reason`.
+  > `budget`/`budgetBurnPercent` are `null` when no budget query param is supplied.
+  >
+  > **Verify — an actual SQL cross-check, not a paraphrase:** `IncreaseCycleTest` runs one change
+  > through the real lifecycle (`propose` → `submit` → `approve` → `applyDueChange`, not a shortcut
+  > insert) at a deliberately unused effective date (2045 — every other change-lifecycle test either
+  > fixes a year in 2031-2039 or, uniquely, `ApplyDueChangesJobTest`, which uses the real system
+  > `Clock`'s actual "today"), then re-derives the normalised delta with an independent query written
+  > directly in the test and asserts they agree exactly (15000.00, USD 1:1). The response's own
+  > (unscoped, shared-container) total is asserted only as `>=` that scoped figure, not exactly equal.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 121, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (2 new tests in `IncreaseCycleTest`, 119 pre-existing). **This is P7's last backend endpoint** —
+  > all six `/api/analytics/*` routes and `/employees/{id}/peers` are now real. P7.6/P7.7 are the two
+  > remaining screens.
 - [ ] **P7.6** Overview and Pay analysis screens; charts themed from CSS variables; every card
   carries its basis line and a "View as table" toggle.
   *Verify:* switching themes re-colours every chart; the table equivalent exports.
@@ -1166,8 +1188,8 @@ After completion of complete P8 stop executing next P9 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P7.4` `pay-gap` (FR-6.4) — done, `[x]`, 119/119 backend tests (2026-08-21) |
-| **Current step** | `P7.5` — `increase-cycle` (FR-6.5) and employee `peers` (FR-6.6, already built at P4.4). |
+| **Last completed** | `P7.5` `increase-cycle` (FR-6.5) — done, `[x]`, 121/121 backend tests (2026-08-21) |
+| **Current step** | `P7.6` — Overview and Pay analysis screens; charts themed from CSS variables. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._
