@@ -81,7 +81,10 @@ class V4V5BandsAndFxMigrationTest {
 						+ "(job_level_id, country_code, currency, min_amount, mid_amount, max_amount, effective_from, created_by) "
 						+ "values (?, 'US', 'USD', 100000, 150000, 200000, current_date, ?)",
 				jobLevelId, userId);
-		Integer count = jdbcTemplate.queryForObject("select count(*) from salary_schema.salary_bands", Integer.class);
+		// Scoped to this test's own job level, not the whole table — other test classes sharing this
+		// cached context/container (e.g. EffectiveDatingTest) insert their own salary_bands rows too.
+		Integer count = jdbcTemplate.queryForObject(
+				"select count(*) from salary_schema.salary_bands where job_level_id = ?", Integer.class, jobLevelId);
 		assertThat(count).isEqualTo(1);
 	}
 

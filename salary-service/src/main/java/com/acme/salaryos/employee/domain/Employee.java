@@ -110,4 +110,9 @@ public class Employee {
 		this.terminationDate = terminationDate;
 	}
 
+	/** Called by {@code EffectiveDating.apply} (P5.1) — a real pay change resolves the mismatch. */
+	public void clearBandMismatch() {
+		this.bandMismatched = false;
+	}
+
 }

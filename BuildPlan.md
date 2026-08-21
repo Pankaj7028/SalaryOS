@@ -482,10 +482,90 @@ verified.
 
 ## P5 — Compensation & bands
 
-- [ ] **P5.1** `EffectiveDating` — apply, close, correct, annualise, normalise.
+- [x] **P5.1** `EffectiveDating` — apply, close, correct, annualise, normalise.
   *Verify:* the dedicated test class covers day-boundary closing, backdating rejection, correction
   supersede, FTE annualisation, and a missing FX rate. This is the highest-value test file in the
   build; do not thin it.
+  > **Product decision made (asked the user directly before implementing):** the docs
+  > left "annualisation accounts for FTE" underspecified for what "accounts for" means — grossed up
+  > to a full-time-equivalent figure, or left as the employee's literal actual pay? Since every
+  > compa-ratio/band comparison and every FR-6.1 payroll-cost total downstream depends on this,
+  > asked before implementing rather than guessing. Chosen: **gross to FTE = 1.0 equivalent** —
+  > `annualBaseAmount = periodAnnual ÷ fte` for `ANNUAL`/`MONTHLY`. **`HOURLY` is a deliberate
+  > exception**: an hourly rate already represents a per-hour wage independent of hours actually
+  > worked, so `amount × 2080` (40hr × 52wk, the standard full-time year — not documented anywhere,
+  > a judgment call) already yields the FTE=1.0 figure directly; dividing by FTE again would
+  > double-count it. `EffectiveDatingTest.hourlyAnnualisationUsesTheStandardYearWithoutDividingByFteAgain`
+  > pins this down explicitly so it can't silently regress.
+  >
+  > **Design deviates from the doc's shown `apply()` pseudocode** (backend doc §3), on purpose: the
+  > doc's sketch throws `NoOpenPeriodException` unconditionally when no open period exists, which
+  > would make it impossible to ever create an employee's first-ever compensation record through
+  > this class — contradicting "all of it lives in one class." Instead `apply()` branches: no open
+  > period → this is the first-ever record, nothing to close; an open period exists → the normal
+  > close-then-insert raise/promotion path, `effectiveFrom` must be strictly after it or
+  > `BackdatedBeforeOpenPeriodException` fires (backend doc §8's exact copy). No separate
+  > `openInitial` method needed. `Clock` was **not** injected into this class despite backend doc §3
+  > rule 6's "Clock is injected" convention — nothing here compares a date against "today", only
+  > against another date on the record itself; the convention will actually matter starting at
+  > P6.3's `ApplyDueChangesJob`, which is where the doc's rule 6 actually bites, not here.
+  >
+  > **`GET /employees/{id}/peers` (FR-6.6) was already built at P4.4** — see that step's note. P5's
+  > job here is the ledger only.
+  >
+  > **Two real, non-obvious bugs found and fixed while writing the test suite, not test artifacts:**
+  > (1) both `apply()` and `correct()` initially inserted the NEW row before closing the OLD one —
+  > reasonable-looking Java call order, but Hibernate's default flush ordering runs every pending
+  > INSERT before any UPDATE **regardless of the order methods were called in**, so the new row's
+  > insert hit the database while the old row's range was still open-ended, and `comp_no_overlap`
+  > correctly rejected it as a genuine (if transient) overlap. Fixed with an explicit
+  > `saveAndFlush()` on the closed row before building the new one — a real transactional-ordering
+  > bug that would have surfaced in production on literally the second raise ever applied, not
+  > something a thinner test suite would have caught. (2) `correct()` read
+  > `original.getEffectiveTo()` for the corrected row's own end date **after** already calling
+  > `original.close(...)`, which had just overwritten that same field — so the corrected row
+  > inherited the wrong (just-computed) end date instead of the original period's real one,
+  > producing an inverted, invalid date range on any correction of a period that was still open.
+  > Fixed by capturing the value into a local variable before the mutation.
+  >
+  > **Schema bug actually fixed, not just documented:** `V13__widen_range_penetration.sql` widens
+  > `compensation_records`/`employee_current_comp`.`range_penetration` from `numeric(6,4)` to
+  > `numeric(8,4)` — the `numeric(6,4)` from V6/V9 tops out just under ±100, but range penetration
+  > legitimately exceeds 100 for anyone paid above band max (this step's own
+  > `aboveMaxRangePenetrationExceedsOneHundredWithoutOverflowing` test proves it: 250% for someone
+  > $60,000 above a $40,000-wide band). P4.3's seed data had already hit this as a workaround
+  > (clamping a 130% test case to 99.99 to insert); this migration is the actual fix-forward,
+  > per CLAUDE.md §12.11.
+  >
+  > **Two pre-existing tests broke from legitimate new data, fixed, not weakened:**
+  > `CompensationEntitiesRoundTripTest` collided on `fx_rates`' unique `(month, base, quote)`
+  > constraint because `EffectiveDatingTest` happened to reuse the same 2024 months in the same
+  > shared cached Testcontainers context — fixed by moving `EffectiveDatingTest`'s dates to 2031,
+  > clear of every date any other test file uses, rather than touching the older test.
+  > `V4V5BandsAndFxMigrationTest.bandCheckConstraintRejectsMinGreaterThanMid` asserted an **unscoped**
+  > `count(*) from salary_bands` was exactly 1, silently assuming it was the only test ever
+  > inserting into that table in the shared container — broke the moment `EffectiveDatingTest`'s
+  > above-max test (legitimately) inserted its own band row. Fixed by scoping the count to
+  > `job_level_id`, the same fix pattern already established for this exact class of bug elsewhere
+  > in the suite (P4.1's `EmployeeListPaginationTest`).
+  >
+  > Also added along the way: `app.base-currency` config property (`APP_BASE_CURRENCY`, default
+  > `USD`, CLAUDE.md §10), `SalaryBandRepository.findEffective` (effective-dated band lookup),
+  > `FxRateRepository.findByBaseCurrencyAndQuoteCurrencyAndRateMonth`,
+  > `CompensationRecord.supersede(UUID)` domain method, `Employee.clearBandMismatch()` (called by
+  > `apply()` — a real pay change resolves a mismatch flag, per `Employee`'s own P4.2 javadoc),
+  > and four new `ApiExceptionHandler` mappings (409 backdated, 422 missing FX rate, 400 missing
+  > correction note, 400 correction outside its period) plus a `DataIntegrityViolationException`
+  > handler that turns a raw `comp_no_overlap` constraint hit into a 409 instead of a 500 — the
+  > backstop backend doc §3 rule 2 calls for, never silently swallowed.
+  >
+  > **Scope boundary, deliberate:** this class writes only `compensation_records`. Keeping
+  > `employee_current_comp` in sync is explicitly P5.2's job ("projection maintained in the same
+  > transaction") — a raise applied here will not yet show up on the employee list/detail screens
+  > (which read the projection) until P5.2 lands, immediately next.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 76, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (13 new tests in `EffectiveDatingTest`, 63 pre-existing, all green).
 - [ ] **P5.2** `employee_current_comp` projection maintained in the same transaction +
   `POST /admin/rebuild-projection` + `ProjectionConsistencyTest`.
   *Verify:* re-deriving the projection from the ledger equals the stored projection for 10k rows.
@@ -562,8 +642,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | Backend + frontend for `P4.3` and `P4.4` built and verified except a live browser pass (2026-08-21) |
-| **Current step** | `P4.4` — **`[~]`, not `[x]`** (and `P4.3` is still `[~]` too). Code for both is done — backend 63/63 tests, frontend build/typecheck/lint clean, API-level curl verification against a seeded throwaway DB (including hand-checked peer-percentile math). Owed for both: open `/employees` and `/employees/[id]` in a real browser and confirm they actually render/behave, plus the §12 checklist's keyboard/375px passes. See the done-notes under P4.3/P4.4 above for the exact recipe to recreate the throwaway dev DB. Next after that: `P5.1` `EffectiveDating`. |
+| **Last completed** | `P5.1` `EffectiveDating` — done, `[x]`, 76/76 backend tests (2026-08-21) |
+| **Current step** | `P5.2` — `employee_current_comp` projection maintained in the same transaction, `POST /admin/rebuild-projection`, `ProjectionConsistencyTest`. `P4.3`/`P4.4` remain `[~]` (code done, browser pass owed — see their done-notes and the Blockers row). |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). **Chrome extension cannot reach this machine's `localhost`** — confirmed twice this session (a connected Chrome tab loaded `https://example.com` but got an error page for both `localhost:3100` and `localhost:8080/actuator/health`). Owed a visual pass over P2.5 (sign-in), P4.3 (`/employees`), and P4.4 (`/employees/[id]`) once a Chrome session that can actually reach this machine is available. |
 
 _Update both rows on every completed step._

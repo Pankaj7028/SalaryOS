@@ -85,11 +85,17 @@ public class CompensationRecord {
 	private Instant createdAt;
 
 	/**
-	 * No {@code @Setter}: the only mutation this insert-only table permits (CLAUDE.md §6.3) is
-	 * closing the open period — never editing any other field in place.
+	 * No {@code @Setter}: the only mutations this insert-only table permits (CLAUDE.md §6.3) are
+	 * closing the open period and, for a correction, pointing at its replacement — never editing
+	 * any other field in place.
 	 */
 	public void close(LocalDate effectiveTo) {
 		this.effectiveTo = effectiveTo;
+	}
+
+	/** Marks this row as replaced by a {@code CORRECTION} row. The original is never deleted. */
+	public void supersede(UUID correctionId) {
+		this.supersededBy = correctionId;
 	}
 
 }

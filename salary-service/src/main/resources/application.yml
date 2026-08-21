@@ -34,6 +34,9 @@ app:
   cors:
     # CLAUDE.md §10: explicit allow-list, never a wildcard — allowCredentials requires it.
     allowed-origins: ${APP_CORS_ORIGINS:http://localhost:3000}
+  # The normalisation target (CLAUDE.md §6.4/§10) — every comp record's normalized_annual_base
+  # is in this currency, pinned via fx_rates, never recomputed at today's rate.
+  base-currency: ${APP_BASE_CURRENCY:USD}
 
 server:
   port: 8080
