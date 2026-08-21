@@ -115,7 +115,7 @@ verified.
   nav entry.
 - [x] **P3.6** `notify.ts` + single root `<Toaster>`; loading, empty, and error primitives per §7.8.
   *Verify:* one toast host in the DOM; grep finds no direct `toast(` import in features.
-- [ ] **P3.7** `<Money>`, `<Delta>`, `<BandStatusBadge>`, and **`<BandBar>`** in all three widths
+- [x] **P3.7** `<Money>`, `<Delta>`, `<BandStatusBadge>`, and **`<BandBar>`** in all three widths
   including the no-band and out-of-band cases. *Verify:* a component gallery route renders every
   state in both themes; accessible names read correctly in a screen reader.
 
@@ -212,8 +212,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P3.6` notify.ts + feedback primitives (2026-08-21) |
-| **Current step** | `P3.7` Money · Delta · BandStatusBadge · BandBar |
+| **Last completed** | `P3.7` Money/Delta/BandStatusBadge/BandBar — **P3 complete** (2026-08-21) |
+| **Current step** | `P0.3`/`P0.5` when the environment allows; otherwise P2.5 needs the API |
 | **Blockers** | `P0.3` no Neon/`DATABASE_URL`; `P0.5`+`P1.*` no Docker for Testcontainers |
 
 _Update both rows on every completed step._

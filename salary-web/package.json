@@ -16,7 +16,8 @@
     "verify:shell": "node scripts/verify-shell.mjs",
     "verify:topbar": "node scripts/verify-topbar.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "verify:components": "node scripts/verify-components.mjs"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
