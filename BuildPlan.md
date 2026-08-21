@@ -603,8 +603,36 @@ verified.
   > projector into `EmployeeService` and calling `refresh(id)` right after closing the record.
   >
   > Observed: `./mvnw clean verify` → `Tests run: 77, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
-- [ ] **P5.3** Bands CRUD with versioning (never in-place), CSV import with dry-run diff.
+- [x] **P5.3** Bands CRUD with versioning (never in-place), CSV import with dry-run diff.
   *Verify:* editing an in-force band closes it and opens a successor; the dry run changes nothing.
+  > **`salary_bands` has no exclusion constraint** (unlike `compensation_records`'
+  > `comp_no_overlap`, V4's migration) — the service (`BandService`) is the only thing enforcing
+  > non-overlap, not a backstop for one. `create()` rejects (409) a second band for a (job level ×
+  > country) that already has an open one, directing the caller to PATCH; `update()` rejects (409)
+  > versioning an already-closed band, and rejects (409) backdating on/before the current version's
+  > own start — same day-boundary discipline as `EffectiveDating`, including the same
+  > close-then-`saveAndFlush`-before-insert ordering (no DB constraint requires it here, but it's
+  > the same correct pattern and costs nothing extra).
+  >
+  > **CSV format decided, not specified anywhere in the docs:** `jobLevelId,countryCode,currency,
+  > minAmount,midAmount,maxAmount,effectiveFrom,note` (header row required, `note` optional/last).
+  > Manual line-split parsing, not a CSV library — every field here is a UUID/code/number/date, none
+  > can legitimately contain a comma, so a dependency for quoted-field handling isn't justified yet.
+  > Per-row outcome is `CREATE` (no open band yet for that level×country), `VERSION` (one exists and
+  > the row's date comes after it), or `ERROR` (malformed row, min>mid>max violated, or a backdated
+  > version) — one bad row never blocks the others in the same file, and `dryRun=true` computes the
+  > full diff without writing anything (verified: band count and open-band lookups are unchanged
+  > after a dry run in `BandVersioningTest.dryRunReportsTheDiffButChangesNothing`).
+  >
+  > **`@AuthenticationPrincipal UUID currentUserId` used for the first time** — `created_by` on
+  > `salary_bands` is the first column in the app that needed "who is calling this," and
+  > `SessionCookieAuthFilter` already sets the JWT's `sub` claim (a UUID) as the
+  > `Authentication`'s principal directly, so binding it is a one-line parameter, no new plumbing.
+  > Later write paths that need an acting user (P6's change proposals) should follow the same
+  > pattern rather than re-deriving it from `SecurityContextHolder` by hand.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 83, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (6 new tests in `BandVersioningTest`, 77 pre-existing, all green).
 - [ ] **P5.4** Pay history ledger endpoint + `as-at` query. *Verify:* the salary in force on a chosen
   past date is returned for a sample of 50 seeded employees.
 - [ ] **P5.5** Employee pay-history ledger UI and the bands grid screen with the
@@ -676,8 +704,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P5.2` `employee_current_comp` projection — done, `[x]`, 77/77 backend tests (2026-08-21) |
-| **Current step** | `P5.3` — Bands CRUD with versioning, CSV import with dry-run diff. `P4.3`/`P4.4` remain `[~]` (code done, browser pass owed — see their done-notes and the Blockers row). |
+| **Last completed** | `P5.3` Bands CRUD with versioning + CSV import — done, `[x]`, 83/83 backend tests (2026-08-21) |
+| **Current step** | `P5.4` — Pay history ledger endpoint + `as-at` query. `P4.3`/`P4.4` remain `[~]` (code done, browser pass owed — see their done-notes and the Blockers row). |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). **Chrome extension cannot reach this machine's `localhost`** — confirmed twice this session (a connected Chrome tab loaded `https://example.com` but got an error page for both `localhost:3100` and `localhost:8080/actuator/health`). Owed a visual pass over P2.5 (sign-in), P4.3 (`/employees`), and P4.4 (`/employees/[id]`) once a Chrome session that can actually reach this machine is available. |
 
 _Update both rows on every completed step._

@@ -1,5 +1,8 @@
 package com.acme.salaryos.common.error;
 
+import com.acme.salaryos.band.service.BandAlreadyExistsException;
+import com.acme.salaryos.band.service.BandBackdatedException;
+import com.acme.salaryos.band.service.BandNotOpenException;
 import com.acme.salaryos.common.paging.InvalidCursorException;
 import com.acme.salaryos.compensation.effective.BackdatedBeforeOpenPeriodException;
 import com.acme.salaryos.compensation.effective.CorrectionOutsideOriginalPeriodException;
@@ -55,6 +58,21 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(CorrectionOutsideOriginalPeriodException.class)
 	public ProblemDetail handleCorrectionOutsideOriginalPeriod(CorrectionOutsideOriginalPeriodException exception) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+	}
+
+	@ExceptionHandler(BandAlreadyExistsException.class)
+	public ProblemDetail handleBandAlreadyExists(BandAlreadyExistsException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+	}
+
+	@ExceptionHandler(BandNotOpenException.class)
+	public ProblemDetail handleBandNotOpen(BandNotOpenException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+	}
+
+	@ExceptionHandler(BandBackdatedException.class)
+	public ProblemDetail handleBandBackdated(BandBackdatedException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
 	}
 
 	/**

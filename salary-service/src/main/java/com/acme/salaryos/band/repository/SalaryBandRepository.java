@@ -17,4 +17,7 @@ public interface SalaryBandRepository extends JpaRepository<SalaryBand, UUID> {
 	Optional<SalaryBand> findEffective(
 			@Param("jobLevelId") UUID jobLevelId, @Param("countryCode") String countryCode, @Param("asAt") LocalDate asAt);
 
+	/** The current in-force version — not necessarily active *today* if it was versioned with a future effective date, but the one {@code create}/{@code update} must close before opening a successor. */
+	Optional<SalaryBand> findByJobLevelIdAndCountryCodeAndEffectiveToIsNull(UUID jobLevelId, String countryCode);
+
 }

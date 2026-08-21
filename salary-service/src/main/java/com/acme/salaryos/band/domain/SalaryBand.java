@@ -52,4 +52,9 @@ public class SalaryBand {
 
 	private String note;
 
+	/** No {@code @Setter}: the only mutation a band permits is closing it when a successor version opens (FR-4.5) — never edited in place otherwise. */
+	public void close(LocalDate effectiveTo) {
+		this.effectiveTo = effectiveTo;
+	}
+
 }

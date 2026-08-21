@@ -14,16 +14,16 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | P5 in progress; P4 UI work code-complete but unverified in a browser |
-| **Last completed** | `P5.2` `employee_current_comp` projection — `[x]`, 77/77 backend tests. |
-| **Next step** | `P5.3` — Bands CRUD with versioning, CSV import with dry-run diff. Separately: get a Chrome session that can reach this machine's `localhost` and run the P4.3/P4.4 visual passes. |
+| **Last completed** | `P5.3` Bands CRUD + versioning + CSV import — `[x]`, 83/83 backend tests. |
+| **Next step** | `P5.4` — Pay history ledger endpoint + `as-at` query. Separately: get a Chrome session that can reach this machine's `localhost` and run the P4.3/P4.4 visual passes. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). Chrome extension cannot reach `localhost` on this machine — see gotcha below. |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
-Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4.1`, `P4.2` · `P5.1`, `P5.2`. In
+Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4.1`, `P4.2` · `P5.1`–`P5.3`. In
 progress: `P4.3`, `P4.4` (both code done, both need a browser pass). Blocked: `P0.3`. Untouched:
-`P5.3`–`P9`.
+`P5.4`–`P9`.
 
 ---
 
@@ -33,7 +33,7 @@ progress: `P4.3`, `P4.4` (both code done, both need a browser pass). Blocked: `P
 doesn't source it per call** — export both explicitly alongside any Maven command that needs Docker:
 `export DOCKER_HOST=unix:///Users/pankajmandal/.colima/default/docker.sock` and
 `export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock`. `colima status`/`colima start`
-as needed. `./mvnw clean verify` (Testcontainers, Postgres 17) currently passes **63/63**.
+as needed.
 
 ---
 
@@ -81,22 +81,25 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
 - **`getCurrentUser()` in `src/lib/auth/current-user.ts` is a placeholder**, the seam where
   `GET /api/auth/me` lands at P2.5. Change `role` there to view the app as another role.
 - **P4.3's Employees list omits column sort, a "band status" filter, "page N" jump, saved views, and
-  bulk-select** — each because nothing on the backend supports it yet. Reasoning in its done-note.
-- **`GET /employees/{id}/peers` (FR-6.6) was built at P4.4, not P7.5** — Technical-Requirements.md
-  §5 places the route under Employees, and `EmployeeController` already owned the stub. P7.5's real
-  remaining scope is just `increase-cycle` (FR-6.5).
-- **`TooltipProvider` lives in `query-provider.tsx`** (added P4.4) — one instance at the app root,
-  same discipline as the root `<Toaster>`. Don't add a second one around a feature.
-- **FTE annualisation (P5.1, user-confirmed):** `annualBaseAmount` is grossed to the employee's
-  FTE = 1.0 equivalent (÷ FTE) for `ANNUAL`/`MONTHLY`, so compa-ratio stays meaningful regardless of
-  FTE. `HOURLY` is the deliberate exception — `amount × 2080` (a documented-nowhere-else 40hr×52wk
-  assumption) already IS the FTE=1.0 figure; dividing by FTE again would double-count.
-- **`app.base-currency` (`APP_BASE_CURRENCY`, default `USD`) added at P5.1** — the normalisation
-  target `EffectiveDating` reads via `@Value`.
-- **`employee_current_comp` is refreshed by `EmployeeCurrentCompProjector`** (P5.2), called from
-  `EffectiveDating.apply()`/`.correct()` and from `EmployeeService.terminate()` — any future write
-  path that opens, closes, or supersedes a `compensation_records` row must call
-  `projector.refresh(employeeId)` too, or the projection silently goes stale for that employee.
+  bulk-select; `GET /employees/{id}/peers` (FR-6.6) was built at P4.4, not P7.5 (P7.5's real
+  remaining scope is just `increase-cycle`, FR-6.5); `TooltipProvider` lives once in
+  `query-provider.tsx`** — full reasoning for each in the P4.3/P4.4 done-notes in `BuildPlan.md`.
+- **FTE annualisation (P5.1, user-confirmed):** grossed to FTE = 1.0 (÷ FTE) for `ANNUAL`/`MONTHLY`;
+  `HOURLY` is the exception — `amount × 2080` (documented nowhere else) already IS that figure, so
+  no further ÷ FTE. `app.base-currency` (`APP_BASE_CURRENCY`, default `USD`) added the same step.
+- **`employee_current_comp` is refreshed by `EmployeeCurrentCompProjector`** (P5.2) from
+  `EffectiveDating.apply()`/`.correct()` and `EmployeeService.terminate()` — any future write that
+  opens/closes/supersedes a `compensation_records` row must call `projector.refresh(employeeId)`
+  too, or the projection silently goes stale for that employee.
+- **`@AuthenticationPrincipal UUID currentUserId`** is the "who is calling this" pattern (P5.3,
+  first use) — `SessionCookieAuthFilter` sets the JWT `sub` claim as the principal directly. Use
+  this, not `SecurityContextHolder` by hand, for any future write needing the acting user (P6).
+- **CSV import format (P5.3, undocumented elsewhere):** header row + domain-field columns (bands:
+  `jobLevelId,countryCode,currency,minAmount,midAmount,maxAmount,effectiveFrom,note`), manual
+  line-split (no comma can appear in any of these fields, so no CSV library). One bad row → `ERROR`,
+  never blocks the rest. `P8.4`'s employee import should probably match this shape.
+- **`salary_bands` has no exclusion constraint** (unlike `compensation_records`) — `BandService`
+  alone prevents overlapping versions. Be careful with any direct-repository write to this table.
 
 ---
 
