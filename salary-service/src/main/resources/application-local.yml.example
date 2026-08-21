@@ -13,8 +13,11 @@ spring:
     password: replace-me
     hikari:
       maximum-pool-size: 10
-      connection-timeout: 10s
-      max-lifetime: 5m
+      # Milliseconds, not Spring Duration shorthand — HikariConfig's setters take a raw `long`,
+      # and Spring's Binder only accepts "10s"-style strings for a java.time.Duration target.
+      # "10s"/"5m" here fails at startup with a NumberFormatException, not silently.
+      connection-timeout: 10000  # 10s
+      max-lifetime: 300000       # 5m
 
   jpa:
     open-in-view: false

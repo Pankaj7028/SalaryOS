@@ -20,6 +20,7 @@
     "verify:components": "node scripts/verify-components.mjs"
   },
   "dependencies": {
+    "@tanstack/react-query": "^5.101.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",

@@ -31,6 +31,9 @@ app:
     ttl: ${APP_SESSION_TTL:20m}
   refresh:
     ttl: ${APP_REFRESH_TTL:12h}
+  cors:
+    # CLAUDE.md §10: explicit allow-list, never a wildcard — allowCredentials requires it.
+    allowed-origins: ${APP_CORS_ORIGINS:http://localhost:3000}
 
 server:
   port: 8080

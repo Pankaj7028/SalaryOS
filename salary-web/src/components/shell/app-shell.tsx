@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
@@ -11,6 +12,12 @@ import { Topbar } from "./topbar";
  */
 export async function AppShell({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
+  // proxy.ts already redirects an unauthenticated request before it gets
+  // here; this only fires if the cookie expired in the gap between that
+  // check and this fetch.
+  if (!user) {
+    redirect("/sign-in");
+  }
 
   return (
     <div className="app-shell">

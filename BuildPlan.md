@@ -254,9 +254,43 @@ verified.
   > deleted `EmployeeController#list`'s annotation, confirmed both tests failed naming that exact
   > method, restored it, confirmed both passed again.
   > Observed: `./mvnw clean verify` → `Tests run: 58, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
-- [ ] **P2.5** Frontend: `proxy.ts` (Next 16's `middleware.ts`) redirecting unauthenticated routes,
+- [x] **P2.5** Frontend: `proxy.ts` (Next 16's `middleware.ts`) redirecting unauthenticated routes,
   sign-in page, `useSession`, fetch wrapper with CSRF header, central 401/403/network handling.
   *Verify:* sign in as each seeded role, land on `/`, sign out, protected route bounces.
+  > **Done (2026-08-21):** `src/proxy.ts` (cookie-presence gate only — not the security boundary,
+  > CLAUDE.md §7), `/sign-in` page + form, `src/lib/api/client.ts` (`apiFetch`: CSRF echo on
+  > mutating requests, 401 → hard redirect to sign-in, 403/network → `notify.ts` centrally, per
+  > `notify.ts`'s own docstring), `src/lib/api/{auth,keys}.ts`, `src/lib/auth/auth-queries.ts`
+  > (`useSession`/`useLogin`/`useLogout`, first real use of TanStack Query — installed
+  > `@tanstack/react-query`, added `QueryProvider`). `current-user.ts` (Server Component read) now
+  > really calls `GET /api/auth/me` forwarding the `sos_session` cookie, replacing the P3
+  > placeholder; `AppShell` redirects to `/sign-in` if it comes back null. `UserMenu`'s sign-out is
+  > wired for real. Backend needed CORS added (`SecurityConfig`, `APP_CORS_ORIGINS`) for the browser
+  > to call cross-port in dev — not explicitly this step's scope but nothing in P2.5 works without it.
+  > **Bug found and fixed in the already-committed `application-local.yml.example` (P0.3 prep):**
+  > `connection-timeout: 10s` / `max-lifetime: 5m` — Hikari's setters take a raw `long` milliseconds,
+  > not a Spring `Duration` string; Spring's Binder only accepts unit-suffixed shorthand for a
+  > `Duration`-typed target, so this fails at startup with a `NumberFormatException`, not silently.
+  > Would have hit whoever fills this in for real Neon credentials at P0.3. Fixed to `10000`/`300000`
+  > with a comment explaining why.
+  > **Verify — partially observed, gap flagged rather than papered over:** the Chrome extension
+  > was not connected this session, so the four sign-ins could not be watched in an actual browser.
+  > Instead ran the real stack end to end — a throwaway local Postgres 17 container (not
+  > Testcontainers, not Neon; git-ignored `application-local.yml`, torn down after), `salary-service`
+  > and `salary-web` both actually running, four seeded users (one per role, Argon2id-hashed
+  > passwords) — and drove every step documented as a Verify requirement via curl against the real
+  > HTTP endpoints: each role's login → `GET /api/auth/me` returns that role's real name (confirmed
+  > in the rendered `/` HTML too, replacing the old "Dana Whitfield" placeholder) → `salary-web`'s
+  > `/` returns 200 (not a redirect) → logout revokes only that session (the other three roles'
+  > sessions stayed valid) → `/` afterward 307s to `/sign-in` **because the re-fetch of `/api/auth/me`
+  > 401s**, not merely because the cookie is gone — proxy.ts's presence check alone would have let
+  > the stale cookie through, and it did; `AppShell`'s real check is what caught it. A second
+  > protected route (`/employees`) bounces with the correct `?redirect=` target too. This proves the
+  > integration wiring is correct; it does not confirm the rendered sign-in form looks right or that
+  > clicking works — that visual pass is still owed once a browser is available.
+  > Observed: backend `./mvnw clean verify` → `Tests run: 58, Failures: 0, Errors: 0`, `BUILD
+  > SUCCESS`. Frontend `npm run verify` (tokens, contrast, lint, typecheck, 27 vitest tests, build) —
+  > all clean.
 
 ## P3 — Shell & design system
 
@@ -372,9 +406,9 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P2.4` `@PreAuthorize` on every endpoint stub + `RolePermissionMatrixTest` — **P2 complete** (2026-08-21) |
-| **Current step** | `P2.5` — frontend: `proxy.ts`, sign-in page, `useSession`, fetch wrapper, 401/403 handling |
-| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by Testcontainers-backed backend tests; P2.5 is frontend and needs a running backend to test against manually) |
+| **Last completed** | `P2.5` frontend auth: `proxy.ts`, sign-in page, `useSession`, fetch wrapper — **P2 complete** (2026-08-21) |
+| **Current step** | `P3` is already done (2026-08-21 earlier session) — next unstarted is `P4.1` `GET /employees` |
+| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). A real browser (Chrome extension not connected this session) is owed a visual pass over the P2.5 sign-in flow whenever available. |
 
 _Update both rows on every completed step._
 

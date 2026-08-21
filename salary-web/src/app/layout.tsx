@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { QueryProvider } from "@/components/providers/query-provider";
 import { Toaster } from "@/components/ui/sonner";
 import { THEME_COOKIE, parseTheme, themeClass } from "@/lib/theme";
 import "./globals.css";
@@ -58,7 +59,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: PRE_PAINT }} />
       </head>
       <body className="flex min-h-full flex-col">
-        {children}
+        <QueryProvider>{children}</QueryProvider>
         {/* The ONE toast host. A second one silently shadows this and nothing
             appears and nothing errors (CLAUDE.md §9). notify.test.ts enforces it. */}
         <Toaster position="bottom-right" closeButton />
