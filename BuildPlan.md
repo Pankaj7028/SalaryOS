@@ -103,7 +103,7 @@ verified.
 - [x] **P3.1** `theme.css` with the full token set from `salary-management-ui.md §2`, both themes,
   `@custom-variant dark (&:is(.app-dark *))`, `@theme inline` mappings.
   *Verify:* a token-audit page renders every token in both themes; no hex outside this file.
-- [ ] **P3.2** Fonts, type scale utilities, tabular numeral rules (`§3`).
+- [x] **P3.2** Fonts, type scale utilities, tabular numeral rules (`§3`).
   *Verify:* a column of mixed-width figures aligns; slashed zero renders.
 - [ ] **P3.3** `.app-shell` / `.app-topbar` / `.app-body` / `.app-sidebar` / `.app-content`,
   collapse with persistence, mobile Sheet. *Verify:* collapse persists across reload; 375px pass.
@@ -212,8 +212,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P3.1` theme.css tokens (2026-08-21) |
-| **Current step** | `P3.2` fonts + type scale |
+| **Last completed** | `P3.2` fonts + type scale (2026-08-21) |
+| **Current step** | `P3.3` application shell |
 | **Blockers** | `P0.3` no Neon/`DATABASE_URL`; `P0.5`+`P1.*` no Docker for Testcontainers |
 
 _Update both rows on every completed step._

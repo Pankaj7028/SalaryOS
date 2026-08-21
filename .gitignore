@@ -28,6 +28,7 @@ next-env.d.ts
 # ── Test / coverage ──────────────────────────────────────────
 coverage/
 test-results/
+salary-web/screenshots/
 playwright-report/
 blob-report/
 .playwright/

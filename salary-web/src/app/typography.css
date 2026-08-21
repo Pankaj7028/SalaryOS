@@ -1,0 +1,110 @@
+/* ============================================================================
+ * typography.css — the type scale from docs/salary-management-ui.md §3.1 and the
+ * numeral rules from §3.2.
+ *
+ * Sizes are the px values in the doc, expressed in rem against a 16px root. Note
+ * the root stays at 16px on purpose: the doc's "base is 14px" is about *body
+ * text*, and shrinking the root would also shrink every rem-based spacing and
+ * radius value by 12.5%. So `body` is set to 14px and the scale is absolute.
+ * ========================================================================= */
+
+@layer base {
+  body {
+    font-size: 0.875rem; /* 14px — table-first app; 16px costs ~2 rows a screen */
+    line-height: 1.25rem; /* 20px */
+  }
+}
+
+@layer components {
+  /* ---- figures: mono, tabular. Every money/percent/ratio/date/id ---------- */
+  .figure-xl {
+    font-family: var(--font-mono);
+    font-size: 1.875rem; /* 30 */
+    line-height: 2.25rem; /* 36 */
+    font-weight: 500;
+    letter-spacing: -0.02em;
+  }
+  .figure-lg {
+    font-family: var(--font-mono);
+    font-size: 1.25rem; /* 20 */
+    line-height: 1.75rem; /* 28 */
+    font-weight: 500;
+    letter-spacing: -0.01em;
+  }
+  .figure {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem; /* 13 */
+    line-height: 1.125rem; /* 18 */
+    font-weight: 400;
+  }
+  .figure-sm {
+    font-family: var(--font-mono);
+    font-size: 0.75rem; /* 12 */
+    line-height: 1rem; /* 16 */
+    font-weight: 400;
+  }
+
+  /* ---- interface: sans ---------------------------------------------------- */
+  .type-title {
+    font-size: 1.25rem; /* 20 */
+    line-height: 1.75rem; /* 28 */
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .type-section {
+    font-size: 1rem; /* 16 */
+    line-height: 1.5rem; /* 24 */
+    font-weight: 600;
+  }
+  .type-subsection {
+    font-size: 0.875rem; /* 14 */
+    line-height: 1.25rem; /* 20 */
+    font-weight: 600;
+  }
+  .type-body {
+    font-size: 0.875rem; /* 14 */
+    line-height: 1.25rem; /* 20 */
+    font-weight: 400;
+  }
+  .type-body-sm {
+    font-size: 0.8125rem; /* 13 */
+    line-height: 1.125rem; /* 18 */
+    font-weight: 400;
+  }
+  .type-label {
+    font-size: 0.75rem; /* 12 */
+    line-height: 1rem; /* 16 */
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .type-caption {
+    font-size: 0.75rem; /* 12 */
+    line-height: 1rem; /* 16 */
+    font-weight: 400;
+  }
+}
+
+/* ---- §3.2 numeral rules (non-negotiable) ---------------------------------
+ * tabular-nums so columns align; "zero" for the slashed zero, which is what
+ * separates 0 from O in an employee number. Applied to the figure classes, to
+ * anything mono, and to cells explicitly marked numeric.
+ * ------------------------------------------------------------------------ */
+.figure-xl,
+.figure-lg,
+.figure,
+.figure-sm,
+.font-mono,
+table td.numeric,
+table th.numeric {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings:
+    "tnum" 1,
+    "zero" 1;
+}
+
+/* Money columns are right-aligned so digits line up even across currencies. */
+table td.numeric,
+table th.numeric {
+  text-align: right;
+}
