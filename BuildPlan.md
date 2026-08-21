@@ -110,8 +110,19 @@ verified.
   > — a second `PENDING` change for the same employee throws `DataIntegrityViolationException`
   > naming the index; exactly 1 open change persists.
   > Observed: `./mvnw verify` → `Tests run: 14, Failures: 0, Errors: 0`, `BUILD SUCCESS` (7.5s).
-- [ ] **P1.7** `V8` + `V9` — `audit_events` (append-only grants), `employee_current_comp`.
+- [x] **P1.7** `V8` + `V9` — `audit_events` (append-only grants), `employee_current_comp`.
   *Verify:* an `UPDATE` on `audit_events` as the app role is denied.
+  > **Done (2026-08-21):** `V8__audit_events.sql` creates `salaryos_app` (idempotent — Neon is
+  > expected to already have it from P0.3 provisioning), grants it standard CRUD on every table via
+  > `GRANT ... ON ALL TABLES` + `ALTER DEFAULT PRIVILEGES` (so V9+ need no repeated GRANT), then
+  > revokes UPDATE/DELETE specifically on `audit_events`. `V9__employee_current_comp.sql` needs no
+  > grant of its own. **Correctness finding:** Postgres table owners always retain full DML —
+  > REVOKE against an owner is a no-op — so `salaryos_app` must never be the role that *runs*
+  > migrations, only the role migrations grant to. Fixed `application-local.yml.example` to give
+  > Flyway a separate Neon-owner-role connection distinct from the app's `spring.datasource`.
+  > `V8V9AuditAndProjectionMigrationTest` connects a second `DriverManagerDataSource` as
+  > `salaryos_app` and proves INSERT/SELECT succeed, UPDATE fails with `permission denied`.
+  > Observed: `./mvnw clean verify` → `Tests run: 16, Failures: 0, Errors: 0`, `BUILD SUCCESS` (7.9s).
 - [ ] **P1.8** `V10` + `V11` — indexes and static reference rows.
   *Verify:* `\di salary_schema.*` matches `Technical-Requirements.md §4.3`.
 - [ ] **P1.9** JPA entities + repositories for everything above; `Money` value type and converter.
@@ -248,8 +259,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P1.6` `V7` compensation_changes migration (2026-08-21) |
-| **Current step** | `P1.7` — `V8` + `V9` audit_events, employee_current_comp |
+| **Last completed** | `P1.7` `V8`+`V9` audit_events (append-only grants), employee_current_comp (2026-08-21) |
+| **Current step** | `P1.8` — `V10` + `V11` indexes, static reference rows |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by P1) |
 
 _Update both rows on every completed step._

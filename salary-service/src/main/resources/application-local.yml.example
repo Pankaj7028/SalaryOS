@@ -29,3 +29,9 @@ spring:
     schemas: salary_schema
     default-schema: salary_schema
     locations: classpath:db/migration
+    # Migrations must NOT run as salaryos_app: Postgres owners always retain full DML on tables
+    # they create, so a REVOKE against the owner is a no-op — see V8's audit_events comment. Run
+    # Flyway as Neon's project-default owner role instead (the one you land on when the project is
+    # created), and let it GRANT salaryos_app only what V8 grants it.
+    user: replace-with-neon-owner-role
+    password: replace-me-too
