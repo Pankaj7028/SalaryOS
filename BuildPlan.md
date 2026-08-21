@@ -113,7 +113,7 @@ verified.
 - [x] **P3.5** `src/lib/auth/roles.ts` with `AREA_ACCESS` and `NAV_VISIBILITY`, role-filtered
   sidebar, `roles.test.ts` asserting visibility ⊆ access. *Verify:* the test fails when you widen a
   nav entry.
-- [ ] **P3.6** `notify.ts` + single root `<Toaster>`; loading, empty, and error primitives per §7.8.
+- [x] **P3.6** `notify.ts` + single root `<Toaster>`; loading, empty, and error primitives per §7.8.
   *Verify:* one toast host in the DOM; grep finds no direct `toast(` import in features.
 - [ ] **P3.7** `<Money>`, `<Delta>`, `<BandStatusBadge>`, and **`<BandBar>`** in all three widths
   including the no-band and out-of-band cases. *Verify:* a component gallery route renders every
@@ -212,8 +212,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P3.5` roles.ts + nav filtering (2026-08-21) |
-| **Current step** | `P3.6` notify.ts + root Toaster |
+| **Last completed** | `P3.6` notify.ts + feedback primitives (2026-08-21) |
+| **Current step** | `P3.7` Money · Delta · BandStatusBadge · BandBar |
 | **Blockers** | `P0.3` no Neon/`DATABASE_URL`; `P0.5`+`P1.*` no Docker for Testcontainers |
 
 _Update both rows on every completed step._

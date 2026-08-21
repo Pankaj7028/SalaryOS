@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
+import { Toaster } from "@/components/ui/sonner";
 import { THEME_COOKIE, parseTheme, themeClass } from "@/lib/theme";
 import "./globals.css";
 
@@ -56,7 +57,12 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: PRE_PAINT }} />
       </head>
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        {children}
+        {/* The ONE toast host. A second one silently shadows this and nothing
+            appears and nothing errors (CLAUDE.md §9). notify.test.ts enforces it. */}
+        <Toaster position="bottom-right" closeButton />
+      </body>
     </html>
   );
 }
