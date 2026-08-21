@@ -1,0 +1,31 @@
+# Copy to application-local.yml (git-ignored) and fill in the Neon credentials, then run with
+#   ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+#
+# Settings below follow docs/salary-management-backend.md §2.1. The Hikari values are not
+# arbitrary: Neon recycles connections, and a max-lifetime longer than this produces intermittent
+# failures that only ever reproduce in production.
+
+spring:
+  datasource:
+    # The POOLED endpoint — the host containing "-pooler". sslmode=require is not optional.
+    url: jdbc:postgresql://ep-xxxx-pooler.REGION.aws.neon.tech/salaryos?sslmode=require
+    username: salaryos_app
+    password: replace-me
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10s
+      max-lifetime: 5m
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate      # Flyway owns the schema. Never let Hibernate write DDL.
+    properties:
+      hibernate:
+        default_schema: salary_schema
+
+  flyway:
+    enabled: true
+    schemas: salary_schema
+    default-schema: salary_schema
+    locations: classpath:db/migration

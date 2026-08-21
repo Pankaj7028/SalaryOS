@@ -34,10 +34,15 @@ verified.
   security, validation, flyway, postgresql, lombok, actuator, testcontainers.
   *Verify:* `./mvnw clean package` succeeds; `./mvnw spring-boot:run` starts and `/actuator/health`
   returns UP with no datasource configured yet (`spring.autoconfigure.exclude` or a stub).
-- [ ] **P0.3** Neon project + database; `salary_schema` created; `DATABASE_URL` in
+- [~] **P0.3** Neon project + database; `salary_schema` created; `DATABASE_URL` in
   `application-local.yml` (git-ignored) and `.env.example` committed with placeholders. Hikari tuned
   per `salary-management-backend.md §2.1`.
   *Verify:* app boots against Neon; `select 1` through actuator health; `\dn` shows `salary_schema`.
+  > **Blocked (2026-08-21):** needs a human to create the Neon project and hand over the pooled
+  > connection string. Templates are already committed — `.env.example` and
+  > `application-local.yml.example` (Hikari + schema per §2.1). To finish: copy the example to
+  > `application-local.yml`, fill in the three credential lines, create `salary_schema`, then delete
+  > the `spring.autoconfigure.exclude` block from `application.yml` and run the Verify.
 - [ ] **P0.4** Next.js 16 app (`salary-web`), TypeScript strict, Tailwind v4, shadcn/ui `new-york`
   initialised, path aliases, ESLint + Prettier.
   *Verify:* `npm run dev` serves a page; `npm run lint && npm run typecheck && npm run build` clean.

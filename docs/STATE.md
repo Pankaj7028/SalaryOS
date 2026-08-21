@@ -77,5 +77,9 @@ _Add to this list whenever something costs more than ten minutes to work out. On
 
 ## Open questions for the human
 
-- **P0.3** needs a Neon project + database created, and the pooled connection string
-  (`?sslmode=require`) handed over. Everything up to P0.2 proceeds without it.
+- **P0.3 needs a Neon project + database, and its pooled connection string** (the host containing
+  `-pooler`, with `?sslmode=require`). Everything that does not need the credential is already
+  committed: `.env.example` and `salary-service/src/main/resources/application-local.yml.example`
+  (Hikari and schema settings per backend §2.1). To finish P0.3: copy the example to
+  `application-local.yml`, fill in url/username/password, create `salary_schema`, **delete the
+  `spring.autoconfigure.exclude` block from `application.yml`**, then run the step's Verify.
