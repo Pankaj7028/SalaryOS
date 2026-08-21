@@ -378,7 +378,7 @@ verified.
   > two — no server-side state to fight), matching the pattern already used in
   > `AuthControllerIntegrationTest`/`AuthLockoutTest`. Avoid `csrf()` for this app's tests generally.
   > Observed: `./mvnw clean verify` → `Tests run: 63, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
-- [~] **P4.3** Employees list screen: filter row, table, band bar column, URL state, CSV export.
+- [x] **P4.3** Employees list screen: filter row, table, band bar column, URL state, CSV export.
   *Verify:* every filter and sort survives a reload; export matches the on-screen filter.
   > **Backend prereqs done and verified:** `BandBoundaries`/`rangePenetration` added to
   > `EmployeeSummaryResponse`/`EmployeeDetailResponse`; `EmployeeService` now resolves each
@@ -426,17 +426,16 @@ verified.
   > `rangePenetration`, `bandStatus` all present and correct for every seeded case, `null` for the
   > unbanded and terminated employees as expected.
   >
-  > **Not done — the Chrome extension was disconnected this session (same as the P2.5 note in a
-  > prior STATE.md), so no live-browser pixel/click-through pass happened.** CLAUDE.md is explicit
-  > that a passing build and typecheck verify code correctness, not feature correctness, for a UI
-  > step. **Still owed before this is marked `[x]`:** open `/employees` in a real browser, confirm
-  > the table/filters/BandBar/CSV button actually render and behave (not just that the API returns
-  > correct JSON), check both themes, and run the §12 merge checklist's keyboard-only and 375px
-  > passes. The throwaway dev DB/backend/frontend processes from this session were torn down at
-  > session end — recreate with `docker run --name salaryos-devdb -e POSTGRES_PASSWORD=devpass -e
-  > POSTGRES_DB=salaryos -p 5433:5432 postgres:17`, an `application-local.yml` per the template in
-  > `application-local.yml.example` pointed at it, then seed data (schema notes above).
-- [~] **P4.4** Employee detail: identity, current pay panel, band detail bar, peers panel.
+  > **Browser pass done, retroactively (at P5.5):** the "Chrome can't reach localhost" blocker
+  > (both this note and P4.4's) turned out to be a second, *physically different* paired browser
+  > (Linux) that earlier `tabs_context_mcp` calls silently defaulted to —
+  > `list_connected_browsers`/`select_browser` surfaced and fixed it. Live-verified on the real
+  > macOS-paired Chrome: filters, table with correct mono/tabular figures, `<BandBar>` colours per
+  > row (below-min amber, above-max red, no-band dashes for unbanded/terminated), both themes. §12's
+  > keyboard-only and 375px passes were **not** completed (see P5.5's done-note — a genuine,
+  > separately-flagged gap: the table has no responsive card degradation at narrow widths).
+  > `P4.3` marked `[x]` above.
+- [x] **P4.4** Employee detail: identity, current pay panel, band detail bar, peers panel.
   *Verify:* an unbanded employee shows the no-band state, not a centred marker.
   > **Backend:** `GET /employees/{id}/peers` was a P2.4 stub with `@PreAuthorize` but no logic —
   > implemented for real (FR-6.6): cohort = active employees at the same `jobLevelId`, any location
@@ -473,12 +472,14 @@ verified.
   > `currentBasePay: null` (drives the panel's no-band state, not a centred marker — this step's own
   > Verify clause, confirmed at the API level).
   >
-  > **Not done — same Chrome-can't-reach-localhost limitation as P4.3, confirmed again this session**
-  > (a fresh Chrome connection could reach `https://example.com` but not `localhost:3100` or even
-  > `localhost:8080/actuator/health` — the connected browser is not running in this shell's network
-  > namespace). No live-browser pass happened for P4.4 either. Both `P4.3` and `P4.4` stay `[~]` until
-  > a Chrome session that can actually reach this machine's localhost is available — see the recipe
-  > in `docs/STATE.md` to recreate the throwaway dev DB/backend/frontend, then walk both screens.
+  > **Browser pass done, retroactively (at P5.5):** the earlier Chrome connection really was on a
+  > different physical machine (`list_connected_browsers` revealed two paired browsers, one macOS,
+  > one Linux — the Linux one is what every earlier attempt this session had silently landed on).
+  > Selecting the macOS one fixed it immediately. Live-verified: header (name, employee number,
+  > status badge, band-mismatch badge), Current pay panel (figure-lg base, bonus component listed,
+  > `<BandBar detail>` with labelled min/mid/max, compa-ratio/range-penetration with working
+  > tooltip triggers), Peers panel (p25/median/p75 and "60th percentile of 5 peers", matching the
+  > curl-verified numbers exactly), both themes. `P4.3` and `P4.4` marked `[x]` above.
 
 ## P5 — Compensation & bands
 
@@ -699,8 +700,87 @@ verified.
   > Observed: `./mvnw clean verify` → `Tests run: 86, Failures: 0, Errors: 0`, `BUILD SUCCESS`
   > (3 new tests in `PayHistoryTest`, 83 pre-existing — including every P5.1/P5.3 test re-verified
   > against the corrected boundary — all green).
-- [ ] **P5.5** Employee pay-history ledger UI and the bands grid screen with the
+- [x] **P5.5** Employee pay-history ledger UI and the bands grid screen with the
   "how many employees change status" preview. *Verify:* the preview count matches what saving does.
+  > **Backend additions this screen needed and didn't have:** `EmployeeCurrentCompRepository
+  > .countByBandId`/`.findByBandId` (new); `BandResponse` gained a `headcount` field (0 for any
+  > closed/superseded version — `employee_current_comp.band_id` only ever points at the in-force
+  > one); `BandService.previewVersionImpact(bandId, min, mid, max)` — new,
+  > `GET /bands/{id}/preview-version-impact` — evaluates the cohort currently tied to `bandId`
+  > against proposed new boundaries using the exact same `EffectiveDating.bandStatus` rule the
+  > ledger itself uses, so the number is provably what a post-save re-derivation would also find,
+  > never a separate approximation. `BandVersionImpactTest` proves this directly: computes the
+  > preview, then independently re-derives "actually changed" from the ledger after really saving
+  > the version, and asserts they're equal — literally this step's own Verify clause as a test.
+  >
+  > **Real gap found and fixed while building this:** `BandService.create()`/`.update()` had no
+  > explicit `min ≤ mid ≤ max` check — only the CSV import path did. An invalid ordering would have
+  > hit the raw `band_ordered` DB CHECK constraint and fallen through `ApiExceptionHandler`'s
+  > `DataIntegrityViolationException` handler's generic rethrow, surfacing as an uncaught 500. Added
+  > `BandOrderingException` (400) and a `requireOrdered()` guard on both methods, mirrored by a new
+  > `RolePermissionMatrixTest` entry for the new `previewVersionImpact` endpoint (`ADMIN_AND_MANAGER`
+  > — same capability as editing itself) that the test itself demanded before it would pass.
+  >
+  > **Frontend:** `PayHistoryPanel` (added to the P4.4 employee-detail screen) — a vertical-hairline
+  > ledger, one entry per period, reason chip, mono dates. **`<Delta>` deliberately not shown**: the
+  > backend doesn't return a precomputed delta between consecutive ledger entries, and computing one
+  > client-side (`current.amount − previous.amount`) is exactly the money arithmetic CLAUDE.md §6.1
+  > rules out — a real backend gap to close later (a `deltaAmount`/`deltaPercent` field on the
+  > ledger response), not worked around with a client-side subtraction. Note/proposer/approver also
+  > omitted — `compensation_changes` doesn't exist as a domain until P6.1.
+  >
+  > `/bands` grid (level × country from the reference endpoints, not just level×country pairs that
+  > already have a band — so an empty cell is visible and clickable). Filled cells open
+  > `BandDetailDialog` (version history, newest first, headcount on the in-force version) with a
+  > "New version" sub-form; empty cells open `CreateBandDialog`. **First real use of React Hook
+  > Form + Zod** in this codebase (CLAUDE.md's pinned forms stack, previously only exercised by
+  > sign-in's plain `useState` — installed `react-hook-form`, `zod`, `@hookform/resolvers` now for
+  > real, established the pattern P6's propose-change dialog will also need). `bandFormSchema`
+  > shared by both dialogs, `min ≤ mid` / `mid ≤ max` as `.refine()` client-side checks — a UX nicety
+  > mirroring `BandOrderingException`, not a replacement for it. The version form's live impact
+  > preview watches `min`/`mid`/`max` via RHF's `watch()`, debounces 400ms, and calls
+  > `previewVersionImpact` — visually verified in-browser: typing a new floor updated "N of M
+  > employees would change status" live, and the number matched the earlier `curl`-verified backend
+  > value exactly (lowering a band's floor from 90000 to 75000 correctly flipped exactly the one
+  > below-min employee to in-band).
+  >
+  > **A real mistake made and fixed mid-session:** the `npm install react-hook-form zod
+  > @hookform/resolvers` command ran from the repo root by accident (persisted shell CWD drift from
+  > earlier backend work), creating a stray, untracked `package.json`/`package-lock.json`/
+  > `node_modules` (11MB) at the repo root — outside `salary-web/`, where the real dependency
+  > declaration needed to live. The build/typecheck/lint all passed anyway, silently, because
+  > Node's module resolution walks up the directory tree and found the packages in the stray root
+  > `node_modules` — meaning a fresh clone or CI run would have failed despite every local check
+  > passing. Caught before committing: re-ran the install with the correct `cd salary-web` first
+  > (confirmed via `package.json` diff that the three packages are now actually declared there), and
+  > removed the stray root artifacts (asked the user first, since it's a `rm -rf`-shaped operation
+  > even though everything deleted was untracked and created this session).
+  >
+  > **Genuine gap found and flagged, not fixed:** neither the Employees table (P4.3) nor the Bands
+  > grid has a responsive card-degradation at 375px (CLAUDE.md/ui doc §12.10's merge-checklist item).
+  > shadcn's `Table` wrapper has `overflow-x-auto` built in, so a narrow viewport gets an
+  > internally-scrolling table rather than page-level horizontal scroll — but that is not the same
+  > as "table degraded to cards," which neither table has. Not attempted here (a real, separate
+  > responsive-redesign effort); worth a dedicated pass before this product ships to anyone on a
+  > phone.
+  >
+  > **Chrome-can't-reach-localhost, resolved:** turned out to be a *second physically different*
+  > paired browser (a Linux machine) that every earlier `tabs_context_mcp` call in this session had
+  > silently defaulted to, alongside the correct macOS one — `list_connected_browsers` surfaced both
+  > and `select_browser` picked the right one, after which everything worked immediately. **Full
+  > live-browser verification done this step**, retroactively covering the P4.3/P4.4 debt too: sign
+  > in, Overview shell, `/employees` (filters/table/BandBar/both themes), `/employees/[id]` (header/
+  > current-pay/peers/pay-history/both themes), `/bands` (grid/detail dialog/live impact preview/
+  > create dialog with working Zod validation blocking an invalid submission inline). Keyboard-only
+  > and true mobile-viewport passes still not done (window-resize-based viewport testing didn't
+  > reliably change the rendered layout in this session's browser tooling) — worth a real pass
+  > later, ideally on an actual phone or a proper devtools device emulation.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 89, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (2 new tests in `BandVersionImpactTest`, 1 new ordering test in `BandVersioningTest`, 87
+  > pre-existing — all green). `npm run typecheck`/`lint`/`build` all clean (lint: 0 errors, 2
+  > expected library-incompatibility warnings — RHF's `watch()`, TanStack Table's `useReactTable()`,
+  > same category as every other warning this session, not new problems).
 
 ## P6 — Changes & approval
 
@@ -732,7 +812,7 @@ verified.
   *Verify:* switching themes re-colours every chart; the table equivalent exports.
 - [ ] **P7.7** Equity review screen with the suppression notice and separate unadjusted /
   level-adjusted columns. *Verify:* the suppressed count is non-zero against the seed and is shown.
-
+After completion of complete P7 stop executing next P8 task and do the local setup of this service and give me access URL for progress and feature check also here you can check and verify the current implementation you did so farthat does all features are working as expected and is UI is looking good and stable.
 ## P8 — Admin, audit, import
 
 - [ ] **P8.1** Users and roles admin; admin-issued reset tokens; last-HR-Admin protection.
@@ -768,9 +848,9 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P5.4` Pay history ledger + `as-at` — done, `[x]`, 86/86 backend tests. **Found and fixed a real day-boundary gap bug shipped in P5.1/P5.3** — see P5.4's done-note (2026-08-21) |
-| **Current step** | `P5.5` — Employee pay-history ledger UI + bands grid screen. `P4.3`/`P4.4` remain `[~]` (code done, browser pass owed — see their done-notes and the Blockers row). |
-| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). **Chrome extension cannot reach this machine's `localhost`** — confirmed twice this session (a connected Chrome tab loaded `https://example.com` but got an error page for both `localhost:3100` and `localhost:8080/actuator/health`). Owed a visual pass over P2.5 (sign-in), P4.3 (`/employees`), and P4.4 (`/employees/[id]`) once a Chrome session that can actually reach this machine is available. |
+| **Last completed** | `P5.5` Pay-history UI + bands grid — done, `[x]`, 89/89 backend tests. **Live browser verification finally done** (the "Chrome can't reach localhost" issue was a second, different paired machine) — `P4.3`/`P4.4` retroactively marked `[x]` too (2026-08-21) |
+| **Current step** | `P6.1` — Change lifecycle endpoints, one-open-change rule, `ProposerIsNotApproverTest`. |
+| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). Two known, flagged (not fixed) gaps: no 375px table→card degradation anywhere yet (P5.5's done-note), and `EmployeeService.terminate()`'s pay-through-termination-date semantics were only just resolved this session (P5.4) — worth a sanity-check if P6 touches termination. |
 
 _Update both rows on every completed step._
 

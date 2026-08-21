@@ -96,6 +96,7 @@ class RolePermissionMatrixTest {
 		map.put("BandController#list", VIEW_PAY);
 		map.put("BandController#create", ADMIN_AND_MANAGER);
 		map.put("BandController#update", ADMIN_AND_MANAGER);
+		map.put("BandController#previewVersionImpact", ADMIN_AND_MANAGER);
 		map.put("BandController#importCsv", HR_ADMIN_ONLY);
 
 		for (String method : List.of("list", "propose", "updateDraft", "submit", "discardDraft")) {

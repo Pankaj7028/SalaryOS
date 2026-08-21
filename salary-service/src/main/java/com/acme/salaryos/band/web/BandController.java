@@ -2,6 +2,7 @@ package com.acme.salaryos.band.web;
 
 import com.acme.salaryos.band.dto.BandImportResult;
 import com.acme.salaryos.band.dto.BandResponse;
+import com.acme.salaryos.band.dto.BandVersionImpactResponse;
 import com.acme.salaryos.band.dto.CreateBandRequest;
 import com.acme.salaryos.band.dto.UpdateBandRequest;
 import com.acme.salaryos.band.service.BandService;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -54,6 +56,15 @@ public class BandController {
 	public BandResponse update(
 			@PathVariable UUID id, @Valid @RequestBody UpdateBandRequest request, @AuthenticationPrincipal UUID currentUserId) {
 		return bandService.update(id, request, currentUserId);
+	}
+
+	/** ui doc §8.6: the status-change count shown before saving a new version. Same viewers as editing itself. */
+	@GetMapping("/{id}/preview-version-impact")
+	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER')")
+	public BandVersionImpactResponse previewVersionImpact(
+			@PathVariable UUID id, @RequestParam BigDecimal minAmount, @RequestParam BigDecimal midAmount,
+			@RequestParam BigDecimal maxAmount) {
+		return bandService.previewVersionImpact(id, minAmount, midAmount, maxAmount);
 	}
 
 	/** Import / bulk upload: HR Admin only. */

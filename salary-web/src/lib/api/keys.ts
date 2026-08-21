@@ -18,4 +18,9 @@ export const employeeKeys = {
   list: (params: Record<string, string | number | undefined>) => ["employees", "list", params] as const,
   detail: (id: string) => ["employees", "detail", id] as const,
   peers: (id: string) => ["employees", "peers", id] as const,
+  compensationHistory: (id: string) => ["employees", "compensationHistory", id] as const,
+};
+
+export const bandKeys = {
+  list: () => ["bands", "list"] as const,
 };

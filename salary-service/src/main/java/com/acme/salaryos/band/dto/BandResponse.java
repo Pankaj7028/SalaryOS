@@ -14,5 +14,7 @@ public record BandResponse(
 		Money max,
 		LocalDate effectiveFrom,
 		LocalDate effectiveTo,
-		String note) {
+		String note,
+		/** Employees currently projected against this exact band version (ui doc §8.6's grid-cell count). Always 0 for a superseded (closed) version — {@code employee_current_comp} only ever points at the in-force one. */
+		long headcount) {
 }

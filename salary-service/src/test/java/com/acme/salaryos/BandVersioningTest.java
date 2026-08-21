@@ -84,6 +84,15 @@ class BandVersioningTest {
 	}
 
 	@Test
+	void creatingABandWithMinGreaterThanMidIsRejectedBeforeTheDbCheckConstraint() {
+		Fixtures fx = seedFixtures("ORDERING");
+		assertThatThrownBy(() -> bandService.create(new CreateBandRequest(
+				fx.jobLevelId(), "US", "USD", new BigDecimal("130000"), new BigDecimal("110000"), new BigDecimal("90000"),
+				LocalDate.of(2033, 1, 1), null), fx.userId()))
+				.isInstanceOf(com.acme.salaryos.band.service.BandOrderingException.class);
+	}
+
+	@Test
 	void creatingASecondBandForAnAlreadyCoveredLevelAndCountryIsRejected() {
 		Fixtures fx = seedFixtures("DUPLICATE");
 		bandService.create(new CreateBandRequest(

@@ -90,6 +90,29 @@ export type PeerComparison = {
   percentile: number | null;
 };
 
+/**
+ * One ledger entry (FR-3.6/FR-6.7). No `note`, proposer, or approver yet — those live on the
+ * `compensation_changes` row this record's `changeId` points at, and that domain doesn't exist
+ * until P6.1.
+ */
+export type CompensationRecord = {
+  id: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  base: Money;
+  payFrequency: string;
+  annualBaseAmount: string;
+  normalizedAnnualBase: Money;
+  bandId: string | null;
+  compaRatio: number | null;
+  rangePenetration: number | null;
+  changeReason: string;
+  changeId: string | null;
+  supersededBy: string | null;
+  createdBy: string;
+  createdAt: string;
+};
+
 function buildQuery(params: EmployeeListParams): string {
   const search = new URLSearchParams();
   if (params.q) search.set("q", params.q);
@@ -117,6 +140,11 @@ export async function fetchEmployee(id: string): Promise<EmployeeDetail> {
 export async function fetchPeers(id: string): Promise<PeerComparison> {
   const response = await apiFetch(`/api/employees/${id}/peers`);
   return (await response.json()) as PeerComparison;
+}
+
+export async function fetchCompensationHistory(id: string): Promise<CompensationRecord[]> {
+  const response = await apiFetch(`/api/employees/${id}/compensation`);
+  return (await response.json()) as CompensationRecord[];
 }
 
 /**

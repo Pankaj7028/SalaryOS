@@ -4,10 +4,14 @@ import com.acme.salaryos.band.domain.SalaryBand;
 import com.acme.salaryos.band.dto.BandImportResult;
 import com.acme.salaryos.band.dto.BandImportRowResult;
 import com.acme.salaryos.band.dto.BandResponse;
+import com.acme.salaryos.band.dto.BandVersionImpactResponse;
 import com.acme.salaryos.band.dto.CreateBandRequest;
 import com.acme.salaryos.band.dto.UpdateBandRequest;
 import com.acme.salaryos.band.repository.SalaryBandRepository;
 import com.acme.salaryos.common.money.Money;
+import com.acme.salaryos.compensation.domain.EmployeeCurrentComp;
+import com.acme.salaryos.compensation.effective.EffectiveDating;
+import com.acme.salaryos.compensation.repository.EmployeeCurrentCompRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -36,9 +40,11 @@ import java.util.UUID;
 public class BandService {
 
 	private final SalaryBandRepository salaryBandRepository;
+	private final EmployeeCurrentCompRepository employeeCurrentCompRepository;
 
-	public BandService(SalaryBandRepository salaryBandRepository) {
+	public BandService(SalaryBandRepository salaryBandRepository, EmployeeCurrentCompRepository employeeCurrentCompRepository) {
 		this.salaryBandRepository = salaryBandRepository;
+		this.employeeCurrentCompRepository = employeeCurrentCompRepository;
 	}
 
 	public List<BandResponse> list() {
@@ -51,8 +57,31 @@ public class BandService {
 				.toList();
 	}
 
+	/**
+	 * ui doc §8.6: "Creating a new version shows how many employees change status as a result
+	 * before saving." Evaluates the cohort currently projected against {@code bandId} (necessarily
+	 * its in-force version — {@code employee_current_comp.band_id} only ever points at that one)
+	 * against the proposed new boundaries, using the exact same {@link EffectiveDating#bandStatus}
+	 * rule the ledger itself uses — so this number is provably what a post-save re-derivation would
+	 * also find, never a separate approximation.
+	 */
+	public BandVersionImpactResponse previewVersionImpact(UUID bandId, BigDecimal minAmount, BigDecimal midAmount, BigDecimal maxAmount) {
+		SalaryBand proposed = SalaryBand.builder()
+				.minAmount(minAmount).midAmount(midAmount).maxAmount(maxAmount)
+				.build();
+
+		List<EmployeeCurrentComp> cohort = employeeCurrentCompRepository.findByBandId(bandId);
+		long changing = cohort.stream()
+				.filter(comp -> !EffectiveDating.bandStatus(comp.getAnnualBaseAmount(), proposed).equals(comp.getBandStatus()))
+				.count();
+
+		return new BandVersionImpactResponse(cohort.size(), (int) changing);
+	}
+
 	@Transactional
 	public BandResponse create(CreateBandRequest request, UUID createdBy) {
+		requireOrdered(request.minAmount(), request.midAmount(), request.maxAmount());
+
 		Optional<SalaryBand> existing = salaryBandRepository
 				.findByJobLevelIdAndCountryCodeAndEffectiveToIsNull(request.jobLevelId(), request.countryCode());
 		if (existing.isPresent()) {
@@ -75,6 +104,8 @@ public class BandService {
 
 	@Transactional
 	public BandResponse update(UUID id, UpdateBandRequest request, UUID createdBy) {
+		requireOrdered(request.minAmount(), request.midAmount(), request.maxAmount());
+
 		SalaryBand current = salaryBandRepository.findById(id).orElseThrow(NoSuchElementException::new);
 		if (current.getEffectiveTo() != null) {
 			throw new BandNotOpenException();
@@ -184,6 +215,12 @@ public class BandService {
 				minAmount, midAmount, maxAmount, effectiveFrom, null);
 	}
 
+	private void requireOrdered(BigDecimal minAmount, BigDecimal midAmount, BigDecimal maxAmount) {
+		if (minAmount.compareTo(midAmount) > 0 || midAmount.compareTo(maxAmount) > 0) {
+			throw new BandOrderingException();
+		}
+	}
+
 	private BandImportRowResult errorRow(int rowNumber, String rawLine, String message) {
 		return new BandImportRowResult(rowNumber, "ERROR", null, null, null, null, null, null, null, message);
 	}
@@ -215,10 +252,11 @@ public class BandService {
 
 	private BandResponse toResponse(SalaryBand band) {
 		String currency = band.getCurrency();
+		long headcount = band.getEffectiveTo() == null ? employeeCurrentCompRepository.countByBandId(band.getId()) : 0;
 		return new BandResponse(
 				band.getId(), band.getJobLevelId(), band.getCountryCode(),
 				new Money(band.getMinAmount(), currency), new Money(band.getMidAmount(), currency), new Money(band.getMaxAmount(), currency),
-				band.getEffectiveFrom(), band.getEffectiveTo(), band.getNote());
+				band.getEffectiveFrom(), band.getEffectiveTo(), band.getNote(), headcount);
 	}
 
 }

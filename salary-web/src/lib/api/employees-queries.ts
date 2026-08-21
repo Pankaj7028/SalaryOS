@@ -2,7 +2,13 @@
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { employeeKeys } from "@/lib/api/keys";
-import { fetchEmployee, fetchEmployees, fetchPeers, type EmployeeListParams } from "@/lib/api/employees";
+import {
+  fetchCompensationHistory,
+  fetchEmployee,
+  fetchEmployees,
+  fetchPeers,
+  type EmployeeListParams,
+} from "@/lib/api/employees";
 
 /**
  * `keepPreviousData` keeps the current rows on screen while the next page or
@@ -29,5 +35,12 @@ export function usePeers(id: string) {
   return useQuery({
     queryKey: employeeKeys.peers(id),
     queryFn: () => fetchPeers(id),
+  });
+}
+
+export function useCompensationHistory(id: string) {
+  return useQuery({
+    queryKey: employeeKeys.compensationHistory(id),
+    queryFn: () => fetchCompensationHistory(id),
   });
 }

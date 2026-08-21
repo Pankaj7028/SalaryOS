@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ErrorState, TableSkeleton } from "@/components/feedback/states";
 import { CurrentPayPanel } from "@/components/employees/current-pay-panel";
+import { PayHistoryPanel } from "@/components/employees/pay-history-panel";
 import { PeersPanel } from "@/components/employees/peers-panel";
 import { ApiError } from "@/lib/api/client";
 import { useEmployee } from "@/lib/api/employees-queries";
@@ -16,12 +17,9 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /**
- * `/employees/[id]` (ui doc §8.3). Header + Current pay + Peers. **Pay
- * history is deliberately not built here** — it is its own step, P5.4/P5.5,
- * once the ledger endpoint (`GET /{id}/compensation`) exists; `BuildPlan.md`
- * scopes P4.4 to identity, current pay, band bar, and peers only. "Propose
- * change" is disabled for the same reason as the Overview page's button
- * (P3.3): the change-lifecycle endpoints are P6, not built yet.
+ * `/employees/[id]` (ui doc §8.3). Header + Current pay + Pay history + Peers. "Propose change" is
+ * disabled for the same reason as the Overview page's button (P3.3): the change-lifecycle
+ * endpoints are P6, not built yet.
  */
 export function EmployeeDetailScreen({ id }: { id: string }) {
   const employee = useEmployee(id);
@@ -87,6 +85,9 @@ export function EmployeeDetailScreen({ id }: { id: string }) {
       <div className="grid gap-4 lg:grid-cols-2">
         <CurrentPayPanel employee={person} />
         <PeersPanel employeeId={person.id} />
+        <div className="lg:col-span-2">
+          <PayHistoryPanel employeeId={person.id} />
+        </div>
       </div>
     </div>
   );

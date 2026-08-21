@@ -13,17 +13,16 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 
 | | |
 |---|---|
-| **Phase** | P5 in progress; P4 UI work code-complete but unverified in a browser |
-| **Last completed** | `P5.4` Pay history + `as-at` — `[x]`, 86/86 backend tests. **Found and fixed a real day-boundary gap bug in P5.1/P5.3's closing formula** — see gotcha below, read it before touching any closing/versioning code. |
-| **Next step** | `P5.5` — Employee pay-history ledger UI + bands grid screen. Separately: get a Chrome session that can reach this machine's `localhost` and run the P4.3/P4.4 visual passes. |
-| **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). Chrome extension cannot reach `localhost` on this machine — see gotcha below. |
+| **Phase** | P5 complete; P6 (Changes & approval) next |
+| **Last completed** | `P5.5` Pay-history UI + bands grid — `[x]`, 89/89 backend tests. Live browser verification finally happened this session (see gotcha below) — `P4.3`/`P4.4` retroactively `[x]` too. |
+| **Next step** | `P6.1` — Change lifecycle endpoints, one-open-change rule, `ProposerIsNotApproverTest`. |
+| **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
-Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4.1`, `P4.2` · `P5.1`–`P5.4`. In
-progress: `P4.3`, `P4.4` (both code done, both need a browser pass). Blocked: `P0.3`. Untouched:
-`P5.5`–`P9`.
+Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all). Blocked:
+`P0.3`. Untouched: `P6`–`P9`.
 
 ---
 
@@ -103,6 +102,10 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
 - **Termination pay runs through and includes `terminationDate`** (user-confirmed, P5.4) —
   `EmployeeService.terminate()` closes at `terminationDate.plusDays(1)`, not `terminationDate`
   itself (same `[)`-range reasoning as the closing-formula gotcha above).
+- **React Hook Form + Zod installed and used for real at P5.5** (CLAUDE.md's pinned forms stack;
+  sign-in's plain `useState` predates this and wasn't redone). `bandFormSchema` is the pattern to
+  follow for P6's propose-change dialog: one shared Zod schema per form, `.refine()` for
+  cross-field checks mirroring (never replacing) the backend's own validation.
 
 ---
 
@@ -116,11 +119,12 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   transitive via JJWT/Jackson 2, not a Spring bean). No Jackson-3 `jackson-annotations` artifact is
   on the classpath, so `@JsonFormat` etc. isn't available without a new dependency — not needed yet
   (money serializes as a JSON number; every consumer already copes).
-- **Lombok on JDK 25 prints `sun.misc.Unsafe` warnings on every compile.** Cosmetic.
-- **The Claude-in-Chrome extension cannot reach this machine's `localhost`**, confirmed twice (P4.3,
-  P4.4): a connected tab loads `https://example.com` fine but errors on both `localhost:3100` and
-  `localhost:8080/actuator/health`. Don't retry past 2 attempts — confirm with the health-check URL,
-  then fall back to `curl` verification and say plainly that no visual pass happened.
+- **If a connected Chrome tab can't reach this machine's `localhost`, check for a second paired
+  browser on a different physical machine before giving up.** Burned most of a session (P4.3–P5.4)
+  believing "Chrome can't reach localhost" was a hard limitation — `tabs_context_mcp` was silently
+  defaulting to a Linux-paired browser alongside the correct macOS one. Fix:
+  `list_connected_browsers` to see all paired devices, `select_browser(deviceId)` to pick the right
+  one. Only conclude "genuinely can't reach it" after confirming you're on the right browser.
 - **Hibernate flushes every pending INSERT before any UPDATE, regardless of the order your Java
   code called `save()` in.** Bit `EffectiveDating.apply()`/`.correct()` at P5.1: closing an old
   ledger row and inserting its replacement, called in the "right" order, still hit the DB
@@ -143,12 +147,17 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
 - **Verify UI steps against `next start`, not `next dev`** — the dev overlay swallows clicks (ate
   the sidebar Collapse button). Use `BASE_URL=…:3100`. Playwright: `waitUntil: "load"`, not
   `"networkidle"` (never fires against `next start`).
-- **The collapsed sidebar peeks open on hover** — move the pointer away before measuring its width.
 - **`command.tsx`/`sonner.tsx` shadcn components were repaired in place** (ours to edit) — don't
   re-pull them from upstream. **`salary-web/AGENTS.md`/`CLAUDE.md` are `next dev`-generated and
   committed deliberately** — deleting them only produces churn.
-- **Scanning-style tests must exclude test files and strip comments**, or they report their own
-  prose (`notify.test.ts` did both before it was right).
+- **`npm install` from the wrong cwd fails silently.** Running it from the repo root instead of
+  `salary-web/` (persisted-shell cwd drift after backend work) created a stray, untracked root
+  `package.json`/`node_modules` — typecheck/lint/build all still passed, because Node's module
+  resolution walks up the directory tree and found the packages there anyway. Always confirm `pwd`
+  (or use an absolute `cd` in the same command) before any `npm install` in this repo.
+- **Neither the Employees table nor the Bands grid degrades to cards at 375px** (CLAUDE.md/ui doc
+  §12.10) — a known, unfixed gap. shadcn's `Table` wrapper has its own `overflow-x-auto`, so a
+  narrow viewport scrolls the table internally rather than the page, but that's not the same thing.
 
 ---
 
