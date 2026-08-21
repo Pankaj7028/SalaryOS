@@ -19,12 +19,14 @@ import java.net.UnknownHostException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Login, logout, and refresh rotation (CLAUDE.md §4). Wrong password and unknown email throw the
- * same exception with the same message — full timing uniformity (dummy-hash on a miss) and the
- * lockout counter land in P2.3.
+ * Login, logout, and refresh rotation (CLAUDE.md §4). Wrong password, unknown email, and a locked
+ * account all throw the same exception with the same message and take comparable time (FR-1.3) —
+ * {@link #login} always runs exactly one Argon2id comparison, against the real hash when the user
+ * exists and a fixed dummy hash otherwise, before it looks at any other reason to fail.
  */
 @Service
 @Slf4j
@@ -37,6 +39,7 @@ public class AuthService {
 	private final JwtService jwtService;
 	private final PasswordEncoder passwordEncoder;
 	private final Duration refreshTtl;
+	private final String dummyPasswordHash;
 
 	public AuthService(
 			UserRepository userRepository,
@@ -49,19 +52,39 @@ public class AuthService {
 		this.jwtService = jwtService;
 		this.passwordEncoder = passwordEncoder;
 		this.refreshTtl = refreshTtl;
+		// Encoded once at startup so an unknown-email login still pays the same Argon2id cost as
+		// a real check — the alternative is a response-time oracle for account enumeration.
+		this.dummyPasswordHash = passwordEncoder.encode("no-such-account-timing-parity-placeholder");
 	}
 
-	@Transactional
+	/**
+	 * {@code noRollbackFor}: a failed attempt saves the incremented counter (and, on the 5th, the
+	 * lockout) and then throws to report the failure — without this, Spring's default
+	 * rollback-on-RuntimeException would undo that save along with everything else.
+	 */
+	@Transactional(noRollbackFor = BadCredentialsException.class)
 	public IssuedSession login(String email, String password, String remoteAddress, String userAgent) {
-		User user = userRepository.findByEmail(email).orElseThrow(() -> new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE));
+		Optional<User> maybeUser = userRepository.findByEmail(email);
+		String hashToCheck = maybeUser.map(User::getPasswordHash).orElse(dummyPasswordHash);
+		boolean passwordMatches = passwordEncoder.matches(password, hashToCheck);
 
-		if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+		User user = maybeUser.orElseThrow(() -> new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE));
+		Instant now = Instant.now();
+
+		if (user.isLocked(now)) {
+			throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
+		}
+		if (!passwordMatches) {
+			user.recordFailedLogin(now);
+			userRepository.save(user);
 			throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
 		}
 		if (!"ACTIVE".equals(user.getStatus())) {
 			throw new BadCredentialsException(INVALID_CREDENTIALS_MESSAGE);
 		}
 
+		user.clearFailedLogins();
+		userRepository.save(user);
 		return issueSession(user, UUID.randomUUID(), remoteAddress, userAgent);
 	}
 

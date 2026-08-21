@@ -216,8 +216,22 @@ verified.
   > Also needed `org.bouncycastle:bcprov-jdk18on` — `Argon2PasswordEncoder` delegates to it and it
   > is not pulled in transitively by `spring-boot-starter-security`.
   > Observed: `./mvnw clean verify` → `Tests run: 53, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
-- [ ] **P2.3** Lockout after 5 failures, uniform response and timing for wrong password / unknown
+- [x] **P2.3** Lockout after 5 failures, uniform response and timing for wrong password / unknown
   email / locked. *Verify:* a test asserting identical status, body, and comparable timing.
+  > **Done (2026-08-21):** `User.recordFailedLogin`/`clearFailedLogins`/`isLocked` domain methods
+  > (5 failures → 15 min lock). `AuthService.login` now always runs exactly one Argon2id comparison
+  > — the real hash when the user exists, a fixed pre-encoded dummy hash otherwise — *before*
+  > branching on locked/wrong-password/inactive, so every failure path pays the same cost and
+  > returns the identical `ProblemDetail`.
+  > **Same rollback bug as P2.2, different method:** `login`'s failed-attempt branch saves the
+  > incremented counter and then throws — needed the identical `noRollbackFor =
+  > BadCredentialsException.class` fix, or the save silently never happened.
+  > `AuthLockoutTest`: 5 failures locks the account and a 6th attempt with the *correct* password
+  > still fails; locked/wrong-password/unknown-email share identical status+body; response timing
+  > compared across wrong-password vs unknown-email with a generous ratio tolerance (real timing
+  > assertions are inherently a little noisy — this is about proving no gross oracle exists, not
+  > microsecond parity).
+  > Observed: `./mvnw clean verify` → `Tests run: 56, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
 - [ ] **P2.4** `@PreAuthorize` on every endpoint stub + `RolePermissionMatrixTest` against
   `CLAUDE.md §7`. *Verify:* it fails when you delete one annotation.
 - [ ] **P2.5** Frontend: `proxy.ts` (Next 16's `middleware.ts`) redirecting unauthenticated routes,
@@ -338,8 +352,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P2.2` login/logout/refresh (with rotation + family revocation), `GET /auth/me` (2026-08-21) |
-| **Current step** | `P2.3` — lockout after 5 failures, uniform response/timing |
+| **Last completed** | `P2.3` lockout after 5 failures, uniform response/timing (2026-08-21) |
+| **Current step** | `P2.4` — `@PreAuthorize` on every endpoint stub + `RolePermissionMatrixTest` |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by Testcontainers-backed integration tests) |
 
 _Update both rows on every completed step._

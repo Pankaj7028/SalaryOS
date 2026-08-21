@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -58,5 +59,25 @@ public class User {
 
 	@UpdateTimestamp
 	private Instant updatedAt;
+
+	private static final int MAX_FAILED_LOGINS = 5;
+	private static final Duration LOCKOUT_DURATION = Duration.ofMinutes(15);
+
+	/** FR-1.3: five consecutive failures locks the account for 15 minutes. */
+	public void recordFailedLogin(Instant at) {
+		this.failedLoginCount = this.failedLoginCount + 1;
+		if (this.failedLoginCount >= MAX_FAILED_LOGINS) {
+			this.lockedUntil = at.plus(LOCKOUT_DURATION);
+		}
+	}
+
+	public void clearFailedLogins() {
+		this.failedLoginCount = 0;
+		this.lockedUntil = null;
+	}
+
+	public boolean isLocked(Instant at) {
+		return lockedUntil != null && lockedUntil.isAfter(at);
+	}
 
 }
