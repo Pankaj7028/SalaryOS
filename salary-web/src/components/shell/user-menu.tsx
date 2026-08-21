@@ -3,6 +3,7 @@
 import { LogOut, UserCog } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import type { CurrentUser } from "@/lib/auth/current-user";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,11 +15,10 @@ import {
 /**
  * Avatar menu (§6.1): name, email, role badge, Account, Sign out.
  *
- * The identity below is a PLACEHOLDER. The real one comes from GET /api/auth/me
- * at P2.5 — never from a token read in the browser (CLAUDE.md §4.4).
+ * The identity comes from getCurrentUser(), which is a placeholder until P2.5
+ * wires it to GET /api/auth/me — never a token read in the browser (§4.4).
  */
-export function UserMenu() {
-  const user = { name: "Dana Whitfield", email: "dana.whitfield@acme.example", role: "HR_MANAGER" };
+export function UserMenu({ user }: { user: CurrentUser }) {
   const initials = user.name
     .split(" ")
     .map((p) => p[0])

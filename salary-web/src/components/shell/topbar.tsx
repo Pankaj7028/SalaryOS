@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { cookies } from "next/headers";
+import type { CurrentUser } from "@/lib/auth/current-user";
 import { THEME_COOKIE, parseTheme } from "@/lib/theme";
 import { Brand } from "./brand";
 import { CommandPalette } from "./command-palette";
@@ -15,12 +16,12 @@ import { UserMenu } from "./user-menu";
  * The theme is read here on the server so the menu opens already showing the
  * current choice, matching the class the server put on <html>.
  */
-export async function Topbar() {
+export async function Topbar({ user }: { user: CurrentUser }) {
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
 
   return (
     <header className="app-topbar flex items-center gap-3 px-4">
-      <MobileNav />
+      <MobileNav role={user.role} />
       <Brand />
 
       <div className="flex-1" />
@@ -31,7 +32,7 @@ export async function Topbar() {
           <CurrencyToggle />
         </Suspense>
         <ThemeMenu initial={theme} />
-        <UserMenu />
+        <UserMenu user={user} />
       </div>
     </header>
   );

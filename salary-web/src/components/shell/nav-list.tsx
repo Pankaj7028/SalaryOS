@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_GROUPS, isActive } from "@/lib/nav";
+import { canSee, isArea, type Role } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils";
 
 /**
@@ -12,12 +13,19 @@ import { cn } from "@/lib/utils";
  * An empty group disappears rather than rendering a header with nothing under it
  * (§6.2) — that matters once P3.5 filters items by role.
  */
-export function NavList({ onNavigate }: { onNavigate?: () => void }) {
+export function NavList({ role, onNavigate }: { role: Role; onNavigate?: () => void }) {
   const pathname = usePathname();
+
+  // Filter first, THEN drop empty groups — otherwise a role with no items in a
+  // group still gets its caption, advertising an area it cannot reach.
+  const groups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => isArea(item.href) && canSee(role, item.href)),
+  })).filter((group) => group.items.length > 0);
 
   return (
     <nav aria-label="Main" className="flex flex-col gap-6 py-4">
-      {NAV_GROUPS.filter((group) => group.items.length > 0).map((group) => (
+      {groups.map((group) => (
         <div key={group.caption} className="flex flex-col gap-1">
           <p className="type-label text-muted-foreground nav-caption px-4 pb-1 transition-opacity">
             <span className="nav-label inline-block">{group.caption}</span>

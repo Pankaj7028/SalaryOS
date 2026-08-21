@@ -11,10 +11,12 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "check:tokens": "node scripts/check-tokens.mjs",
-    "verify": "npm run check:tokens && npm run lint && npm run typecheck && npm run build",
+    "verify": "npm run check:tokens && npm run lint && npm run typecheck && npm run test && npm run build",
     "verify:visual": "node scripts/verify-type.mjs",
     "verify:shell": "node scripts/verify-shell.mjs",
-    "verify:topbar": "node scripts/verify-topbar.mjs"
+    "verify:topbar": "node scripts/verify-topbar.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
@@ -41,6 +43,7 @@
     "prettier": "^3.9.6",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.11"
   }
 }

@@ -110,7 +110,7 @@ verified.
 - [x] **P3.4** Topbar: brand, ⌘K command palette (stub results), currency toggle wired to
   `?ccy=`, theme menu (System default, cookie-persisted, no flash), avatar menu.
   *Verify:* server-rendered HTML already carries `.app-dark` when the cookie says so.
-- [ ] **P3.5** `src/lib/auth/roles.ts` with `AREA_ACCESS` and `NAV_VISIBILITY`, role-filtered
+- [x] **P3.5** `src/lib/auth/roles.ts` with `AREA_ACCESS` and `NAV_VISIBILITY`, role-filtered
   sidebar, `roles.test.ts` asserting visibility ⊆ access. *Verify:* the test fails when you widen a
   nav entry.
 - [ ] **P3.6** `notify.ts` + single root `<Toaster>`; loading, empty, and error primitives per §7.8.
@@ -212,8 +212,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P3.4` topbar controls (2026-08-21) |
-| **Current step** | `P3.5` roles.ts + nav filtering |
+| **Last completed** | `P3.5` roles.ts + nav filtering (2026-08-21) |
+| **Current step** | `P3.6` notify.ts + root Toaster |
 | **Blockers** | `P0.3` no Neon/`DATABASE_URL`; `P0.5`+`P1.*` no Docker for Testcontainers |
 
 _Update both rows on every completed step._
