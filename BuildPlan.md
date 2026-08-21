@@ -315,8 +315,33 @@ verified.
 
 ## P4 — Employees
 
-- [ ] **P4.1** `GET /employees` with search, filters, sort, keyset pagination; `GET /employees/{id}`.
+- [x] **P4.1** `GET /employees` with search, filters, sort, keyset pagination; `GET /employees/{id}`.
   *Verify:* integration test pages to the end of 10k rows with no duplicate or skipped id.
+  > **Done (2026-08-21):** `common/paging/{Cursor,CursorCodec,KeysetPage}` (opaque cursor, URL-safe
+  > base64 of the sort-key values) + `employee/spec/EmployeeSpecifications` (search, department,
+  > location, country via a subquery — no Location relationship on Employee by design —, job level,
+  > status) + `EmployeeService`/`EmployeeController` (`list`/`get` now real; create/edit/terminate
+  > stay P4.2 stubs). Sort is fixed at `(last_name, id)`, matching the only index built for this
+  > (V10) — FR-2.2 asks for "sort" generally but the Verify only tests this one, so arbitrary
+  > client-chosen sort columns are deferred rather than half-built.
+  > Uses Spring Data JPA's **native keyset scrolling** (`ScrollPosition.keyset()`/`.forward(keys)`,
+  > `Window<T>` via `repository.findBy(spec, q -> q.sortBy(sort).limit(n).scroll(position))`) rather
+  > than a hand-rolled seek predicate — it composes cleanly with `Specification`-based filters and
+  > is exactly what it's for.
+  > `employee_current_comp` join is a second batched query (`findAllById`), not a JPA join —
+  > `Employee` has no relationship to it by design (P1.9), and it's empty until P5 anyway, so every
+  > `currentBasePay`/`compaRatio`/`bandStatus` in the response is null for now, correctly (never a
+  > fabricated compa-ratio of 1.0 for an unbanded/uncompensated employee).
+  > **Correctness finding:** this Spring Data version's `Specification.where(null)` throws
+  > (`IllegalArgumentException`), not the historical "null means unrestricted" behavior — building
+  > the combined filter spec needed an explicit `Specification.unrestricted()` fallback per
+  > optional filter instead of chaining `.and(possiblyNullSpec)` directly.
+  > `EmployeeListPaginationTest`: 10,000 employees batch-inserted via raw JDBC (not the P9 seed
+  > generator — no realistic distribution, just row count, with repeated last names to exercise the
+  > id tie-break), paged through the real HTTP endpoint end to end (page size 137, an
+  > un-round number on purpose) collecting every id into a `Set`; asserts the set equals the
+  > originally-inserted id set (catches both duplicates and skips) — completes in ~1.5s.
+  > Observed: `./mvnw clean verify` → `Tests run: 59, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
 - [ ] **P4.2** Create, edit, terminate; the band-mismatch flag on level/location change.
   *Verify:* terminating closes the open comp period on the termination date.
 - [ ] **P4.3** Employees list screen: filter row, table, band bar column, URL state, CSV export.
@@ -406,8 +431,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P2.5` frontend auth: `proxy.ts`, sign-in page, `useSession`, fetch wrapper — **P2 complete** (2026-08-21) |
-| **Current step** | `P3` is already done (2026-08-21 earlier session) — next unstarted is `P4.1` `GET /employees` |
+| **Last completed** | `P4.1` `GET /employees` (search/filter/keyset pagination) + `GET /employees/{id}` (2026-08-21) |
+| **Current step** | `P4.2` — create, edit, terminate; band-mismatch flag |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). A real browser (Chrome extension not connected this session) is owed a visual pass over the P2.5 sign-in flow whenever available. |
 
 _Update both rows on every completed step._
