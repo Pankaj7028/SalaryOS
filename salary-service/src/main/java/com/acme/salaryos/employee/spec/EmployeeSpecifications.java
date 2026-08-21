@@ -18,11 +18,18 @@ public final class EmployeeSpecifications {
 			return null;
 		}
 		String pattern = "%" + query.toLowerCase() + "%";
+		// workEmail is citext (CitextJdbcType, JDBC type OTHER, not a recognized "string" type to
+		// Hibernate's own type-checker) — both cb.like(workEmail, ...) directly ("Operand of
+		// 'like' ... is not a string") and cb.lower(workEmail) directly ("Parameter 1 of function
+		// 'lower()' has type STRING, but argument ... mapped to 1111") fail Hibernate's SQM
+		// argument-type validation, even though the column is text-compatible at the SQL level.
+		// An explicit cast to String satisfies the validator by presenting a properly string-typed
+		// expression instead of the raw OTHER-typed attribute.
 		return (root, cq, cb) -> cb.or(
 				cb.like(cb.lower(root.get("firstName")), pattern),
 				cb.like(cb.lower(root.get("lastName")), pattern),
 				cb.like(cb.lower(root.get("employeeNumber")), pattern),
-				cb.like(cb.lower(root.get("workEmail")), pattern));
+				cb.like(cb.lower(root.get("workEmail").as(String.class)), pattern));
 	}
 
 	public static Specification<Employee> departmentId(UUID departmentId) {

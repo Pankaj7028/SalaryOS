@@ -68,10 +68,46 @@ public class Employee {
 
 	private LocalDate terminationDate;
 
+	/** FR-2.5: set when job level or location changes without an accompanying pay change (V12). */
+	@Builder.Default
+	private boolean bandMismatched = false;
+
 	@CreationTimestamp
 	private Instant createdAt;
 
 	@UpdateTimestamp
 	private Instant updatedAt;
+
+	/**
+	 * No {@code @Setter}: state changes go through named domain methods (CLAUDE.md §9). Editing
+	 * job level or location does not touch pay — it sets {@link #bandMismatched}, cleared only
+	 * when a compensation change is applied (P5).
+	 */
+	public void updateProfile(
+			String firstName, String lastName, String workEmail, UUID departmentId, UUID locationId,
+			UUID jobFamilyId, UUID jobLevelId, UUID managerId, String employmentType, BigDecimal fte) {
+		boolean levelOrLocationChanged = !this.jobLevelId.equals(jobLevelId) || !this.locationId.equals(locationId);
+
+		this.firstName = firstName;
+		this.lastName = lastName;
+		this.workEmail = workEmail;
+		this.departmentId = departmentId;
+		this.locationId = locationId;
+		this.jobFamilyId = jobFamilyId;
+		this.jobLevelId = jobLevelId;
+		this.managerId = managerId;
+		this.employmentType = employmentType;
+		this.fte = fte;
+
+		if (levelOrLocationChanged) {
+			this.bandMismatched = true;
+		}
+	}
+
+	/** FR-2.6: sets status and termination date. Closing the open comp period is the caller's job (needs the ledger). */
+	public void terminate(LocalDate terminationDate) {
+		this.status = "TERMINATED";
+		this.terminationDate = terminationDate;
+	}
 
 }

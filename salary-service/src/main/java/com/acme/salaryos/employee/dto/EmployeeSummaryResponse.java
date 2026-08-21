@@ -26,6 +26,7 @@ public record EmployeeSummaryResponse(
 		String status,
 		LocalDate hireDate,
 		LocalDate terminationDate,
+		boolean bandMismatched,
 		Money currentBasePay,
 		BigDecimal compaRatio,
 		String bandStatus) {

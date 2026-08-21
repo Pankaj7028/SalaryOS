@@ -84,4 +84,12 @@ public class CompensationRecord {
 	@CreationTimestamp
 	private Instant createdAt;
 
+	/**
+	 * No {@code @Setter}: the only mutation this insert-only table permits (CLAUDE.md §6.3) is
+	 * closing the open period — never editing any other field in place.
+	 */
+	public void close(LocalDate effectiveTo) {
+		this.effectiveTo = effectiveTo;
+	}
+
 }

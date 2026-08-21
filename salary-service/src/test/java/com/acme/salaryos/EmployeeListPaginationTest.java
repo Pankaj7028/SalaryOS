@@ -58,10 +58,13 @@ class EmployeeListPaginationTest {
 		String cursor = null;
 		int pages = 0;
 
+		// Scoped to this test's own rows via q=E-PAGE: other test classes sharing this cached
+		// context/container (see the FlywayMigrationTest note in BuildPlan.md P1.2) may have their
+		// own employees in the same schema, and an unfiltered list would pick those up too.
 		do {
 			String url = cursor == null
-					? "/api/employees?limit=137"
-					: "/api/employees?limit=137&cursor=" + cursor;
+					? "/api/employees?limit=137&q=E-PAGE"
+					: "/api/employees?limit=137&q=E-PAGE&cursor=" + cursor;
 			String body = mockMvc.perform(get(url))
 					.andExpect(status().isOk())
 					.andReturn().getResponse().getContentAsString();

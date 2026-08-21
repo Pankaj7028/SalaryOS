@@ -23,6 +23,7 @@ public record EmployeeDetailResponse(
 		String status,
 		LocalDate hireDate,
 		LocalDate terminationDate,
+		boolean bandMismatched,
 		Money currentBasePay,
 		BigDecimal compaRatio,
 		BigDecimal rangePenetration,

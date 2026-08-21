@@ -342,8 +342,42 @@ verified.
   > un-round number on purpose) collecting every id into a `Set`; asserts the set equals the
   > originally-inserted id set (catches both duplicates and skips) — completes in ~1.5s.
   > Observed: `./mvnw clean verify` → `Tests run: 59, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
-- [ ] **P4.2** Create, edit, terminate; the band-mismatch flag on level/location change.
+- [x] **P4.2** Create, edit, terminate; the band-mismatch flag on level/location change.
   *Verify:* terminating closes the open comp period on the termination date.
+  > **Done (2026-08-21):** `V12__employee_band_mismatched.sql` (fix-forward — `employees` has no
+  > such column in V3, immutable; FR-2.5's flag is a plain boolean set on edit, not derived by
+  > comparing bands live: the rule is "level/location changed since pay last did," not "the numbers
+  > technically differ today"). `Employee.updateProfile(...)`/`.terminate(date)` domain methods (no
+  > setters); `CompensationRecord.close(date)` domain method + `findByEmployeeIdAndEffectiveToIsNull`
+  > — termination closes the open period directly (`effective_to = terminationDate`), not through
+  > P5.1's `EffectiveDating` (doesn't exist yet; that class's closing rule — `newFrom − 1 day`, for
+  > when a *new* period starts the next day — doesn't apply to termination, which has no successor
+  > period). `EmployeeUpdateRequest` is a full replace, not a partial patch: every field required.
+  > **Real bug found and fixed, not just a test-flakiness workaround:** `EmployeeSpecifications
+  > .search()`'s email predicate — `workEmail` is `citext` via the custom `CitextJdbcType` (JDBC
+  > type `OTHER`), and Hibernate's SQM argument-type validator rejects `OTHER` for **both**
+  > `cb.like(workEmail, ...)` directly ("Operand of 'like' ... is not a string") **and**
+  > `cb.lower(workEmail)` directly ("Parameter 1 of function 'lower()' has type STRING, but
+  > argument ... mapped to 1111") — even though the column is completely text-compatible at the SQL
+  > level. This is a real defect in P4.1's shipped code: `GET /employees?q=...` would 500 on **any**
+  > real query, since email is always one of the four OR'd search branches; it went unnoticed
+  > because P4.1's own pagination test never actually passed a `q`. Found while adding `q=E-PAGE` to
+  > `EmployeeListPaginationTest` to fix an unrelated cross-test data-isolation issue (below), and
+  > fixed at the root: `cb.lower(root.get("workEmail").as(String.class))` — the explicit cast
+  > presents a properly string-typed expression to the validator instead of the raw `OTHER`-typed
+  > attribute.
+  > **Also found:** `EmployeeListPaginationTest`'s unfiltered `GET /employees` picked up whatever
+  > other test classes had seeded into the same cached-context container (10004 rows instead of
+  > 10000, from `EmployeeLifecycleTest`'s 4) — same shared-container caution as P1.2's, scoped this
+  > time with `q=E-PAGE` (which is what surfaced the citext bug above). Separately,
+  > `SecurityMockMvcRequestPostProcessors.csrf()` in `EmployeeLifecycleTest` doesn't target our
+  > custom `CookieCsrfTokenRepository` bean — it falls back to its own `HttpSessionCsrfTokenRepository`
+  > and writes a stray session attribute that caused an unrelated 403 in `AuthControllerIntegrationTest`
+  > when run afterward in the same JVM. Fixed by setting the `sos_csrf` cookie and `X-CSRF-Token`
+  > header to a matching arbitrary value directly (`CookieCsrfTokenRepository` only compares the
+  > two — no server-side state to fight), matching the pattern already used in
+  > `AuthControllerIntegrationTest`/`AuthLockoutTest`. Avoid `csrf()` for this app's tests generally.
+  > Observed: `./mvnw clean verify` → `Tests run: 63, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
 - [ ] **P4.3** Employees list screen: filter row, table, band bar column, URL state, CSV export.
   *Verify:* every filter and sort survives a reload; export matches the on-screen filter.
 - [ ] **P4.4** Employee detail: identity, current pay panel, band detail bar, peers panel.
@@ -431,8 +465,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P4.1` `GET /employees` (search/filter/keyset pagination) + `GET /employees/{id}` (2026-08-21) |
-| **Current step** | `P4.2` — create, edit, terminate; band-mismatch flag |
+| **Last completed** | `P4.2` create/edit/terminate + band-mismatch flag (2026-08-21) |
+| **Current step** | `P4.3` — Employees list screen (filter row, table, band bar column, URL state, CSV export) |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). A real browser (Chrome extension not connected this session) is owed a visual pass over the P2.5 sign-in flow whenever available. |
 
 _Update both rows on every completed step._

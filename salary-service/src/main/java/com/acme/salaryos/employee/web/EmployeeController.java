@@ -1,9 +1,13 @@
 package com.acme.salaryos.employee.web;
 
 import com.acme.salaryos.common.paging.KeysetPage;
+import com.acme.salaryos.employee.dto.EmployeeCreateRequest;
 import com.acme.salaryos.employee.dto.EmployeeDetailResponse;
 import com.acme.salaryos.employee.dto.EmployeeSummaryResponse;
+import com.acme.salaryos.employee.dto.EmployeeTerminateRequest;
+import com.acme.salaryos.employee.dto.EmployeeUpdateRequest;
 import com.acme.salaryos.employee.service.EmployeeService;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -11,6 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -81,20 +86,20 @@ public class EmployeeController {
 	/** Create / edit employee record: HR Admin, HR Manager. */
 	@PostMapping
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER')")
-	public ResponseEntity<Void> create() {
-		return notImplemented();
+	public EmployeeDetailResponse create(@Valid @RequestBody EmployeeCreateRequest request) {
+		return employeeService.create(request);
 	}
 
 	@PatchMapping("/{id}")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER')")
-	public ResponseEntity<Void> update(@PathVariable UUID id) {
-		return notImplemented();
+	public EmployeeDetailResponse update(@PathVariable UUID id, @Valid @RequestBody EmployeeUpdateRequest request) {
+		return employeeService.update(id, request);
 	}
 
 	@PostMapping("/{id}/terminate")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER')")
-	public ResponseEntity<Void> terminate(@PathVariable UUID id) {
-		return notImplemented();
+	public EmployeeDetailResponse terminate(@PathVariable UUID id, @Valid @RequestBody EmployeeTerminateRequest request) {
+		return employeeService.terminate(id, request.terminationDate());
 	}
 
 	private ResponseEntity<Void> notImplemented() {
