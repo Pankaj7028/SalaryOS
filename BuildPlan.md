@@ -929,8 +929,53 @@ verified.
   > already had a pending change from earlier testing; proposed + submitted a real change for a
   > second employee end to end (`DRAFT` → `PENDING`). No live browser pass this session — Chrome
   > browser tools were not enabled; the API-level verification above is real, not assumed.
-- [ ] **P6.5** Changes screen with tabs in the URL and inline approve/reject.
+- [x] **P6.5** Changes screen with tabs in the URL and inline approve/reject.
   *Verify:* an approver-less role sees the tab without the actions.
+  > **Done (2026-08-21):** `ChangeResponse` extended with server-resolved `employeeFirstName`/
+  > `employeeLastName`/`employeeNumber`, `proposedByName`/`decidedByName`, `outOfBand`, and
+  > `deltaAmount`/`deltaPercent` — same "never a raw id or client-computed figure on a display
+  > surface" discipline as the rest of the app (CLAUDE.md §6.1, §9's CSV-export precedent).
+  > `proposedByName`/`decidedByName` exist because `UserAdminController` (`/admin/users`) is
+  > HR_ADMIN-only (P8.1, not built) — a HR_MANAGER/COMP_ANALYST viewing this screen has no other way
+  > to resolve a user id to a name. `outOfBand` reuses the exact band lookup
+  > `requireNoteIfNeeded` already does at propose time, factored into `isOutOfBand()`.
+  >
+  > **A real gap found and closed, not just documented:** `reject()` accepted a null/blank
+  > `decisionNote` — the ui doc's own "required note on reject" was unenforced server-side even
+  > though every other mandatory-note rule in this app (propose outside-band, correction) is.
+  > Fixed by checking after `requirePending` (so a reject on a non-pending change still reports
+  > *that* problem first, matching `approve()`'s own precedence — verified directly:
+  > `onlyAPendingChangeCanBeApprovedOrRejected` still expects `ChangeNotPendingException` for a
+  > DRAFT with no note, not the new check firing first).
+  >
+  > **Frontend:** `ChangesScreen` (`/changes`) — five tabs (`?tab=pending|approved|applied|rejected
+  > |draft`) via shadcn's Tabs (newly added, `npx shadcn add tabs`), `useChanges(status)` per tab.
+  > `ChangesTable` renders both a desktop table (≥768px) and a `md:hidden` card list from day one —
+  > this screen never had the 375px gap P4.3/P5.5 shipped and P6.3 later fixed, because that fix
+  > was written first this session and the pattern was just reused. Approve is a single inline
+  > button (a decision note is optional per the ui doc); Reject opens `RejectChangeDialog` — a
+  > required-note Textarea, disabled submit until non-empty, mirroring the server's own check.
+  > Drafts tab gets Submit/Discard (`POST .../submit`, `DELETE`) — a real usability completion, not
+  > scope creep: `ProposeChangeDialog`'s (P6.4) own success toast says "submit it when you're
+  > ready," and without this a DRAFT had no way to ever reach the approval queue through the UI.
+  > **`canApproveChanges(role)` added to `roles.ts`** (CLAUDE.md §7/§10) — narrower than `/changes`
+  > area access itself (which also includes COMP_ANALYST, who proposes but doesn't decide); gates
+  > whether the Actions column/card-row renders **at all**, never a disabled button — the tab and
+  > every row stay visible to COMP_ANALYST on the Awaiting-approval tab, exactly per this step's own
+  > Verify clause. New `roles.test.ts` case pins the RBAC row longhand, same pattern as its siblings.
+  >
+  > **Verified:** `./mvnw clean verify` → `Tests run: 109, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (2 new tests in `ChangeLifecycleTest` covering the reject-note enforcement and the resolved-name/
+  > delta/out-of-band fields, 107 pre-existing). `npm run typecheck`/`lint`/`build` clean (lint: 0
+  > errors, same 3 pre-existing library warnings). `npx vitest run` → 28/28 (new
+  > `canApproveChanges` case). Live end-to-end against the throwaway dev DB, signed in as the seeded
+  > HR_ADMIN: listed PENDING (two real changes, names/deltas/outOfBand all correct) → rejected one
+  > with no note (400, exact message) → rejected it with a note (200, REJECTED,
+  > `decidedByName: "Ada Admin"`) → confirmed self-approval still blocked (403, proposer === decider)
+  > → listed REJECTED (shows the decider name) → proposed a fresh DRAFT, listed it under DRAFT,
+  > discarded it (204), confirmed the DRAFT list was empty again. No live browser pass this
+  > session — Chrome browser tools were not enabled; `next start` is up on `:3100` against the live
+  > backend on `:8080` if a visual check is wanted.
 
 ## P7 — Insights
 
@@ -984,8 +1029,8 @@ After completion of complete P8 stop executing next P9 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P6.4` Propose-change dialog with the live impact panel — done, `[x]`, 107/107 backend tests (2026-08-21) |
-| **Current step** | `P6.5` — Changes screen with tabs in the URL and inline approve/reject. |
+| **Last completed** | `P6.5` Changes screen with tabs in the URL and inline approve/reject — done, `[x]`, 109/109 backend tests (2026-08-21) |
+| **Current step** | `P7.1` — `payroll-cost`, `headcount` (FR-6.1) with the full basis envelope. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._

@@ -6,6 +6,7 @@ import {
   type Area,
   type Role,
   canAccess,
+  canApproveChanges,
   canSee,
 } from "./roles";
 import { NAV_GROUPS } from "@/lib/nav";
@@ -84,6 +85,13 @@ describe("mirrors the RBAC table in CLAUDE.md §7", () => {
   it("COMP_ANALYST proposes changes but manages no bands", () => {
     expect(canAccess("COMP_ANALYST", "/changes")).toBe(true);
     expect(canAccess("COMP_ANALYST", "/bands")).toBe(false);
+  });
+
+  it("only HR_ADMIN and HR_MANAGER may approve or reject a change — COMP_ANALYST can propose but not decide", () => {
+    expect(canApproveChanges("HR_ADMIN")).toBe(true);
+    expect(canApproveChanges("HR_MANAGER")).toBe(true);
+    expect(canApproveChanges("COMP_ANALYST")).toBe(false);
+    expect(canApproveChanges("AUDITOR")).toBe(false);
   });
 
   it("there is no role hierarchy — HR_ADMIN is listed explicitly everywhere it is allowed", () => {

@@ -17,16 +17,39 @@ export type ProposeChangeInput = {
   note?: string;
 };
 
+export type ChangeStatus = "DRAFT" | "PENDING" | "APPROVED" | "APPLIED" | "REJECTED";
+
+/**
+ * ui doc §8.5: the Changes screen's row. Employee identity and proposer/decider names arrive
+ * pre-resolved from the server (same discipline as P4.3's CSV export — never a raw id on a
+ * display surface), since a HR_MANAGER/COMP_ANALYST viewer has no `/admin/users` access to
+ * resolve a user id itself.
+ */
 export type Change = {
   id: string;
   employeeId: string;
-  status: string;
+  employeeFirstName: string;
+  employeeLastName: string;
+  employeeNumber: string;
+  status: ChangeStatus;
   effectiveDate: string;
   currentBase: Money;
   newBase: Money;
+  deltaAmount: Money;
+  deltaPercent: number;
   changeReason: string;
   performanceRating: string | null;
   note: string | null;
+  outOfBand: boolean;
+  proposedBy: string;
+  proposedByName: string | null;
+  proposedAt: string | null;
+  decidedBy: string | null;
+  decidedByName: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  appliedAt: string | null;
+  appliedRecordId: string | null;
 };
 
 /**
@@ -68,4 +91,38 @@ export async function fetchChangeImpactPreview(params: ChangeImpactPreviewParams
 export async function proposeChange(input: ProposeChangeInput): Promise<Change> {
   const response = await apiFetch("/api/changes", { method: "POST", body: JSON.stringify(input) });
   return (await response.json()) as Change;
+}
+
+export async function fetchChanges(status: ChangeStatus): Promise<Change[]> {
+  const response = await apiFetch(`/api/changes?status=${status}`);
+  return (await response.json()) as Change[];
+}
+
+/** ui doc §8.5: a decision note is encouraged, not required, when approving. */
+export async function approveChange(id: string, decisionNote?: string): Promise<Change> {
+  const response = await apiFetch(`/api/changes/${id}/approve`, {
+    method: "POST",
+    body: JSON.stringify({ decisionNote: decisionNote || null }),
+  });
+  return (await response.json()) as Change;
+}
+
+/** ui doc §8.5: rejecting requires a note — enforced server-side too (400 without one). */
+export async function rejectChange(id: string, decisionNote: string): Promise<Change> {
+  const response = await apiFetch(`/api/changes/${id}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ decisionNote }),
+  });
+  return (await response.json()) as Change;
+}
+
+/** Moves a DRAFT to PENDING — how a change proposed via `ProposeChangeDialog` (which only ever
+ * creates a DRAFT) actually reaches the approval queue. */
+export async function submitDraft(id: string): Promise<Change> {
+  const response = await apiFetch(`/api/changes/${id}/submit`, { method: "POST" });
+  return (await response.json()) as Change;
+}
+
+export async function discardDraft(id: string): Promise<void> {
+  await apiFetch(`/api/changes/${id}`, { method: "DELETE" });
 }

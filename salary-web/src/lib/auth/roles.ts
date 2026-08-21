@@ -80,3 +80,15 @@ export function canSee(role: Role, area: Area): boolean {
 export function isArea(href: string): href is Area {
   return href in AREA_ACCESS;
 }
+
+/**
+ * "Approve / reject a change" (CLAUDE.md §7) — narrower than `/changes` area access itself, which
+ * also includes COMP_ANALYST (who may propose but not decide). ui doc §8.5: the tab a role cannot
+ * act on stays visible — its action buttons are just absent, never disabled-with-a-tooltip — so
+ * this gates the buttons only, not the screen or the row.
+ */
+const CHANGE_APPROVER_ROLES: readonly Role[] = ["HR_ADMIN", "HR_MANAGER"];
+
+export function canApproveChanges(role: Role): boolean {
+  return CHANGE_APPROVER_ROLES.includes(role);
+}

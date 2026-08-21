@@ -27,4 +27,5 @@ export const bandKeys = {
 
 export const changeKeys = {
   impactPreview: (params: Record<string, string | undefined>) => ["changes", "impactPreview", params] as const,
+  list: (status: string) => ["changes", "list", status] as const,
 };

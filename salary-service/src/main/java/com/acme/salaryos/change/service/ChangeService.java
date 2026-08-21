@@ -1,5 +1,7 @@
 package com.acme.salaryos.change.service;
 
+import com.acme.salaryos.auth.domain.User;
+import com.acme.salaryos.auth.repository.UserRepository;
 import com.acme.salaryos.band.domain.SalaryBand;
 import com.acme.salaryos.band.repository.SalaryBandRepository;
 import com.acme.salaryos.change.domain.CompensationChange;
@@ -59,6 +61,7 @@ public class ChangeService {
 	private final SalaryBandRepository salaryBandRepository;
 	private final EffectiveDating effectiveDating;
 	private final EmployeeService employeeService;
+	private final UserRepository userRepository;
 
 	public ChangeService(
 			CompensationChangeRepository changeRepository,
@@ -67,7 +70,8 @@ public class ChangeService {
 			LocationRepository locationRepository,
 			SalaryBandRepository salaryBandRepository,
 			EffectiveDating effectiveDating,
-			EmployeeService employeeService) {
+			EmployeeService employeeService,
+			UserRepository userRepository) {
 		this.changeRepository = changeRepository;
 		this.employeeRepository = employeeRepository;
 		this.employeeCurrentCompRepository = employeeCurrentCompRepository;
@@ -75,6 +79,7 @@ public class ChangeService {
 		this.salaryBandRepository = salaryBandRepository;
 		this.effectiveDating = effectiveDating;
 		this.employeeService = employeeService;
+		this.userRepository = userRepository;
 	}
 
 	public List<ChangeResponse> list(UUID employeeId, String status, LocalDate fromDate, LocalDate toDate) {
@@ -190,10 +195,16 @@ public class ChangeService {
 		return toResponse(changeRepository.save(change));
 	}
 
+	/** ui doc §8.5: rejecting requires a note (unlike approving, where one is encouraged but optional).
+	 * Checked after {@link #requirePending} so a reject on a non-pending change reports THAT problem
+	 * first, matching {@link #approve}'s own precedence between state and input validation. */
 	@Transactional
 	public ChangeResponse reject(UUID id, UUID decidedBy, String decisionNote) {
 		CompensationChange change = changeRepository.findById(id).orElseThrow(NoSuchElementException::new);
 		requirePending(change);
+		if (decisionNote == null || decisionNote.isBlank()) {
+			throw new ChangeNoteRequiredException("to reject a change");
+		}
 		change.reject(decidedBy, decisionNote);
 		return toResponse(changeRepository.save(change));
 	}
@@ -336,13 +347,38 @@ public class ChangeService {
 	}
 
 	private ChangeResponse toResponse(CompensationChange change) {
+		Employee employee = employeeRepository.findById(change.getEmployeeId()).orElseThrow(NoSuchElementException::new);
+		String proposedByName = userRepository.findById(change.getProposedBy()).map(User::getFullName).orElse(null);
+		String decidedByName = change.getDecidedBy() == null
+				? null
+				: userRepository.findById(change.getDecidedBy()).map(User::getFullName).orElse(null);
+		boolean outOfBand = isOutOfBand(employee, change.getEffectiveDate(), change.getNewBaseAmount());
+
+		BigDecimal deltaAmount = change.getNewBaseAmount().subtract(change.getCurrentBaseAmount());
+		BigDecimal deltaPercent = change.getCurrentBaseAmount().signum() == 0
+				? BigDecimal.ZERO
+				: deltaAmount.divide(change.getCurrentBaseAmount(), 6, RoundingMode.HALF_UP);
+
 		return new ChangeResponse(
-				change.getId(), change.getEmployeeId(), change.getStatus(), change.getEffectiveDate(),
+				change.getId(), change.getEmployeeId(), employee.getFirstName(), employee.getLastName(), employee.getEmployeeNumber(),
+				change.getStatus(), change.getEffectiveDate(),
 				new Money(change.getCurrentBaseAmount(), change.getCurrency()),
 				new Money(change.getNewBaseAmount(), change.getCurrency()),
-				change.getChangeReason(), change.getPerformanceRating(), change.getNote(),
-				change.getProposedBy(), change.getProposedAt(), change.getDecidedBy(), change.getDecidedAt(),
+				new Money(deltaAmount, change.getCurrency()), deltaPercent,
+				change.getChangeReason(), change.getPerformanceRating(), change.getNote(), outOfBand,
+				change.getProposedBy(), proposedByName, change.getProposedAt(),
+				change.getDecidedBy(), decidedByName, change.getDecidedAt(),
 				change.getDecisionNote(), change.getAppliedAt(), change.getAppliedRecordId());
+	}
+
+	/** Same rule {@link #requireNoteIfNeeded} enforces at propose time — landing outside the band
+	 * effective on the change's own effective date, never the band as it stands today. */
+	private boolean isOutOfBand(Employee employee, LocalDate effectiveDate, BigDecimal newBaseAmount) {
+		Location location = locationRepository.findById(employee.getLocationId()).orElseThrow(NoSuchElementException::new);
+		SalaryBand band = salaryBandRepository
+				.findEffective(employee.getJobLevelId(), location.getCountryCode(), effectiveDate)
+				.orElse(null);
+		return band != null && !"IN_BAND".equals(EffectiveDating.bandStatus(newBaseAmount, band));
 	}
 
 }

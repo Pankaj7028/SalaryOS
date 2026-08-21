@@ -148,6 +148,47 @@ class ChangeLifecycleTest {
 		assertThat(next.status()).isEqualTo("DRAFT");
 	}
 
+	/** ui doc §8.5: rejecting requires a note, unlike approving, where one is encouraged but optional. */
+	@Test
+	void rejectingAPendingChangeWithoutANoteIsRejected() {
+		Fixtures fx = seedFixtures("REJECTNONOTE", new BigDecimal("90000"), new BigDecimal("110000"), new BigDecimal("130000"));
+		UUID employeeId = hireWithComp(fx, "REJECTNONOTE", new BigDecimal("100000"));
+
+		ChangeResponse change = changeService.propose(new ProposeChangeRequest(
+				employeeId, LocalDate.of(2036, 6, 1), new BigDecimal("110000"), "USD", "MERIT", null, null), fx.proposerId());
+		changeService.submit(change.id());
+
+		assertThatThrownBy(() -> changeService.reject(change.id(), fx.approverId(), null))
+				.isInstanceOf(ChangeNoteRequiredException.class);
+		assertThatThrownBy(() -> changeService.reject(change.id(), fx.approverId(), "   "))
+				.isInstanceOf(ChangeNoteRequiredException.class);
+
+		// Approving, by contrast, is still fine with no note.
+		ChangeResponse approved = changeService.approve(change.id(), fx.approverId(), null);
+		assertThat(approved.status()).isEqualTo("APPROVED");
+	}
+
+	/** ChangeResponse now resolves employee identity, proposer/decider names, and out-of-band (P6.5). */
+	@Test
+	void responseCarriesResolvedEmployeeAndDeciderNamesAndOutOfBandFlag() {
+		Fixtures fx = seedFixtures("RESOLVED", new BigDecimal("90000"), new BigDecimal("110000"), new BigDecimal("130000"));
+		UUID employeeId = hireWithComp(fx, "RESOLVED", new BigDecimal("100000"));
+
+		ChangeResponse change = changeService.propose(new ProposeChangeRequest(
+				employeeId, LocalDate.of(2036, 6, 1), new BigDecimal("140000"), "USD", "MERIT", null, "Big jump."), fx.proposerId());
+
+		assertThat(change.employeeFirstName()).isEqualTo("First");
+		assertThat(change.employeeLastName()).isEqualTo("Last");
+		assertThat(change.employeeNumber()).isEqualTo("E-RESOLVED");
+		assertThat(change.proposedByName()).isEqualTo("Proposer");
+		assertThat(change.decidedByName()).isNull();
+		assertThat(change.outOfBand()).isTrue();
+
+		changeService.submit(change.id());
+		ChangeResponse approved = changeService.approve(change.id(), fx.approverId(), "Approved.");
+		assertThat(approved.decidedByName()).isEqualTo("Approver");
+	}
+
 	@Test
 	void onlyADraftCanBeEditedSubmittedOrDiscarded() {
 		Fixtures fx = seedFixtures("DRAFTONLY", new BigDecimal("90000"), new BigDecimal("110000"), new BigDecimal("130000"));
