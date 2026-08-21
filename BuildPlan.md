@@ -378,8 +378,64 @@ verified.
   > two — no server-side state to fight), matching the pattern already used in
   > `AuthControllerIntegrationTest`/`AuthLockoutTest`. Avoid `csrf()` for this app's tests generally.
   > Observed: `./mvnw clean verify` → `Tests run: 63, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
-- [ ] **P4.3** Employees list screen: filter row, table, band bar column, URL state, CSV export.
+- [~] **P4.3** Employees list screen: filter row, table, band bar column, URL state, CSV export.
   *Verify:* every filter and sort survives a reload; export matches the on-screen filter.
+  > **Backend prereqs done and verified:** `BandBoundaries`/`rangePenetration` added to
+  > `EmployeeSummaryResponse`/`EmployeeDetailResponse`; `EmployeeService` now resolves each
+  > employee's `SalaryBand` via a new `SalaryBandRepository` dependency (`fetchBands`/`findBand`
+  > helpers). `ReferenceController`'s six P2.4 stubs wired to a new `ReferenceService`
+  > (departments/locations/countries/job-families/job-levels/currencies), `@PreAuthorize` left
+  > verbatim. `GET /employees/export` now streams a real CSV (same filter spec as `list`, minus
+  > cursor/limit) with department/location/level names resolved, not raw UUIDs. `./mvnw clean
+  > verify` → `Tests run: 63, Failures: 0, Errors: 0`, `BUILD SUCCESS`, twice (once after the DTO/
+  > service changes, once after the CSV endpoint).
+  >
+  > **Frontend built:** `src/lib/api/{employees,reference}.ts` + sibling `-queries.ts` (TanStack
+  > Query hooks, `keepPreviousData` so the table doesn't blank on refetch); `employeeKeys`/
+  > `referenceKeys` added to `keys.ts`. `/employees` page (`EmployeesScreen`, client, owns
+  > `searchParams`) with search (debounced 300ms) + department/location/country/level/status
+  > selects, all URL-backed; `EmployeesTable` (TanStack Table v8 + shadcn `Table`) with columns
+  > name+number / department / location / level / base pay / compa-ratio / `<BandBar inline>` /
+  > status, row-as-stretched-`<Link>` to `/employees/[id]` (middle-click/⌘-click work; one tab stop
+  > per row). Export CSV button hits the new endpoint directly (plain navigation — cookies ride
+  > along under `SameSite=Lax`, `Content-Disposition: attachment` downloads without leaving the
+  > page).
+  >
+  > **npm installed TanStack Table v9 by default** (a breaking rewrite — no `useReactTable`/
+  > `getCoreRowModel` on its public API); re-pinned to `^8` per CLAUDE.md's pinned stack table.
+  > **A genuine schema bug found and worked around, not fixed:** `employee_current_comp.range_penetration`
+  > and `compensation_records.range_penetration` are `numeric(6,4)` (max abs value <100), but range
+  > penetration legitimately exceeds 100 for anyone paid above band max — the seed data below had to
+  > clamp a 130% case to 99.99 to insert. Left as-is (out of scope for this step); worth a fix-forward
+  > migration before P5/real seed data hits this.
+  >
+  > **Scope deliberately trimmed**, each for a concrete reason (see the commit message and the
+  > code comment atop `employees-screen.tsx`): no saved-view select (nothing backs it), no bulk
+  > select → propose-change (P6.4 doesn't exist yet), no band-status filter (no such backend query
+  > param), no column sort (fixed `lastName,id` server sort tied to the keyset cursor), no "page N"
+  > jump (`KeysetPage` carries no total count — Next uses the cursor, Previous uses browser history).
+  >
+  > **Verified:** `./mvnw -q compile` clean; `npm run typecheck` clean; `npm run lint` → 0 errors (1
+  > expected warning: React Compiler can't memoize `useReactTable`'s return, which is normal for
+  > this library); `npm run build` clean, all routes including `/employees` render. Stood up a
+  > throwaway local Postgres 17 (`docker run postgres:17`, port 5433, `application-local.yml`
+  > git-ignored) since Neon is still blocked (`P0.3`) and no seed data exists yet (`P9`); ran Flyway
+  > against it, hand-seeded 5 employees covering every `BandBar` state (in-band, below-min,
+  > above-max, no-band, terminated/no-comp) plus one HR_ADMIN test user. `curl`-verified, signed in
+  > as that user: `GET /api/employees` returns the correct shape end-to-end — `band`, `compaRatio`,
+  > `rangePenetration`, `bandStatus` all present and correct for every seeded case, `null` for the
+  > unbanded and terminated employees as expected.
+  >
+  > **Not done — the Chrome extension was disconnected this session (same as the P2.5 note in a
+  > prior STATE.md), so no live-browser pixel/click-through pass happened.** CLAUDE.md is explicit
+  > that a passing build and typecheck verify code correctness, not feature correctness, for a UI
+  > step. **Still owed before this is marked `[x]`:** open `/employees` in a real browser, confirm
+  > the table/filters/BandBar/CSV button actually render and behave (not just that the API returns
+  > correct JSON), check both themes, and run the §12 merge checklist's keyboard-only and 375px
+  > passes. The throwaway dev DB/backend/frontend processes from this session were torn down at
+  > session end — recreate with `docker run --name salaryos-devdb -e POSTGRES_PASSWORD=devpass -e
+  > POSTGRES_DB=salaryos -p 5433:5432 postgres:17`, an `application-local.yml` per the template in
+  > `application-local.yml.example` pointed at it, then seed data (schema notes above).
 - [ ] **P4.4** Employee detail: identity, current pay panel, band detail bar, peers panel.
   *Verify:* an unbanded employee shows the no-band state, not a centred marker.
 
@@ -465,9 +521,9 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P4.2` create/edit/terminate + band-mismatch flag (2026-08-21) |
-| **Current step** | `P4.3` — Employees list screen (filter row, table, band bar column, URL state, CSV export) |
-| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). A real browser (Chrome extension not connected this session) is owed a visual pass over the P2.5 sign-in flow whenever available. |
+| **Last completed** | Backend + frontend for `P4.3` built and verified except a live browser pass (2026-08-21) |
+| **Current step** | `P4.3` — **`[~]`, not `[x]`.** Code is done (backend 63/63 tests, frontend build/typecheck/lint clean, API-level curl verification against a seeded throwaway DB). Owed: open `/employees` in a real browser and confirm it actually renders/behaves, plus the §12 checklist's keyboard/375px passes. See the done-note under P4.3 in the plan above for the exact recipe to recreate the throwaway dev DB. |
+| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). **Chrome extension was not connected this session** — owed a visual pass over both P2.5 (sign-in) and P4.3 (`/employees`) whenever available. |
 
 _Update both rows on every completed step._
 
