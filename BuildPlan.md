@@ -46,8 +46,17 @@ verified.
 - [x] **P0.4** Next.js 16 app (`salary-web`), TypeScript strict, Tailwind v4, shadcn/ui `radix-nova`
   initialised, path aliases, ESLint + Prettier.
   *Verify:* `npm run dev` serves a page; `npm run lint && npm run typecheck && npm run build` clean.
-- [ ] **P0.5** Testcontainers Postgres 17 base test class; one trivial integration test.
+- [~] **P0.5** Testcontainers Postgres 17 base test class; one trivial integration test.
   *Verify:* `./mvnw verify` starts a container and the test passes. **No H2 anywhere in the POM.**
+  > **Blocked (2026-08-21):** Docker is not installed on this machine (`docker: command not found`),
+  > so Testcontainers cannot start a container. Install Docker Desktop or colima, then run the
+  > Verify. Do **not** work around this by adding H2 — `CLAUDE.md §3` and §12.12 forbid it, and an
+  > H2 suite would pass while the `daterange`/`btree_gist` schema fails in production.
+
+  > **Sequencing note (2026-08-21):** `P0.3` (needs Neon) and `P0.5`/`P1.*` (need Docker) are both
+  > blocked on the environment, so the build continues at **P3** — the design system, shell and
+  > components depend on neither a database nor the API. Return to `P0.3`/`P0.5` as soon as the
+  > environment allows; nothing in P3 pre-empts them.
 
 ## P1 — Data model & migrations
 
@@ -91,7 +100,7 @@ verified.
 
 ## P3 — Shell & design system
 
-- [ ] **P3.1** `theme.css` with the full token set from `salary-management-ui.md §2`, both themes,
+- [x] **P3.1** `theme.css` with the full token set from `salary-management-ui.md §2`, both themes,
   `@custom-variant dark (&:is(.app-dark *))`, `@theme inline` mappings.
   *Verify:* a token-audit page renders every token in both themes; no hex outside this file.
 - [ ] **P3.2** Fonts, type scale utilities, tabular numeral rules (`§3`).
@@ -203,8 +212,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P0.4` Next.js 16 scaffold (2026-08-21) |
-| **Current step** | `P0.5` Testcontainers — **blocked, Docker not installed** |
+| **Last completed** | `P3.1` theme.css tokens (2026-08-21) |
+| **Current step** | `P3.2` fonts + type scale |
 | **Blockers** | `P0.3` no Neon/`DATABASE_URL`; `P0.5`+`P1.*` no Docker for Testcontainers |
 
 _Update both rows on every completed step._

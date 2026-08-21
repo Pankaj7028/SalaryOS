@@ -1,0 +1,214 @@
+/* ============================================================================
+ * theme.css — the ONLY file in salary-web that may contain a colour literal.
+ * Spec: docs/salary-management-ui.md §2. Summary: CLAUDE.md §5.
+ *
+ * Two themes, selected by a class on <html>: .app-light (default) / .app-dark.
+ * shadcn's variable names are used verbatim so every shadcn component themes
+ * itself; product tokens (band status, deltas, chrome) sit alongside them.
+ *
+ * If you are about to write a hex value in a component: stop, and add a token
+ * here instead. That rule is what makes both themes work at all.
+ * ========================================================================= */
+
+/* shadcn's dark variant rebound to our class name, so every shadcn component
+ * follows without modification (CLAUDE.md §5.3). */
+@custom-variant dark (&:is(.app-dark *));
+
+/* ---------------------------------------------------------------- LIGHT ---- */
+:root,
+.app-light {
+  --radius: 0.5rem; /* 8px */
+
+  --background: #fafafa;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+
+  --primary: #0b6e4f; /* pine */
+  --primary-foreground: #ffffff;
+  --primary-hover: #0a5c42;
+  --primary-active: #084a35;
+  --primary-subtle: #e6f2ed; /* active nav pill, selected row */
+
+  --secondary: #f4f4f5;
+  --secondary-foreground: #27272a;
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+
+  --border: #e4e4e7;
+  --input: #d4d4d8;
+  --ring: #0b6e4f;
+
+  /* product semantics — band status and deltas */
+  --positive: #0b6e4f; /* increase, in band */
+  --positive-subtle: #e6f2ed;
+  --attention: #a16207; /* below minimum, expiring band */
+  --attention-subtle: #fef3c7;
+  --critical: #b91c1c; /* above maximum, decrease */
+  --critical-subtle: #fee2e2;
+  --neutral-figure: #52525b; /* an unchanged number */
+
+  /* chrome */
+  --topbar: #ffffff;
+  --topbar-foreground: #18181b;
+  --sidebar: #f4f4f5;
+  --sidebar-foreground: #3f3f46;
+  --sidebar-accent: var(--primary-subtle);
+  --sidebar-accent-foreground: var(--primary);
+  --sidebar-border: #e4e4e7;
+  --content: #fafafa;
+
+  /* shadcn's Sidebar also reads these three; the UI doc does not name them, so
+   * they are derived rather than invented, and stay in step with the palette. */
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-ring: var(--ring);
+
+  /* data visualisation — ordered, colour-blind-safe, never re-ordered per chart */
+  --chart-1: #0b6e4f;
+  --chart-2: #0e7490;
+  --chart-3: #4338ca;
+  --chart-4: #86198f;
+  --chart-5: #9a3412;
+  --chart-6: #4d7c0f;
+}
+
+/* ----------------------------------------------------------------- DARK ---- */
+/* Dark is FLAT: topbar, sidebar and content all sit at --background; only cards
+ * lift to --card. Elevation comes from the border and the surface step, never a
+ * shadow — a shadow on near-black is a smudge. */
+.app-dark {
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #131316;
+  --card-foreground: #fafafa;
+  --popover: #131316;
+  --popover-foreground: #fafafa;
+
+  /* Lifted to emerald-400: #0B6E4F on #09090B is unreadable as text, and here the
+   * primary is read as text (links, active nav, deltas, the band marker) at least
+   * as often as it is used as a fill. --primary-foreground flips to near-black. */
+  --primary: #34d399;
+  --primary-foreground: #052e22;
+  --primary-hover: #6ee7b7;
+  --primary-active: #6ee7b7;
+  --primary-subtle: #0f2b22;
+
+  --secondary: #1f1f23;
+  --secondary-foreground: #e4e4e7;
+  --muted: #1f1f23;
+  --muted-foreground: #a1a1aa;
+  --accent: #1f1f23;
+  --accent-foreground: #fafafa;
+
+  --destructive: #f87171;
+  --destructive-foreground: #1a0505;
+
+  --border: #27272a;
+  --input: #3f3f46;
+  --ring: #34d399;
+
+  --positive: #34d399;
+  --positive-subtle: #0f2b22;
+  --attention: #fbbf24;
+  --attention-subtle: #2a1f05;
+  --critical: #f87171;
+  --critical-subtle: #2a0f0f;
+  --neutral-figure: #a1a1aa;
+
+  --topbar: #09090b;
+  --topbar-foreground: #fafafa;
+  --sidebar: #09090b;
+  --sidebar-foreground: #a1a1aa;
+  --sidebar-accent: var(--primary-subtle);
+  --sidebar-accent-foreground: var(--primary);
+  --sidebar-border: #1f1f23;
+  --content: #09090b;
+
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-ring: var(--ring);
+
+  --chart-1: #34d399;
+  --chart-2: #22d3ee;
+  --chart-3: #818cf8;
+  --chart-4: #e879f9;
+  --chart-5: #fb923c;
+  --chart-6: #a3e635;
+}
+
+/* ------------------------------------------------- Tailwind v4 mappings ---- */
+/* One entry per token above, so every token is reachable as a utility class
+ * (bg-card, text-attention, border-border, …). */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-active: var(--primary-active);
+  --color-primary-subtle: var(--primary-subtle);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-positive: var(--positive);
+  --color-positive-subtle: var(--positive-subtle);
+  --color-attention: var(--attention);
+  --color-attention-subtle: var(--attention-subtle);
+  --color-critical: var(--critical);
+  --color-critical-subtle: var(--critical-subtle);
+  --color-neutral-figure: var(--neutral-figure);
+
+  --color-topbar: var(--topbar);
+  --color-topbar-foreground: var(--topbar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-content: var(--content);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+
+  /* The Plex variables are supplied by next/font at P3.2; until then these fall
+   * back to the system stacks rather than resolving to nothing. */
+  --font-sans: var(--font-plex-sans, ui-sans-serif), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono, ui-monospace), ui-monospace, "SFMono-Regular", monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}

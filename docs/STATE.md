@@ -14,8 +14,8 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | P0 — Foundations |
-| **Last completed** | `P0.4` Next.js 16 scaffold |
-| **Next step** | `P0.5` Testcontainers — or P3 (frontend) while blocked |
+| **Last completed** | `P3.1` theme.css tokens |
+| **Next step** | `P3.2` fonts + type scale |
 | **Blockers** | **Docker not installed** → `P0.5` and every `P1.*` migration test. `P0.3` needs Neon. |
 
 `BuildPlan.md` remains the authority on step status. This row is the fast path, not a second source
@@ -65,6 +65,13 @@ of truth — if they disagree, `BuildPlan.md` wins.
   the UI doc were updated to match.
 - **`salary-web/.gitignore` was deleted; the root `.gitignore` is the only one.** Same choice as
   `salary-service`. Add new ignores at the root.
+- **Build order deviates from BuildPlan while the environment blocks P0.3/P0.5.** P3 (design system,
+  shell, components) needs neither Neon nor Docker, so it runs first. Nothing in P3 pre-empts the
+  skipped steps; go back to them the moment Docker and Neon exist.
+- **`globals.css` is a 4-line entry point; all tokens live in `src/app/theme.css`.** shadcn's
+  generated palette and its `.dark` binding were replaced by ours (`.app-dark`).
+- **`npm run verify`** = token drift + contrast + lint + typecheck + build. Use it to close a UI
+  step rather than running the four by hand.
 
 ---
 
