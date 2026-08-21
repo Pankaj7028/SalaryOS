@@ -869,8 +869,29 @@ verified.
   >
   > Observed: `./mvnw clean verify` → `Tests run: 104, Failures: 0, Errors: 0`, `BUILD SUCCESS`
   > (2 new tests in `ApplyDueChangesJobTest`, 102 pre-existing).
-- [ ] **P6.3** Bulk merit upload: per-row validation, proposals for valid rows, downloadable error
+- [x] **P6.3** Bulk merit upload: per-row validation, proposals for valid rows, downloadable error
   report. *Verify:* a file with 100 rows and 12 bad ones creates 88 proposals and one report.
+  > `POST /changes/bulk-upload` (HR Admin only), same shape as `BandService#importCsv` (P5.3): a
+  > CSV of `employeeNumber,newAmount,changeReason[,note]` — no `currency` column, since a merit row
+  > always uses the employee's own current pay currency (looked up server-side, never trusted from
+  > the file). `ChangeService.bulkUpload` reads the file line by line; each row calls the existing
+  > `propose()` inside a `try/catch(RuntimeException)` so every domain rule (unknown employee number,
+  > no current comp, an open change already in flight, a missing required note) becomes one `ERROR`
+  > row with that exception's own message, never blocking the rest — partial success is the normal
+  > outcome (backend doc §3), matching the band importer's per-row isolation exactly. No `dryRun`:
+  > unlike a band version, a DRAFT proposal this cheap to discard doesn't need a preview step.
+  > `EmployeeRepository.findByEmployeeNumber` added — the only human-facing key in this CSV, not the
+  > UUID. "Downloadable error report" is the full `rows()` list in the JSON response, same shape as
+  > `BandImportRowResult` — a UI renders/downloads it whenever a bulk-upload screen exists (not this
+  > step's scope, matching P5.3's precedent).
+  >
+  > `ChangeBulkUploadTest` (1 test, year 2038): 100-row CSV — 88 valid rows (each backed by a real
+  > seeded employee with current comp), 4 unknown employee numbers, 4 unparseable amounts, 4
+  > too-few-column rows. Confirmed: `totalRows=100`, `proposed=88`, `errors=12`, every `PROPOSED` row
+  > carries a non-null `changeId`, every `ERROR` row carries a non-blank message.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 105, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (1 new test in `ChangeBulkUploadTest`, 104 pre-existing).
 - [ ] **P6.4** Propose-change dialog with the live impact panel (delta, resulting compa-ratio, band
   marker movement, peer percentile, annualised cost); note required outside band.
   *Verify:* the panel figures match the API's computed values exactly — no client arithmetic.
@@ -929,8 +950,8 @@ After completion of complete P8 stop executing next P9 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P6.2` `ApplyDueChangesJob` + idempotent `POST /changes/apply-due` — done, `[x]`, 104/104 backend tests (2026-08-21) |
-| **Current step** | `P6.3` — Bulk merit upload: per-row validation, proposals for valid rows, downloadable error report. |
+| **Last completed** | `P6.3` Bulk merit upload (`POST /changes/bulk-upload`) — done, `[x]`, 105/105 backend tests (2026-08-21) |
+| **Current step** | `P6.4` — Propose-change dialog with the live impact panel (delta, resulting compa-ratio, band marker movement, peer percentile, annualised cost); note required outside band. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._

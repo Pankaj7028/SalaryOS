@@ -3,6 +3,8 @@ package com.acme.salaryos.change.service;
 import com.acme.salaryos.band.domain.SalaryBand;
 import com.acme.salaryos.band.repository.SalaryBandRepository;
 import com.acme.salaryos.change.domain.CompensationChange;
+import com.acme.salaryos.change.dto.ChangeBulkUploadResult;
+import com.acme.salaryos.change.dto.ChangeBulkUploadRowResult;
 import com.acme.salaryos.change.dto.ChangeResponse;
 import com.acme.salaryos.change.dto.ProposeChangeRequest;
 import com.acme.salaryos.change.dto.UpdateDraftRequest;
@@ -21,9 +23,15 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.UUID;
@@ -174,6 +182,80 @@ public class ChangeService {
 		change.apply(record.getId());
 		changeRepository.save(change);
 		return record;
+	}
+
+	/**
+	 * FR-5.8: one row is {@code employeeNumber,newAmount,changeReason,note} (note optional) — no
+	 * {@code currency} column, unlike the band CSV's, since a merit row uses the employee's own
+	 * current pay currency by construction, never a value the uploader could get wrong. Every row
+	 * is independent: a bad row becomes an {@code ERROR} entry and never blocks the rest, so partial
+	 * success is the normal outcome, not a failure mode (backend doc §3, matching {@code
+	 * BandService#importCsv}'s per-row isolation). No {@code dryRun} — unlike a band version, a DRAFT
+	 * proposal is cheap to discard, so there is no separate preview step to design around.
+	 */
+	public ChangeBulkUploadResult bulkUpload(MultipartFile file, LocalDate effectiveDate, UUID proposedBy) {
+		List<ChangeBulkUploadRowResult> rows = new ArrayList<>();
+		int proposed = 0;
+		int errors = 0;
+
+		try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+			reader.readLine(); // header
+			int rowNumber = 1;
+			String line;
+			while ((line = reader.readLine()) != null) {
+				rowNumber++;
+				if (line.isBlank()) {
+					continue;
+				}
+				ChangeBulkUploadRowResult result = bulkUploadRow(rowNumber, line, effectiveDate, proposedBy);
+				rows.add(result);
+				if ("PROPOSED".equals(result.action())) {
+					proposed++;
+				} else {
+					errors++;
+				}
+			}
+		}
+		catch (IOException e) {
+			throw new IllegalArgumentException("Could not read the uploaded CSV file.", e);
+		}
+
+		return new ChangeBulkUploadResult(rows.size(), proposed, errors, rows);
+	}
+
+	private ChangeBulkUploadRowResult bulkUploadRow(int rowNumber, String line, LocalDate effectiveDate, UUID proposedBy) {
+		String[] fields = line.split(",", -1);
+		if (fields.length < 3) {
+			return new ChangeBulkUploadRowResult(rowNumber, "ERROR", null, null, null, null,
+					"Expected 3 or 4 columns (employeeNumber,newAmount,changeReason[,note]), found " + fields.length + ".");
+		}
+
+		String employeeNumber = fields[0].trim();
+		String changeReason = fields[2].trim();
+		BigDecimal newAmount;
+		try {
+			newAmount = new BigDecimal(fields[1].trim());
+		}
+		catch (NumberFormatException malformed) {
+			return new ChangeBulkUploadRowResult(rowNumber, "ERROR", employeeNumber, null, changeReason, null,
+					"Could not parse newAmount: " + malformed.getMessage());
+		}
+		String note = fields.length > 3 && !fields[3].isBlank() ? fields[3].trim() : null;
+
+		try {
+			Employee employee = employeeRepository.findByEmployeeNumber(employeeNumber)
+					.orElseThrow(() -> new NoSuchElementException("No employee with number " + employeeNumber + "."));
+			EmployeeCurrentComp comp = employeeCurrentCompRepository.findById(employee.getId())
+					.orElseThrow(NoCurrentCompensationException::new);
+
+			ChangeResponse change = propose(new ProposeChangeRequest(
+					employee.getId(), effectiveDate, newAmount, comp.getBase().currency(), changeReason, null, note), proposedBy);
+
+			return new ChangeBulkUploadRowResult(rowNumber, "PROPOSED", employeeNumber, newAmount, changeReason, change.id(), null);
+		}
+		catch (RuntimeException rejected) {
+			return new ChangeBulkUploadRowResult(rowNumber, "ERROR", employeeNumber, newAmount, changeReason, null, rejected.getMessage());
+		}
 	}
 
 	private void requireNoOpenChange(UUID employeeId) {

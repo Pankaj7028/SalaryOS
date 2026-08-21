@@ -2,16 +2,16 @@ package com.acme.salaryos.change.web;
 
 import com.acme.salaryos.change.ApplyDueChangesJob;
 import com.acme.salaryos.change.dto.ApplyDueChangesResult;
+import com.acme.salaryos.change.dto.ChangeBulkUploadResult;
 import com.acme.salaryos.change.dto.ChangeResponse;
 import com.acme.salaryos.change.dto.DecisionRequest;
 import com.acme.salaryos.change.dto.ProposeChangeRequest;
 import com.acme.salaryos.change.dto.UpdateDraftRequest;
 import com.acme.salaryos.change.service.ChangeService;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -20,7 +20,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -98,15 +100,13 @@ public class ChangeController {
 		return applyDueChangesJob.run();
 	}
 
-	/** Import / bulk upload: HR Admin only. */
+	/** FR-5.8: bulk merit cycle upload — HR Admin only, matching CLAUDE.md §7's "Import / bulk upload" row. */
 	@PostMapping("/bulk-upload")
 	@PreAuthorize("hasRole('HR_ADMIN')")
-	public ResponseEntity<Void> bulkUpload() {
-		return notImplemented();
-	}
-
-	private ResponseEntity<Void> notImplemented() {
-		return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).build();
+	public ChangeBulkUploadResult bulkUpload(
+			@RequestPart MultipartFile file, @RequestParam LocalDate effectiveDate,
+			@AuthenticationPrincipal UUID currentUserId) {
+		return changeService.bulkUpload(file, effectiveDate, currentUserId);
 	}
 
 }
