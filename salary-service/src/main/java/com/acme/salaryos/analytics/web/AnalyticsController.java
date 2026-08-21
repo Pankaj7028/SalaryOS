@@ -1,5 +1,6 @@
 package com.acme.salaryos.analytics.web;
 
+import com.acme.salaryos.analytics.dto.CompaRatioDistributionResponse;
 import com.acme.salaryos.analytics.dto.HeadcountResponse;
 import com.acme.salaryos.analytics.dto.OutOfBandResponse;
 import com.acme.salaryos.analytics.dto.PayrollCostResponse;
@@ -9,7 +10,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
 
 /**
  * Stubs for P7 (Technical-Requirements.md §5); see EmployeeController's class Javadoc. Every
@@ -46,8 +50,11 @@ public class AnalyticsController {
 
 	@GetMapping("/compa-ratio-distribution")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
-	public ResponseEntity<Void> compaRatioDistribution() {
-		return notImplemented();
+	public CompaRatioDistributionResponse compaRatioDistribution(
+			@RequestParam(required = false) UUID departmentId,
+			@RequestParam(required = false) UUID jobLevelId,
+			@RequestParam(required = false) String countryCode) {
+		return analyticsService.compaRatioDistribution(departmentId, jobLevelId, countryCode);
 	}
 
 	@GetMapping("/pay-gap")

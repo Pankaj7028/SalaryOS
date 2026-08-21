@@ -14,16 +14,16 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | P7 (Insights) in progress |
-| **Last completed** | `P7.2` `out-of-band` (FR-6.2) — `[x]`, 115/115 backend tests. |
-| **Next step** | `P7.3` — `compa-ratio-distribution` (FR-6.3). |
+| **Last completed** | `P7.3` `compa-ratio-distribution` (FR-6.3) — `[x]`, 117/117 backend tests. |
+| **Next step** | `P7.4` — `pay-gap` (FR-6.4) with suppression inside the query. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
 Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6` (all) ·
-`P7.1`–`P7.2`.
-Blocked: `P0.3`. Untouched: `P7.3`–`P9`.
+`P7.1`–`P7.3`.
+Blocked: `P0.3`. Untouched: `P7.4`–`P9`.
 
 ---
 

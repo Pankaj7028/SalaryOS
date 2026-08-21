@@ -1048,7 +1048,35 @@ verified.
   >
   > Observed: `./mvnw clean verify` → `Tests run: 115, Failures: 0, Errors: 0`, `BUILD SUCCESS`
   > (2 new tests in `OutOfBandTest`, 113 pre-existing).
-- [ ] **P7.3** `compa-ratio-distribution` (FR-6.3). *Verify:* quartiles match a SQL cross-check.
+- [x] **P7.3** `compa-ratio-distribution` (FR-6.3). *Verify:* quartiles match a SQL cross-check.
+  > **Done (2026-08-21):** `analytics/query/CompaRatioDistributionQuery` — quartiles
+  > (`percentile_cont`, same function the backend doc's own `PayGapQuery` example uses), a fixed
+  > six-bucket histogram (`<0.80` … `≥1.20`, a product constant, not a request parameter), and
+  > `byDepartment`/`byLevel`/`byCountry` median breakdowns, all filterable by an optional
+  > `departmentId`/`jobLevelId`/`countryCode` — every filter expressed in SQL as
+  > `(:param IS NULL OR column = :param)` rather than built up by Java string concatenation, so each
+  > query stays one self-contained, schema-qualified constant. `NO_BAND` employees are excluded from
+  > the distribution itself (no compa-ratio to place — same reasoning as P7.2's `OutOfBandQuery`) but
+  > counted via `population.excluded.noBand`, never silently dropped.
+  >
+  > **A real, non-obvious Postgres error hit and fixed, not routed around:** the first version threw
+  > `could not determine data type of parameter $3` — a parameter that appears ONLY inside
+  > `? IS NULL` (with no other typed context for that specific placeholder occurrence) gives
+  > Postgres's extended-protocol Describe step nothing to infer a type from, even though the very
+  > next clause compares the same named parameter against a typed column. Fixed by casting every
+  > occurrence explicitly (`:departmentId::uuid`, `:jobLevelId::uuid`, `:countryCode::bpchar`) —
+  > removes the ambiguity outright rather than reordering clauses and hoping the planner cooperates.
+  >
+  > **Verify — the actual SQL cross-check, not a paraphrase of it:** `CompaRatioDistributionTest`
+  > seeds five employees under one unique department against a 90000/110000/130000 band, chosen so
+  > `percentile_cont` lands on exact values (compa-ratios 0.8/0.9/1.0/1.1/1.3 → p25=0.9000,
+  > median=1.0000, p75=1.1000) — then re-derives the median with an independent `percentile_cont`
+  > query written directly in the test (not a second call to `CompaRatioDistributionQuery`) and
+  > asserts the two agree exactly. A second test proves a `NO_BAND` employee is excluded from
+  > quartiles but shows up in `noBandCount`.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 117, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (2 new tests in `CompaRatioDistributionTest`, 115 pre-existing).
 - [ ] **P7.4** `pay-gap` (FR-6.4) with suppression **inside** the query and a suppressed-cohort
   count. *Verify:* no cohort under 5 appears in any response, at any parameter combination.
 - [ ] **P7.5** `increase-cycle` (FR-6.5) and employee `peers` (FR-6.6).
@@ -1094,8 +1122,8 @@ After completion of complete P8 stop executing next P9 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P7.2` `out-of-band` (FR-6.2) — done, `[x]`, 115/115 backend tests (2026-08-21) |
-| **Current step** | `P7.3` — `compa-ratio-distribution` (FR-6.3). |
+| **Last completed** | `P7.3` `compa-ratio-distribution` (FR-6.3) — done, `[x]`, 117/117 backend tests (2026-08-21) |
+| **Current step** | `P7.4` — `pay-gap` (FR-6.4) with suppression inside the query. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._

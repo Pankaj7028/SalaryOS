@@ -1,11 +1,13 @@
 package com.acme.salaryos.analytics.service;
 
 import com.acme.salaryos.analytics.dto.AnalyticsPopulation;
+import com.acme.salaryos.analytics.dto.CompaRatioDistributionResponse;
 import com.acme.salaryos.analytics.dto.HeadcountGroup;
 import com.acme.salaryos.analytics.dto.HeadcountResponse;
 import com.acme.salaryos.analytics.dto.OutOfBandResponse;
 import com.acme.salaryos.analytics.dto.OutOfBandRow;
 import com.acme.salaryos.analytics.dto.PayrollCostResponse;
+import com.acme.salaryos.analytics.query.CompaRatioDistributionQuery;
 import com.acme.salaryos.analytics.query.HeadcountQuery;
 import com.acme.salaryos.analytics.query.OutOfBandQuery;
 import com.acme.salaryos.analytics.query.PayrollCostQuery;
@@ -17,24 +19,28 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
-/** FR-6.1 / FR-6.2 / FR-6.8: payroll cost, headcount, and out-of-band, each carrying its own
- * basis envelope. */
+/** FR-6.1 / FR-6.2 / FR-6.3 / FR-6.8: payroll cost, headcount, out-of-band, and compa-ratio
+ * distribution, each carrying its own basis envelope. */
 @Service
 public class AnalyticsService {
 
 	private final PayrollCostQuery payrollCostQuery;
 	private final HeadcountQuery headcountQuery;
 	private final OutOfBandQuery outOfBandQuery;
+	private final CompaRatioDistributionQuery compaRatioDistributionQuery;
 	private final Clock clock;
 	private final String baseCurrency;
 
 	public AnalyticsService(
-			PayrollCostQuery payrollCostQuery, HeadcountQuery headcountQuery, OutOfBandQuery outOfBandQuery, Clock clock,
+			PayrollCostQuery payrollCostQuery, HeadcountQuery headcountQuery, OutOfBandQuery outOfBandQuery,
+			CompaRatioDistributionQuery compaRatioDistributionQuery, Clock clock,
 			@Value("${app.base-currency}") String baseCurrency) {
 		this.payrollCostQuery = payrollCostQuery;
 		this.headcountQuery = headcountQuery;
 		this.outOfBandQuery = outOfBandQuery;
+		this.compaRatioDistributionQuery = compaRatioDistributionQuery;
 		this.clock = clock;
 		this.baseCurrency = baseCurrency;
 	}
@@ -75,6 +81,19 @@ public class AnalyticsService {
 		return new OutOfBandResponse(
 				LocalDate.now(clock), baseCurrency, population, belowMinCount, aboveMaxCount,
 				new Money(outOfBandQuery.totalCostToMinimum(), baseCurrency), rows);
+	}
+
+	public CompaRatioDistributionResponse compaRatioDistribution(UUID departmentId, UUID jobLevelId, String countryCode) {
+		var quartiles = compaRatioDistributionQuery.quartiles(departmentId, jobLevelId, countryCode);
+		int noBand = compaRatioDistributionQuery.noBandCount(departmentId, jobLevelId, countryCode);
+		AnalyticsPopulation population = new AnalyticsPopulation(quartiles.count(), Map.of("noBand", noBand));
+
+		return new CompaRatioDistributionResponse(
+				LocalDate.now(clock), population, quartiles.p25(), quartiles.median(), quartiles.p75(),
+				compaRatioDistributionQuery.histogram(departmentId, jobLevelId, countryCode),
+				compaRatioDistributionQuery.byDepartment(departmentId, jobLevelId, countryCode),
+				compaRatioDistributionQuery.byLevel(departmentId, jobLevelId, countryCode),
+				compaRatioDistributionQuery.byCountry(departmentId, jobLevelId, countryCode));
 	}
 
 }
