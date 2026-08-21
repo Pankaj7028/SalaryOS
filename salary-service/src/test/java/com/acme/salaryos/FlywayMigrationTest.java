@@ -34,9 +34,13 @@ class FlywayMigrationTest {
 				String.class);
 		assertThat(extensions).containsExactly("btree_gist", "citext", "pg_trgm");
 
+		// Filtered to V1's own tables (not an exact-set check): later migrations share this schema,
+		// and — because this test class's Spring context/container is cached and reused across
+		// classes with an identical @SpringBootTest configuration — possibly this container too.
 		List<String> tables = jdbcTemplate.queryForList(
 				"select table_name from information_schema.tables "
-						+ "where table_schema = 'salary_schema' and table_name != 'flyway_schema_history' "
+						+ "where table_schema = 'salary_schema' "
+						+ "and table_name in ('users', 'user_sessions', 'password_reset_tokens') "
 						+ "order by table_name",
 				String.class);
 		assertThat(tables).containsExactlyInAnyOrder("users", "user_sessions", "password_reset_tokens");
