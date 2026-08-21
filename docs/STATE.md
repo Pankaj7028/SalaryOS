@@ -14,16 +14,16 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | P7 (Insights) in progress |
-| **Last completed** | `P7.5` `increase-cycle` (FR-6.5) — `[x]`, 121/121 backend tests. All six `/api/analytics/*` endpoints are now real. |
-| **Next step** | `P7.6` — Overview and Pay analysis screens; charts themed from CSS variables. |
+| **Last completed** | `P7.6` Overview + Pay analysis screens — `[x]`, `npm run verify` clean. Recharts installed. |
+| **Next step** | `P7.7` — Equity review screen (suppression notice, unadjusted/level-adjusted columns). |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
 Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6` (all) ·
-`P7.1`–`P7.5`.
-Blocked: `P0.3`. Untouched: `P7.6`–`P9`.
+`P7.1`–`P7.6`.
+Blocked: `P0.3`. Untouched: `P7.7`–`P9`.
 
 ---
 
@@ -125,6 +125,11 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   grouping, not a statistical adjustment). Only `gender` is grouped on, not `ethnicity_code`.
   `gapAmount`/`gapPercent` are highest-minus-lowest across however many groups survive suppression,
   not a fixed two-value comparison. Full reasoning in `BuildPlan.md`'s P7.4 done-note.
+- **`useChartTheme()` (`src/lib/chart-theme.ts`, P7.6) hardcodes a light-mode hex `FALLBACK`** — the
+  one deliberate exception to "no raw hex outside theme.css" in this codebase. A "use client"
+  component still renders once server-side before `useEffect` can read `getComputedStyle`, so a
+  dark-mode viewer's first paint can flash light chart colours for one frame. Values are copied
+  verbatim from `theme.css`, never invented.
 
 ---
 

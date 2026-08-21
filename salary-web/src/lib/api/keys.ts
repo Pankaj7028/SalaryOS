@@ -29,3 +29,13 @@ export const changeKeys = {
   impactPreview: (params: Record<string, string | undefined>) => ["changes", "impactPreview", params] as const,
   list: (status: string) => ["changes", "list", status] as const,
 };
+
+export const analyticsKeys = {
+  payrollCost: () => ["analytics", "payrollCost"] as const,
+  headcount: () => ["analytics", "headcount"] as const,
+  outOfBand: () => ["analytics", "outOfBand"] as const,
+  compaRatioDistribution: (params: Record<string, string | undefined>) =>
+    ["analytics", "compaRatioDistribution", params] as const,
+  payGap: () => ["analytics", "payGap"] as const,
+  increaseCycle: (params: Record<string, string | undefined>) => ["analytics", "increaseCycle", params] as const,
+};

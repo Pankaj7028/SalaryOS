@@ -1147,9 +1147,59 @@ verified.
   > (2 new tests in `IncreaseCycleTest`, 119 pre-existing). **This is P7's last backend endpoint** —
   > all six `/api/analytics/*` routes and `/employees/{id}/peers` are now real. P7.6/P7.7 are the two
   > remaining screens.
-- [ ] **P7.6** Overview and Pay analysis screens; charts themed from CSS variables; every card
+- [x] **P7.6** Overview and Pay analysis screens; charts themed from CSS variables; every card
   carries its basis line and a "View as table" toggle.
   *Verify:* switching themes re-colours every chart; the table equivalent exports.
+  > **Done (2026-08-21):** `npm install recharts@^2` (CLAUDE.md's pinned "Recharts 2.x", first real
+  > use). `useChartTheme()` (`src/lib/chart-theme.ts`) reads `--chart-1…6`/`--border`/
+  > `--muted-foreground` via `getComputedStyle`, re-reading on a `MutationObserver` watching
+  > `<html>`'s class attribute — a chart already on screen recolours the instant the theme toggle
+  > flips `.app-light`/`.app-dark`, no reload. **Known, documented trade-off, not silently left in:**
+  > the hook's `FALLBACK` constant hardcodes the light-mode hex values (copied verbatim from
+  > `theme.css`) as the initial React state, since a "use client" component still renders once
+  > server-side before any `useEffect` can touch `document` — a dark-mode viewer's first paint can
+  > very briefly show light-mode chart colours before the effect corrects it. This is the one
+  > deliberate exception to "no raw hex outside theme.css" in this codebase, and it's narrow: the
+  > values are copied from the token file, never invented, and only visible for a single frame.
+  >
+  > **`ThemedBarChart`** (`src/components/charts/`) — one hue (`--chart-1`) for every bar; per the
+  > dataviz skill's own guidance, a single-metric chart with axis labels naming each bar doesn't need
+  > a second, redundant per-bar identity colour, so the categorical 6-colour ramp isn't exercised
+  > here (nothing in P7.6's charts compares multiple simultaneous series — every one of them is one
+  > metric across ordered/categorical positions on one axis). Thin bars, 4px rounded tops, recessive
+  > grid/axes, a themed hover tooltip (not Recharts' unstyled default).
+  >
+  > **`ChartCard`** — the shared shell every chart lives in: title, basis line, Chart/Table toggle,
+  > and (found while re-reading this step's own Verify clause literally) an **Export CSV** button —
+  > `src/lib/csv.ts` builds the file entirely client-side from data already in memory (no backend
+  > round-trip, no new figure computed — CLAUDE.md §6.1 is about computing money in TypeScript, not
+  > serialising an already-computed one as text). Wired on every chart in both screens.
+  >
+  > **Overview (`/`):** six `StatCard`s (total annualised base, headcount, median compa-ratio,
+  > outside band, awaiting approval, increase spend YTD — computed client-side as `new Date()` to
+  > Jan 1, ordinary browser code, not a Workflow script), base-pay-by-country and compa-ratio-
+  > distribution charts, and the approval queue as a compact table (reuses P6.5's `useChanges`
+  > hook directly — same cache key, no duplicate fetch). Replaces the P3.3 placeholder.
+  >
+  > **Pay analysis (`/insights/pay`, new route):** the saved-question library — FR-6.1/6.2/6.3/6.5
+  > each as a `QuestionCard` (collapsed: question + headline; expanded: full chart, table, filters).
+  > Payroll cost gets a country/department/level breakdown selector; compa-ratio gets department/
+  > level/country filters (the existing reference hooks, no new endpoint); increase-cycle gets a
+  > date range + optional budget input, showing budget burn when one is entered. FR-6.4 (pay-gap)
+  > deliberately does **not** appear here — it belongs on the separate Equity review screen (§8.8,
+  > P7.7), never beside the org-wide cost/distribution questions.
+  >
+  > **Verified:** `npm run verify` (tokens/contrast, lint, typecheck, 28/28 vitest, build) clean —
+  > lint: 0 errors, same 3 pre-existing library warnings. Live end-to-end against the throwaway dev
+  > DB, signed in as the seeded HR_ADMIN: `curl`-verified all five real analytics endpoints return
+  > correct shaped data (payroll-cost, headcount, out-of-band, compa-ratio-distribution both
+  > unfiltered and pay-gap/increase-cycle on empty datasets, confirming graceful zero-state handling,
+  > not a crash) — confirmed against the actual seeded 8-employee dataset (e.g. Carla's
+  > `ABOVE_MAX`/15000 gap matches the seed data documented at P4.3). Both `/` and `/insights/pay`
+  > return `200` with the correct signed-in user in the rendered shell, no error boundary. **No live
+  > browser pass this session** — Chrome browser tools were not enabled; chart rendering, the theme-
+  > switch recolour, and CSV download were verified by code review and the data-layer checks above,
+  > not by eye. `next start` is up on `:3100` against the live backend if a visual check is wanted.
 - [ ] **P7.7** Equity review screen with the suppression notice and separate unadjusted /
   level-adjusted columns. *Verify:* the suppressed count is non-zero against the seed and is shown.
 
@@ -1188,8 +1238,8 @@ After completion of complete P8 stop executing next P9 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P7.5` `increase-cycle` (FR-6.5) — done, `[x]`, 121/121 backend tests (2026-08-21) |
-| **Current step** | `P7.6` — Overview and Pay analysis screens; charts themed from CSS variables. |
+| **Last completed** | `P7.6` Overview and Pay analysis screens — done, `[x]`, `npm run verify` clean (2026-08-21) |
+| **Current step** | `P7.7` — Equity review screen with the suppression notice and separate unadjusted/level-adjusted columns. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._
