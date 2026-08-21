@@ -88,8 +88,12 @@ verified.
   > `information_schema.table_constraints`), and a demographics row for an unknown employee is
   > rejected. Observed: `./mvnw verify` → `Tests run: 8, Failures: 0, Errors: 0`, `BUILD SUCCESS`
   > (7.5s).
-- [ ] **P1.4** `V4` + `V5` — `salary_bands` (with the ordering check), `fx_rates` (unique on month +
+- [x] **P1.4** `V4` + `V5` — `salary_bands` (with the ordering check), `fx_rates` (unique on month +
   pair). *Verify:* the band check constraint rejects `min > mid`.
+  > **Done (2026-08-21):** `V4__salary_bands.sql`, `V5__fx_rates.sql` + `V4V5BandsAndFxMigrationTest`
+  > — tables present, and `band_ordered` rejects `min_amount(200000) > mid_amount(150000)` with
+  > `DataIntegrityViolationException`, while an ordered row inserts cleanly.
+  > Observed: `./mvnw verify` → `Tests run: 10, Failures: 0, Errors: 0`, `BUILD SUCCESS` (7.6s).
 - [ ] **P1.5** `V6` — `compensation_records` with the generated `validity` column and the
   `EXCLUDE USING gist` constraint, plus `compensation_components`.
   *Verify:* an integration test inserting two overlapping periods for one employee **fails at the
@@ -234,8 +238,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P1.3` `V3` employees, employee_demographics migration (2026-08-21) |
-| **Current step** | `P1.4` — `V4` + `V5` salary_bands, fx_rates |
+| **Last completed** | `P1.4` `V4`+`V5` salary_bands, fx_rates migration (2026-08-21) |
+| **Current step** | `P1.5` — `V6` compensation_records (exclusion constraint) |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by P1) |
 
 _Update both rows on every completed step._
