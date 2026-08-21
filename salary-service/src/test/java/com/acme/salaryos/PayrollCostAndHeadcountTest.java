@@ -87,7 +87,7 @@ class PayrollCostAndHeadcountTest {
 		hireWithComp(fx, "E-PAYCOST-1", new BigDecimal("100000"));
 		hireWithComp(fx, "E-PAYCOST-2", new BigDecimal("120000"));
 		UUID terminatedId = hireWithComp(fx, "E-PAYCOST-3", new BigDecimal("90000"));
-		employeeService.terminate(terminatedId, LocalDate.of(2020, 6, 1));
+		employeeService.terminate(terminatedId, LocalDate.of(2020, 6, 1), fx.userId());
 
 		PayrollCostResponse response = analyticsService.payrollCost();
 
@@ -123,7 +123,7 @@ class PayrollCostAndHeadcountTest {
 		hireWithComp(fx, "E-HEADCOUNT-1", new BigDecimal("100000"));
 		hireWithComp(fx, "E-HEADCOUNT-2", new BigDecimal("100000"));
 		UUID terminatedId = hireWithComp(fx, "E-HEADCOUNT-3", new BigDecimal("100000"));
-		employeeService.terminate(terminatedId, LocalDate.of(2020, 6, 1));
+		employeeService.terminate(terminatedId, LocalDate.of(2020, 6, 1), fx.userId());
 
 		HeadcountResponse response = analyticsService.headcount();
 

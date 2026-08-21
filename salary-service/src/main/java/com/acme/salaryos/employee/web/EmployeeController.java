@@ -19,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -65,29 +66,31 @@ public class EmployeeController {
 			@RequestParam(required = false) UUID jobLevelId,
 			@RequestParam(required = false) String status,
 			@RequestParam(required = false) String cursor,
-			@RequestParam(defaultValue = "50") int limit) {
+			@RequestParam(defaultValue = "50") int limit,
+			@AuthenticationPrincipal UUID currentUserId) {
 		int pageSize = Math.min(Math.max(limit, 1), 200);
-		return employeeService.list(q, departmentId, locationId, countryCode, jobLevelId, status, cursor, pageSize);
+		return employeeService.list(q, departmentId, locationId, countryCode, jobLevelId, status, cursor, pageSize, currentUserId);
 	}
 
 	@GetMapping("/{id}")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST','AUDITOR')")
-	public EmployeeDetailResponse get(@PathVariable UUID id) {
-		return employeeService.get(id);
+	public EmployeeDetailResponse get(@PathVariable UUID id, @AuthenticationPrincipal UUID currentUserId) {
+		return employeeService.get(id, currentUserId);
 	}
 
 	/** FR-6.7: the full pay-history ledger, newest period first. */
 	@GetMapping("/{id}/compensation")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST','AUDITOR')")
-	public List<CompensationRecordResponse> compensationHistory(@PathVariable UUID id) {
-		return employeeService.compensationHistory(id);
+	public List<CompensationRecordResponse> compensationHistory(@PathVariable UUID id, @AuthenticationPrincipal UUID currentUserId) {
+		return employeeService.compensationHistory(id, currentUserId);
 	}
 
 	/** FR-3.6: what this employee was paid on a chosen date. 404 (via NoSuchElementException) if there was no pay yet on that date. */
 	@GetMapping("/{id}/compensation/as-at")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST','AUDITOR')")
-	public CompensationRecordResponse compensationAsAt(@PathVariable UUID id, @RequestParam LocalDate date) {
-		return employeeService.compensationAsAt(id, date).orElseThrow();
+	public CompensationRecordResponse compensationAsAt(
+			@PathVariable UUID id, @RequestParam LocalDate date, @AuthenticationPrincipal UUID currentUserId) {
+		return employeeService.compensationAsAt(id, date, currentUserId).orElseThrow();
 	}
 
 	/** FR-6.6: this employee's position against their (job level × country) cohort's pay distribution. */
@@ -106,9 +109,10 @@ public class EmployeeController {
 			@RequestParam(required = false) UUID locationId,
 			@RequestParam(required = false) String countryCode,
 			@RequestParam(required = false) UUID jobLevelId,
-			@RequestParam(required = false) String status) {
+			@RequestParam(required = false) String status,
+			@AuthenticationPrincipal UUID currentUserId) {
 
-		List<EmployeeSummaryResponse> rows = employeeService.exportAll(q, departmentId, locationId, countryCode, jobLevelId, status);
+		List<EmployeeSummaryResponse> rows = employeeService.exportAll(q, departmentId, locationId, countryCode, jobLevelId, status, currentUserId);
 		Map<UUID, String> departmentNames = referenceService.departments().stream()
 				.collect(Collectors.toMap(DepartmentResponse::id, DepartmentResponse::name));
 		Map<UUID, String> locationNames = referenceService.locations().stream()
@@ -158,20 +162,22 @@ public class EmployeeController {
 	/** Create / edit employee record: HR Admin, HR Manager. */
 	@PostMapping
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER')")
-	public EmployeeDetailResponse create(@Valid @RequestBody EmployeeCreateRequest request) {
-		return employeeService.create(request);
+	public EmployeeDetailResponse create(@Valid @RequestBody EmployeeCreateRequest request, @AuthenticationPrincipal UUID currentUserId) {
+		return employeeService.create(request, currentUserId);
 	}
 
 	@PatchMapping("/{id}")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER')")
-	public EmployeeDetailResponse update(@PathVariable UUID id, @Valid @RequestBody EmployeeUpdateRequest request) {
-		return employeeService.update(id, request);
+	public EmployeeDetailResponse update(
+			@PathVariable UUID id, @Valid @RequestBody EmployeeUpdateRequest request, @AuthenticationPrincipal UUID currentUserId) {
+		return employeeService.update(id, request, currentUserId);
 	}
 
 	@PostMapping("/{id}/terminate")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER')")
-	public EmployeeDetailResponse terminate(@PathVariable UUID id, @Valid @RequestBody EmployeeTerminateRequest request) {
-		return employeeService.terminate(id, request.terminationDate());
+	public EmployeeDetailResponse terminate(
+			@PathVariable UUID id, @Valid @RequestBody EmployeeTerminateRequest request, @AuthenticationPrincipal UUID currentUserId) {
+		return employeeService.terminate(id, request.terminationDate(), currentUserId);
 	}
 
 	private ResponseEntity<Void> notImplemented() {

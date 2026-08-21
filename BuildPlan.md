@@ -1231,10 +1231,102 @@ verified.
 
 ## P8 — Admin, audit, import
 
-- [ ] **P8.1** Users and roles admin; admin-issued reset tokens; last-HR-Admin protection.
+- [x] **P8.1** Users and roles admin; admin-issued reset tokens; last-HR-Admin protection.
   *Verify:* deactivating the last HR Admin is refused.
-- [ ] **P8.2** Audit: write aspect, read interceptor, append-only grants, `AuditImmutabilityTest`.
+  > **Done (2026-08-21):** `UserAdminService` — `create()` (no password field on the request; a
+  > random, never-known-to-anyone secret becomes the initial hash, unlocked only by immediately
+  > issuing a reset token), `update()` (full replace, `EmployeeUpdateRequest`'s own convention),
+  > `issueResetToken()` (FR-1.6: opaque random secret via the same `RefreshTokens.generate()`/
+  > `.hash()` helper P2.2's refresh tokens use — SHA-256 hash persisted, raw token returned exactly
+  > once, never stored). "Cannot change own role" and "last active HR Admin" are two separate,
+  > separately-tested guards — the second also blocks reassigning the LAST active HR_ADMIN's role
+  > away from HR_ADMIN, not just literal deactivation, since both have the identical effect (FR-1.5's
+  > text names only deactivation, but the reasoning obviously extends to the same danger by another
+  > route — a genuine, deliberate extension of the letter of the rule, documented as such).
+  >
+  > **A real bug found and fixed, not just documented:** returning `user.getCreatedAt()` immediately
+  > after `userRepository.save(...)` was silently `null` — `@CreationTimestamp` is a Hibernate-
+  > generated value populated at flush time, not by the entity builder, and `save()` alone doesn't
+  > force a flush. Fixed with `saveAndFlush()`; a regression test (`created.createdAt()` non-null)
+  > pins it down. First time this app has returned a `@CreationTimestamp` field in the same response
+  > as the write that created it — every other entity's create path returns a DTO that omits it.
+  >
+  > **A real test-isolation problem found and fixed:** the "last active HR Admin" guard counts every
+  > row in `users` — untestable against the shared Testcontainers container every other test class
+  > (and even this step's own sibling test methods, sharing one class-cached container) populates
+  > with its own HR_ADMIN fixtures. `LastActiveHrAdminTest` runs with a properties signature no other
+  > test class uses, so Spring caches it a private, empty container — same technique
+  > `PostgresContainerIntegrationTest` already established for an unrelated reason.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 124, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (2 new tests in `UserAdminTest`, 1 in `LastActiveHrAdminTest`, 121 pre-existing). Live-verified:
+  > listed users, created a new HR_MANAGER, confirmed self-role-change rejected (400).
+- [x] **P8.2** Audit: write aspect, read interceptor, append-only grants, `AuditImmutabilityTest`.
   *Verify:* a pay-list read produces an audit row recording the filter; an update is denied.
+  > **Done (2026-08-21):** `AuditService` (new `audit` package sibling to the existing `AuditEvent`/
+  > `AuditEventRepository`/`AuditController` stub from P1.7/P2.4) — deliberately **explicit calls at
+  > each write/read site, not a generic `@Audited` AOP aspect** capturing before/after by reflection:
+  > `ApplyDueChangesJob`'s scheduled path (P6.2) has no HTTP request and therefore no
+  > `SecurityContextHolder` authentication to intercept, so every call site already carrying its own
+  > acting-user id (the established `@AuthenticationPrincipal UUID currentUserId` convention, or
+  > `decidedBy` for the scheduled path) is simpler and correct in both cases, not a reflection-based
+  > guess at "the current user." `actor_role` is resolved from `actorUserId` via a `UserRepository`
+  > lookup inside `AuditService` itself, not threaded through every call site.
+  >
+  > **Wired onto every write that touches pay, bands, changes, or user identity:**
+  > `EffectiveDating.apply()`/`.correct()` (the ledger itself — covers every raise/correction
+  > regardless of which controller triggered it), `EmployeeService.create()`/`.update()`/
+  > `.terminate()`, `ChangeService.propose()`/`.approve()`/`.reject()`/`.applyDueChange()` (the
+  > CHANGE entity's own APPLIED transition — a distinct entity from the ledger row
+  > `EffectiveDating.apply()` already audits inside the same call, not a duplicate), `BandService
+  > .create()`/`.update()`, `UserAdminService.create()`/`.update()`/`.issueResetToken()`.
+  > **Deliberately not audited** (documented scope trim, not a silent gap): `ChangeService
+  > .updateDraft()`/`.submit()`/`.discardDraft()` (pre-decision editing with no committed effect),
+  > `BandService.importCsv()`/`ChangeService.bulkUpload()` (bulk paths — auditing each row would be
+  > a larger, separate pass). `GET /employees/{id}/peers` also isn't audited as "individual pay
+  > data" — it's this person's position against an aggregate, not their own record, a genuinely
+  > borderline call flagged rather than silently decided.
+  >
+  > **A real, non-obvious ordering bug found and fixed at three separate call sites:** the FIRST
+  > version of this wiring serialised the "before" state AFTER the entity had already been mutated
+  > in place (e.g. `EffectiveDating.apply()` closes the old period, then — in the original draft —
+  > serialised it for the audit row, capturing the CLOSED state as "before" instead of the true
+  > pre-mutation state). Fixed by adding `AuditService.snapshot(Object)` — freezes a JSON string
+  > immediately, before any mutation — used at every call site that mutates in place before it can
+  > audit (`EffectiveDating.apply()`/`.correct()`, `ChangeService.approve()`/`.reject()`/
+  > `.applyDueChange()`, `BandService.update()`, `EmployeeService.update()`/`.terminate()`).
+  >
+  > **Read auditing (FR-7.2)** wired onto `EmployeeController`'s `list`/`get`/`compensationHistory`/
+  > `compensationAsAt`/`export` — every one of them now takes `@AuthenticationPrincipal UUID
+  > currentUserId` (none did before this step). A list/export read records the filter description
+  > and the result count, never the individual ids; a detail/history read records which employee.
+  >
+  > **`AuditImmutabilityTest`** — new, deliberately going further than P1.7's
+  > `V8V9AuditAndProjectionMigrationTest` (which already proved the raw database grant with a
+  > hand-crafted INSERT): this one drives a REAL `EmployeeService.update()` and a REAL `.list()`
+  > read through the actual `AuditService`, asserts the resulting rows have the right actor/action/
+  > before-after JSON, THEN proves those specific real rows can't be updated by the `salaryos_app`
+  > role — the full loop, not just the database permission in isolation.
+  >
+  > **A live, active session-collision discovered and resolved mid-step, not glossed over:** another
+  > `claude` CLI process (pid 5087) was independently running its own `./mvnw clean verify` against
+  > this same repo/Testcontainers-Docker-daemon at the same time, corrupting consecutive verify runs
+  > of the identical command (different test counts, different failure sets, a transient
+  > `PostgresContainerIntegrationTest` context-load failure) — real evidence, not a hunch, surfaced
+  > by rerunning the same command three times and getting three different results. Flagged to the
+  > user, who had it stopped; a clean, uncontested rerun afterward reproduced a stable
+  > 124/124-then-125/125 result, confirming every earlier "failure" from that window (an
+  > `ApplyDueChangesJobTest` miss, a `LastActiveHrAdminTest` FK error later found to be a real bug —
+  > see below — plus the phantom context-load error) was genuinely two different things tangled
+  > together, not one. **The one real bug this surfaced**, separate from the concurrency noise:
+  > `LastActiveHrAdminTest`'s `actingAsSomeoneElse` was a bare `UUID.randomUUID()` — harmless before
+  > this step added an FK-constrained audit write to `UserAdminService.update()`, a genuine failure
+  > once it did. Fixed by seeding a real acting user.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 125, Failures: 0, Errors: 0`, `BUILD SUCCESS`,
+  > run uncontested after the other session stopped (1 new test in `AuditImmutabilityTest`, 124
+  > pre-existing). Live-verified against the throwaway dev DB: a real `GET /employees/{id}` produced
+  > a `READ_DETAIL` row with the correct actor role and entity id, visible via direct SQL.
 - [ ] **P8.3** Audit log screen with filters and export; FX rate admin by month.
   *Verify:* a missing rate month is visible and addable.
 - [ ] **P8.4** Employee CSV import with dry-run diff.
@@ -1264,8 +1356,8 @@ After completion of complete P8 stop executing next P9 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P7.7` Equity review screen — done, `[x]`, `npm run verify` clean, suppressedCohorts=2 curl-verified (2026-08-21). **P7 complete.** |
-| **Current step** | `P8.1` — Users and roles admin; admin-issued reset tokens; last-HR-Admin protection. |
+| **Last completed** | `P8.2` Audit write/read wiring + `AuditImmutabilityTest` — done, `[x]`, 125/125 backend tests (2026-08-21). |
+| **Current step** | `P8.3` — Audit log screen with filters and export; FX rate admin by month. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._

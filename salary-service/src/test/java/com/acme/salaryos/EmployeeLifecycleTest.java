@@ -22,14 +22,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
-import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -75,7 +79,6 @@ class EmployeeLifecycleTest {
 	private CompensationRecordRepository compensationRecordRepository;
 
 	@Test
-	@WithMockUser(roles = "HR_ADMIN")
 	void createThenEditWithoutLevelOrLocationChangeLeavesBandMismatchedFalse() throws Exception {
 		Fixtures fx = seedFixtures("NOCHANGE");
 
@@ -94,6 +97,7 @@ class EmployeeLifecycleTest {
 		}});
 
 		mockMvc.perform(patch("/api/employees/" + employeeId)
+						.with(authAs(fx.userId))
 						.cookie(new jakarta.servlet.http.Cookie("sos_csrf", "test-csrf-token")).header("X-CSRF-Token", "test-csrf-token")
 						.contentType("application/json").content(updateBody))
 				.andExpect(status().isOk())
@@ -102,7 +106,6 @@ class EmployeeLifecycleTest {
 	}
 
 	@Test
-	@WithMockUser(roles = "HR_ADMIN")
 	void editingJobLevelSetsBandMismatched() throws Exception {
 		Fixtures fx = seedFixtures("LEVELCHG");
 		UUID otherLevelId = seedAlternateJobLevel(fx.jobFamilyId, "LEVELCHG");
@@ -122,6 +125,7 @@ class EmployeeLifecycleTest {
 		}});
 
 		mockMvc.perform(patch("/api/employees/" + employeeId)
+						.with(authAs(fx.userId))
 						.cookie(new jakarta.servlet.http.Cookie("sos_csrf", "test-csrf-token")).header("X-CSRF-Token", "test-csrf-token")
 						.contentType("application/json").content(updateBody))
 				.andExpect(status().isOk())
@@ -129,7 +133,6 @@ class EmployeeLifecycleTest {
 	}
 
 	@Test
-	@WithMockUser(roles = "HR_ADMIN")
 	void terminatingClosesTheOpenCompensationPeriodOnTheTerminationDate() throws Exception {
 		Fixtures fx = seedFixtures("TERMWITHCOMP");
 		UUID employeeId = createEmployee(fx, "E-LIFECYCLE-3");
@@ -151,6 +154,7 @@ class EmployeeLifecycleTest {
 
 		LocalDate terminationDate = LocalDate.of(2024, 9, 15);
 		MvcResult result = mockMvc.perform(post("/api/employees/" + employeeId + "/terminate")
+						.with(authAs(fx.userId))
 						.cookie(new jakarta.servlet.http.Cookie("sos_csrf", "test-csrf-token")).header("X-CSRF-Token", "test-csrf-token")
 						.contentType("application/json")
 						.content("{\"terminationDate\":\"" + terminationDate + "\"}"))
@@ -168,12 +172,12 @@ class EmployeeLifecycleTest {
 	}
 
 	@Test
-	@WithMockUser(roles = "HR_ADMIN")
 	void terminatingAnEmployeeWithNoCompensationRecordStillSucceeds() throws Exception {
 		Fixtures fx = seedFixtures("TERMNOCOMP");
 		UUID employeeId = createEmployee(fx, "E-LIFECYCLE-4");
 
 		mockMvc.perform(post("/api/employees/" + employeeId + "/terminate")
+						.with(authAs(fx.userId))
 						.cookie(new jakarta.servlet.http.Cookie("sos_csrf", "test-csrf-token")).header("X-CSRF-Token", "test-csrf-token")
 						.contentType("application/json")
 						.content("{\"terminationDate\":\"2024-10-01\"}"))
@@ -197,12 +201,21 @@ class EmployeeLifecycleTest {
 		}});
 
 		MvcResult result = mockMvc.perform(post("/api/employees")
+						.with(authAs(fx.userId))
 						.cookie(new jakarta.servlet.http.Cookie("sos_csrf", "test-csrf-token")).header("X-CSRF-Token", "test-csrf-token")
 						.contentType("application/json").content(body))
 				.andExpect(status().isOk())
 				.andReturn();
 		JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
 		return UUID.fromString(response.get("id").asString());
+	}
+
+	/** Real {@code UsernamePasswordAuthenticationToken(UUID, null, authorities)} shape — matches
+	 * {@code SessionCookieAuthFilter} exactly, since {@code @AuthenticationPrincipal UUID} only
+	 * binds when the principal really is a {@code UUID} ({@code @WithMockUser}'s principal isn't). */
+	private static RequestPostProcessor authAs(UUID userId) {
+		return SecurityMockMvcRequestPostProcessors.authentication(
+				new UsernamePasswordAuthenticationToken(userId, null, List.of(new SimpleGrantedAuthority("ROLE_HR_ADMIN"))));
 	}
 
 	private record Fixtures(UUID departmentId, UUID locationId, UUID jobFamilyId, UUID jobLevelId, UUID userId) {

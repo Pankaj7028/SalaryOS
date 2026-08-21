@@ -13,17 +13,17 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 
 | | |
 |---|---|
-| **Phase** | P8 (Admin, audit, import) — not yet started |
-| **Last completed** | `P7.7` Equity review screen — `[x]`. **P7 (Insights) is fully complete.** |
-| **Next step** | `P8.1` — Users and roles admin; admin-issued reset tokens; last-HR-Admin protection. |
+| **Phase** | P8 (Admin, audit, import) in progress |
+| **Last completed** | `P8.2` Audit write/read wiring + `AuditImmutabilityTest` — `[x]`, 125/125 backend tests. |
+| **Next step** | `P8.3` — Audit log screen with filters and export; FX rate admin by month. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
 Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6` (all) ·
-`P7` (all).
-Blocked: `P0.3`. Untouched: `P8`–`P9`.
+`P7` (all) · `P8.1`–`P8.2`.
+Blocked: `P0.3`. Untouched: `P8.3`–`P9`.
 
 ---
 
@@ -130,11 +130,27 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   component still renders once server-side before `useEffect` can read `getComputedStyle`, so a
   dark-mode viewer's first paint can flash light chart colours for one frame. Values are copied
   verbatim from `theme.css`, never invented.
+- **`JacksonConfig.bigDecimalAsStringCustomizer` (found during P8.2, cross-cutting, not scoped to
+  one step): every `BigDecimal` — every money amount, every ratio — now serialises as a JSON
+  STRING.** Without it, Jackson 3's default writes a bare number, silently contradicting `lib/
+  money.ts`'s own documented contract ("`amount` is a STRING, not a number... an IEEE-754 double
+  cannot represent every such value exactly") for the entire life of the API up to this point —
+  confirmed live: `curl`-verified `currentBasePay.amount` went from a bare `105000.0` float to the
+  precise string `"105000.00"`. The frontend's own types already assumed a string, so nothing there
+  needed to change; this fixes the backend to actually match what it always claimed to send.
 
 ---
 
 ## Gotchas found the hard way
 
+- **More than one `claude` CLI process can be pointed at this same repo at once** — check `ps aux
+  | grep claude` before trusting a confusing `./mvnw clean verify` result. Two sessions running it
+  concurrently share the same `target/` and the same Testcontainers/colima Docker daemon, and the
+  runs corrupt each other: different test counts and different failure sets across identical,
+  back-to-back invocations, plus a phantom `PostgresContainerIntegrationTest` context-load failure
+  (P8.2). If a failure looks inconsistent between two otherwise-identical runs, check for a second
+  session before debugging your own code — rerun once uncontested before concluding anything is
+  actually broken.
 - **Boot 4 moved every autoconfiguration class into a per-module package** and **renamed the
   starters** (`spring-boot-starter-webmvc`, not `-web`; test support per module). A wrong class name
   in `spring.autoconfigure.exclude` is **ignored silently** — confirm against `AutoConfiguration.

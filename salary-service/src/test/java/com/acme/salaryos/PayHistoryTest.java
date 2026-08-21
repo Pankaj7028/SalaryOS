@@ -86,18 +86,18 @@ class PayHistoryTest {
 				"MERIT", null, fx.userId()));
 
 		// Before either period existed: no answer.
-		assertThat(employeeService.compensationAsAt(fx.employeeId(), LocalDate.of(2033, 12, 31))).isEmpty();
+		assertThat(employeeService.compensationAsAt(fx.employeeId(), LocalDate.of(2033, 12, 31), fx.userId())).isEmpty();
 
 		// The exact day the first period is in force, and the exact last day before the raise.
-		assertThat(employeeService.compensationAsAt(fx.employeeId(), LocalDate.of(2034, 1, 1)))
+		assertThat(employeeService.compensationAsAt(fx.employeeId(), LocalDate.of(2034, 1, 1), fx.userId()))
 				.map(CompensationRecordResponse::id).contains(first.getId());
-		assertThat(employeeService.compensationAsAt(fx.employeeId(), LocalDate.of(2034, 6, 30)))
+		assertThat(employeeService.compensationAsAt(fx.employeeId(), LocalDate.of(2034, 6, 30), fx.userId()))
 				.map(CompensationRecordResponse::id).contains(first.getId());
 
 		// The exact day the raise takes over, and any day after.
-		assertThat(employeeService.compensationAsAt(fx.employeeId(), LocalDate.of(2034, 7, 1)))
+		assertThat(employeeService.compensationAsAt(fx.employeeId(), LocalDate.of(2034, 7, 1), fx.userId()))
 				.map(CompensationRecordResponse::id).contains(raise.getId());
-		assertThat(employeeService.compensationAsAt(fx.employeeId(), LocalDate.of(2035, 1, 1)))
+		assertThat(employeeService.compensationAsAt(fx.employeeId(), LocalDate.of(2035, 1, 1), fx.userId()))
 				.map(CompensationRecordResponse::id).contains(raise.getId());
 	}
 
@@ -114,7 +114,7 @@ class PayHistoryTest {
 				fx.employeeId(), LocalDate.of(2034, 6, 1), new BigDecimal("100000"), "USD", "ANNUAL",
 				"MERIT", null, fx.userId()));
 
-		List<CompensationRecordResponse> history = employeeService.compensationHistory(fx.employeeId());
+		List<CompensationRecordResponse> history = employeeService.compensationHistory(fx.employeeId(), fx.userId());
 
 		assertThat(history).hasSize(2);
 		assertThat(history.get(0).id()).isEqualTo(raise.getId());
@@ -128,8 +128,8 @@ class PayHistoryTest {
 	@Test
 	void compensationQueriesOnAnUnknownEmployeeAreNotFound() {
 		UUID unknown = UUID.randomUUID();
-		assertThatThrownBy(() -> employeeService.compensationHistory(unknown)).isInstanceOf(NoSuchElementException.class);
-		assertThatThrownBy(() -> employeeService.compensationAsAt(unknown, LocalDate.of(2034, 1, 1)))
+		assertThatThrownBy(() -> employeeService.compensationHistory(unknown, UUID.randomUUID())).isInstanceOf(NoSuchElementException.class);
+		assertThatThrownBy(() -> employeeService.compensationAsAt(unknown, LocalDate.of(2034, 1, 1), UUID.randomUUID()))
 				.isInstanceOf(NoSuchElementException.class);
 	}
 

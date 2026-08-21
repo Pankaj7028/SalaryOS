@@ -6,12 +6,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -48,10 +52,10 @@ class EmployeeListPaginationTest {
 	private ObjectMapper objectMapper;
 
 	@Test
-	@WithMockUser(roles = "HR_ADMIN")
 	void pagesThroughTenThousandEmployeesWithNoDuplicateOrSkippedId() throws Exception {
 		Set<UUID> insertedIds = seedEmployees();
 		assertThat(insertedIds).hasSize(EMPLOYEE_COUNT);
+		UUID actorUserId = seedUser();
 
 		Set<UUID> seenIds = new HashSet<>();
 		int totalItemsSeen = 0;
@@ -65,7 +69,7 @@ class EmployeeListPaginationTest {
 			String url = cursor == null
 					? "/api/employees?limit=137&q=E-PAGE"
 					: "/api/employees?limit=137&q=E-PAGE&cursor=" + cursor;
-			String body = mockMvc.perform(get(url))
+			String body = mockMvc.perform(get(url).with(authAs(actorUserId)))
 					.andExpect(status().isOk())
 					.andReturn().getResponse().getContentAsString();
 
@@ -129,6 +133,24 @@ class EmployeeListPaginationTest {
 				java.util.Arrays.asList(batchArgs));
 
 		return ids;
+	}
+
+	/** The audited {@code list()} read needs a real {@code users} row — {@code AuditService} looks
+	 * up the actor's role by id, and this test seeds everything via JDBC rather than repositories. */
+	private UUID seedUser() {
+		UUID id = UUID.randomUUID();
+		jdbcTemplate.update("insert into salary_schema.users (id, email, full_name, password_hash, role) "
+						+ "values (?, 'hr-admin-page@acme.test', 'HR Admin', '{argon2}stub', 'HR_ADMIN') on conflict (email) do nothing",
+				id);
+		return jdbcTemplate.queryForObject("select id from salary_schema.users where email = 'hr-admin-page@acme.test'", UUID.class);
+	}
+
+	/** Real {@code UsernamePasswordAuthenticationToken(UUID, null, authorities)} shape — matches
+	 * {@code SessionCookieAuthFilter} exactly, since {@code @AuthenticationPrincipal UUID} only
+	 * binds when the principal really is a {@code UUID} ({@code @WithMockUser}'s principal isn't). */
+	private static RequestPostProcessor authAs(UUID userId) {
+		return SecurityMockMvcRequestPostProcessors.authentication(
+				new UsernamePasswordAuthenticationToken(userId, null, List.of(new SimpleGrantedAuthority("ROLE_HR_ADMIN"))));
 	}
 
 }

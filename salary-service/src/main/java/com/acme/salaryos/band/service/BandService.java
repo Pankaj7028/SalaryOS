@@ -1,5 +1,6 @@
 package com.acme.salaryos.band.service;
 
+import com.acme.salaryos.audit.AuditService;
 import com.acme.salaryos.band.domain.SalaryBand;
 import com.acme.salaryos.band.dto.BandImportResult;
 import com.acme.salaryos.band.dto.BandImportRowResult;
@@ -41,10 +42,14 @@ public class BandService {
 
 	private final SalaryBandRepository salaryBandRepository;
 	private final EmployeeCurrentCompRepository employeeCurrentCompRepository;
+	private final AuditService auditService;
 
-	public BandService(SalaryBandRepository salaryBandRepository, EmployeeCurrentCompRepository employeeCurrentCompRepository) {
+	public BandService(
+			SalaryBandRepository salaryBandRepository, EmployeeCurrentCompRepository employeeCurrentCompRepository,
+			AuditService auditService) {
 		this.salaryBandRepository = salaryBandRepository;
 		this.employeeCurrentCompRepository = employeeCurrentCompRepository;
+		this.auditService = auditService;
 	}
 
 	public List<BandResponse> list() {
@@ -99,7 +104,9 @@ public class BandService {
 				.createdBy(createdBy)
 				.note(request.note())
 				.build();
-		return toResponse(salaryBandRepository.save(band));
+		SalaryBand saved = salaryBandRepository.save(band);
+		auditService.recordWrite(createdBy, "CREATE_BAND", "SALARY_BAND", saved.getId(), null, saved);
+		return toResponse(saved);
 	}
 
 	@Transactional
@@ -114,8 +121,10 @@ public class BandService {
 			throw new BandBackdatedException(current.getEffectiveFrom());
 		}
 
+		String beforeJson = auditService.snapshot(current);
 		SalaryBand successor = versionBand(current, request.currency(), request.minAmount(), request.midAmount(),
 				request.maxAmount(), request.effectiveFrom(), request.note(), createdBy);
+		auditService.recordWriteFromJson(createdBy, "VERSION_BAND", "SALARY_BAND", successor.getId(), beforeJson, auditService.snapshot(successor));
 		return toResponse(successor);
 	}
 

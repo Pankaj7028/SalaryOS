@@ -111,7 +111,7 @@ class ProjectionConsistencyTest {
 
 		// A termination closes the open period with nothing to replace it — no current pay at all.
 		UUID terminated = hireWithComp(fx, "TERMPROJ", new BigDecimal("95000"));
-		employeeService.terminate(terminated, LocalDate.of(2032, 3, 1));
+		employeeService.terminate(terminated, LocalDate.of(2032, 3, 1), fx.userId());
 
 		List<EmployeeCurrentComp> beforeRebuild = employeeCurrentCompRepository.findAllById(
 				List.of(inBand, belowMin, aboveMax, noBandLevelEmployee));

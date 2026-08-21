@@ -80,4 +80,13 @@ public class User {
 		return lockedUntil != null && lockedUntil.isAfter(at);
 	}
 
+	/** FR-1.5: full name, role, and status together — the admin update endpoint states the whole
+	 * intended record, never a partial patch. Callers (`UserAdminService`) are responsible for the
+	 * "cannot change own role" / "last active HR Admin" guards; this method only mutates. */
+	public void updateProfile(String fullName, String role, String status) {
+		this.fullName = fullName;
+		this.role = role;
+		this.status = status;
+	}
+
 }

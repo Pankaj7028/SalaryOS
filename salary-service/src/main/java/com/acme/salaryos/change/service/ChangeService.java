@@ -1,5 +1,6 @@
 package com.acme.salaryos.change.service;
 
+import com.acme.salaryos.audit.AuditService;
 import com.acme.salaryos.auth.domain.User;
 import com.acme.salaryos.auth.repository.UserRepository;
 import com.acme.salaryos.band.domain.SalaryBand;
@@ -62,6 +63,7 @@ public class ChangeService {
 	private final EffectiveDating effectiveDating;
 	private final EmployeeService employeeService;
 	private final UserRepository userRepository;
+	private final AuditService auditService;
 
 	public ChangeService(
 			CompensationChangeRepository changeRepository,
@@ -71,7 +73,8 @@ public class ChangeService {
 			SalaryBandRepository salaryBandRepository,
 			EffectiveDating effectiveDating,
 			EmployeeService employeeService,
-			UserRepository userRepository) {
+			UserRepository userRepository,
+			AuditService auditService) {
 		this.changeRepository = changeRepository;
 		this.employeeRepository = employeeRepository;
 		this.employeeCurrentCompRepository = employeeCurrentCompRepository;
@@ -80,6 +83,7 @@ public class ChangeService {
 		this.effectiveDating = effectiveDating;
 		this.employeeService = employeeService;
 		this.userRepository = userRepository;
+		this.auditService = auditService;
 	}
 
 	public List<ChangeResponse> list(UUID employeeId, String status, LocalDate fromDate, LocalDate toDate) {
@@ -153,7 +157,9 @@ public class ChangeService {
 				.note(request.note())
 				.proposedBy(proposedBy)
 				.build();
-		return toResponse(changeRepository.save(change));
+		CompensationChange saved = changeRepository.save(change);
+		auditService.recordWrite(proposedBy, "PROPOSE_CHANGE", "COMPENSATION_CHANGE", saved.getId(), null, saved);
+		return toResponse(saved);
 	}
 
 	@Transactional
@@ -191,8 +197,11 @@ public class ChangeService {
 		if (change.getProposedBy().equals(decidedBy)) {
 			throw new SelfApprovalException();
 		}
+		String beforeJson = auditService.snapshot(change);
 		change.approve(decidedBy, decisionNote);
-		return toResponse(changeRepository.save(change));
+		CompensationChange saved = changeRepository.save(change);
+		auditService.recordWriteFromJson(decidedBy, "APPROVE_CHANGE", "COMPENSATION_CHANGE", id, beforeJson, auditService.snapshot(saved));
+		return toResponse(saved);
 	}
 
 	/** ui doc §8.5: rejecting requires a note (unlike approving, where one is encouraged but optional).
@@ -205,8 +214,11 @@ public class ChangeService {
 		if (decisionNote == null || decisionNote.isBlank()) {
 			throw new ChangeNoteRequiredException("to reject a change");
 		}
+		String beforeJson = auditService.snapshot(change);
 		change.reject(decidedBy, decisionNote);
-		return toResponse(changeRepository.save(change));
+		CompensationChange saved = changeRepository.save(change);
+		auditService.recordWriteFromJson(decidedBy, "REJECT_CHANGE", "COMPENSATION_CHANGE", id, beforeJson, auditService.snapshot(saved));
+		return toResponse(saved);
 	}
 
 	/**
@@ -228,12 +240,17 @@ public class ChangeService {
 			throw new ChangeNotDueException(change.getEffectiveDate());
 		}
 
+		String beforeJson = auditService.snapshot(change);
+
+		// EffectiveDating.apply() records its own COMPENSATION_RECORD write; this call audits the
+		// CHANGE entity's own transition to APPLIED — a distinct entity, not a duplicate entry.
 		CompensationRecord record = effectiveDating.apply(new ApplyCommand(
 				change.getEmployeeId(), change.getEffectiveDate(), change.getNewBaseAmount(), change.getCurrency(),
 				"ANNUAL", change.getChangeReason(), change.getId(), change.getDecidedBy()));
 
 		change.apply(record.getId());
-		changeRepository.save(change);
+		CompensationChange saved = changeRepository.save(change);
+		auditService.recordWriteFromJson(change.getDecidedBy(), "APPLY_CHANGE", "COMPENSATION_CHANGE", id, beforeJson, auditService.snapshot(saved));
 		return record;
 	}
 

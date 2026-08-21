@@ -1,5 +1,7 @@
 package com.acme.salaryos.common.error;
 
+import com.acme.salaryos.auth.service.CannotChangeOwnRoleException;
+import com.acme.salaryos.auth.service.LastActiveHrAdminException;
 import com.acme.salaryos.band.service.BandAlreadyExistsException;
 import com.acme.salaryos.band.service.BandBackdatedException;
 import com.acme.salaryos.band.service.BandNotOpenException;
@@ -47,6 +49,16 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(NoSuchElementException.class)
 	public ProblemDetail handleNotFound() {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Not found.");
+	}
+
+	@ExceptionHandler(CannotChangeOwnRoleException.class)
+	public ProblemDetail handleCannotChangeOwnRole(CannotChangeOwnRoleException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+	}
+
+	@ExceptionHandler(LastActiveHrAdminException.class)
+	public ProblemDetail handleLastActiveHrAdmin(LastActiveHrAdminException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
 	}
 
 	@ExceptionHandler(BackdatedBeforeOpenPeriodException.class)

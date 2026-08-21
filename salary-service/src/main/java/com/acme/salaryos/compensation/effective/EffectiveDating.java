@@ -1,5 +1,6 @@
 package com.acme.salaryos.compensation.effective;
 
+import com.acme.salaryos.audit.AuditService;
 import com.acme.salaryos.band.domain.SalaryBand;
 import com.acme.salaryos.band.repository.SalaryBandRepository;
 import com.acme.salaryos.common.money.Money;
@@ -45,6 +46,7 @@ public class EffectiveDating {
 	private final FxRateRepository fxRateRepository;
 	private final CompensationRecordRepository compensationRecordRepository;
 	private final EmployeeCurrentCompProjector projector;
+	private final AuditService auditService;
 	private final String baseCurrency;
 
 	/**
@@ -61,6 +63,7 @@ public class EffectiveDating {
 			FxRateRepository fxRateRepository,
 			CompensationRecordRepository compensationRecordRepository,
 			EmployeeCurrentCompProjector projector,
+			AuditService auditService,
 			@Value("${app.base-currency}") String baseCurrency) {
 		this.employeeRepository = employeeRepository;
 		this.locationRepository = locationRepository;
@@ -68,6 +71,7 @@ public class EffectiveDating {
 		this.fxRateRepository = fxRateRepository;
 		this.compensationRecordRepository = compensationRecordRepository;
 		this.projector = projector;
+		this.auditService = auditService;
 		this.baseCurrency = baseCurrency;
 	}
 
@@ -86,6 +90,10 @@ public class EffectiveDating {
 		if (openPeriod.isPresent() && !cmd.effectiveFrom().isAfter(openPeriod.get().getEffectiveFrom())) {
 			throw new BackdatedBeforeOpenPeriodException(openPeriod.get().getEffectiveFrom());
 		}
+
+		// Snapshot BEFORE close() mutates it in place — serialising afterwards would record the
+		// closed (already-mutated) state as the "before" JSON too.
+		String beforeJson = openPeriod.map(auditService::snapshot).orElse(null);
 
 		// Close (and FLUSH) the old period before inserting the new one. Hibernate's default flush
 		// ordering runs every pending INSERT before any UPDATE regardless of call order, so without
@@ -114,6 +122,9 @@ public class EffectiveDating {
 		employeeRepository.save(employee);
 
 		projector.refresh(employee.getId());
+
+		auditService.recordWriteFromJson(cmd.createdBy(), "APPLY_COMPENSATION", "COMPENSATION_RECORD", saved.getId(),
+				beforeJson, auditService.snapshot(saved));
 
 		return saved;
 	}
@@ -145,6 +156,7 @@ public class EffectiveDating {
 		// Captured before close() mutates it — the corrected row inherits the ORIGINAL period's own
 		// end date (null if it was open), not the just-closed value that close() is about to set.
 		LocalDate originalEffectiveTo = original.getEffectiveTo();
+		String beforeJson = auditService.snapshot(original);
 
 		// Same ordering requirement as apply(): close and FLUSH the original before inserting the
 		// corrected row, or comp_no_overlap sees two open-ended ranges at insert time. close(effectiveFrom),
@@ -162,6 +174,9 @@ public class EffectiveDating {
 		compensationRecordRepository.save(original);
 
 		projector.refresh(employee.getId());
+
+		auditService.recordWriteFromJson(cmd.createdBy(), "CORRECT_COMPENSATION", "COMPENSATION_RECORD", saved.getId(),
+				beforeJson, auditService.snapshot(saved));
 
 		return saved;
 	}

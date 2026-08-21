@@ -1,5 +1,6 @@
 package com.acme.salaryos.employee.service;
 
+import com.acme.salaryos.audit.AuditService;
 import com.acme.salaryos.band.domain.SalaryBand;
 import com.acme.salaryos.band.repository.SalaryBandRepository;
 import com.acme.salaryos.common.money.Money;
@@ -60,6 +61,7 @@ public class EmployeeService {
 	private final LocationRepository locationRepository;
 	private final EmployeeCurrentCompProjector projector;
 	private final CursorCodec cursorCodec;
+	private final AuditService auditService;
 
 	public EmployeeService(
 			EmployeeRepository employeeRepository,
@@ -69,7 +71,8 @@ public class EmployeeService {
 			SalaryBandRepository salaryBandRepository,
 			LocationRepository locationRepository,
 			EmployeeCurrentCompProjector projector,
-			CursorCodec cursorCodec) {
+			CursorCodec cursorCodec,
+			AuditService auditService) {
 		this.employeeRepository = employeeRepository;
 		this.employeeCurrentCompRepository = employeeCurrentCompRepository;
 		this.compensationRecordRepository = compensationRecordRepository;
@@ -78,11 +81,12 @@ public class EmployeeService {
 		this.locationRepository = locationRepository;
 		this.projector = projector;
 		this.cursorCodec = cursorCodec;
+		this.auditService = auditService;
 	}
 
 	public KeysetPage<EmployeeSummaryResponse> list(
 			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId,
-			String status, String cursor, int limit) {
+			String status, String cursor, int limit, UUID currentUserId) {
 
 		// Specification.where/and reject a null argument outright (no longer the historical
 		// null-means-"no restriction" behaviour) — start unrestricted and fold in only the
@@ -120,12 +124,25 @@ public class EmployeeService {
 			nextCursor = encodeCursor(window.positionAt(employees.size() - 1));
 		}
 
+		auditService.recordListRead(currentUserId, "EMPLOYEE", describeFilter(query, departmentId, locationId, countryCode, jobLevelId, status), items.size());
+
 		return new KeysetPage<>(items, nextCursor);
+	}
+
+	private String describeFilter(String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId, String status) {
+		StringBuilder sb = new StringBuilder();
+		if (query != null) sb.append("q=").append(query).append(' ');
+		if (departmentId != null) sb.append("departmentId=").append(departmentId).append(' ');
+		if (locationId != null) sb.append("locationId=").append(locationId).append(' ');
+		if (countryCode != null) sb.append("countryCode=").append(countryCode).append(' ');
+		if (jobLevelId != null) sb.append("jobLevelId=").append(jobLevelId).append(' ');
+		if (status != null) sb.append("status=").append(status).append(' ');
+		return sb.isEmpty() ? "(none)" : sb.toString().trim();
 	}
 
 	/** FR-2.7: same filters as {@link #list}, unpaginated — the export always matches the on-screen filter. */
 	public List<EmployeeSummaryResponse> exportAll(
-			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId, String status) {
+			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId, String status, UUID currentUserId) {
 
 		Specification<Employee> spec = Specification.<Employee>unrestricted()
 				.and(nonNullOrUnrestricted(EmployeeSpecifications.search(query)))
@@ -142,18 +159,24 @@ public class EmployeeService {
 				.collect(Collectors.toMap(EmployeeCurrentComp::getEmployeeId, c -> c));
 		Map<UUID, SalaryBand> bands = fetchBands(currentComp.values());
 
-		return employees.stream()
+		List<EmployeeSummaryResponse> rows = employees.stream()
 				.map(employee -> {
 					EmployeeCurrentComp comp = currentComp.get(employee.getId());
 					SalaryBand band = comp == null || comp.getBandId() == null ? null : bands.get(comp.getBandId());
 					return toSummary(employee, comp, band);
 				})
 				.toList();
+
+		auditService.recordListRead(currentUserId, "EMPLOYEE",
+				"EXPORT " + describeFilter(query, departmentId, locationId, countryCode, jobLevelId, status), rows.size());
+
+		return rows;
 	}
 
-	public EmployeeDetailResponse get(UUID id) {
+	public EmployeeDetailResponse get(UUID id, UUID currentUserId) {
 		Employee employee = employeeRepository.findById(id).orElseThrow(NoSuchElementException::new);
 		EmployeeCurrentComp comp = employeeCurrentCompRepository.findById(id).orElse(null);
+		auditService.recordDetailRead(currentUserId, "EMPLOYEE", id);
 		return toDetail(employee, comp, findBand(comp), fetchComponents(comp));
 	}
 
@@ -242,20 +265,22 @@ public class EmployeeService {
 	}
 
 	/** FR-6.7: the full ledger, newest period first. */
-	public List<CompensationRecordResponse> compensationHistory(UUID id) {
+	public List<CompensationRecordResponse> compensationHistory(UUID id, UUID currentUserId) {
 		if (!employeeRepository.existsById(id)) {
 			throw new NoSuchElementException();
 		}
+		auditService.recordDetailRead(currentUserId, "EMPLOYEE_COMPENSATION_HISTORY", id);
 		return compensationRecordRepository.findByEmployeeIdOrderByEffectiveFromDesc(id).stream()
 				.map(this::toCompensationRecordResponse)
 				.toList();
 	}
 
 	/** FR-3.6: the one period valid on {@code asAt}, or empty if this employee had no pay yet on that date. */
-	public Optional<CompensationRecordResponse> compensationAsAt(UUID id, LocalDate asAt) {
+	public Optional<CompensationRecordResponse> compensationAsAt(UUID id, LocalDate asAt, UUID currentUserId) {
 		if (!employeeRepository.existsById(id)) {
 			throw new NoSuchElementException();
 		}
+		auditService.recordDetailRead(currentUserId, "EMPLOYEE_COMPENSATION_AS_AT", id);
 		return compensationRecordRepository.findAsAt(id, asAt).map(this::toCompensationRecordResponse);
 	}
 
@@ -268,7 +293,7 @@ public class EmployeeService {
 	}
 
 	@Transactional
-	public EmployeeDetailResponse create(EmployeeCreateRequest request) {
+	public EmployeeDetailResponse create(EmployeeCreateRequest request, UUID currentUserId) {
 		Employee employee = Employee.builder()
 				.employeeNumber(request.employeeNumber())
 				.firstName(request.firstName())
@@ -284,18 +309,21 @@ public class EmployeeService {
 				.fte(request.fte())
 				.build();
 		employeeRepository.save(employee);
+		auditService.recordWrite(currentUserId, "CREATE_EMPLOYEE", "EMPLOYEE", employee.getId(), null, employee);
 		return toDetail(employee, null, null, List.of());
 	}
 
 	/** FR-2.5: editing job level or location never touches pay — see {@link Employee#updateProfile}. */
 	@Transactional
-	public EmployeeDetailResponse update(UUID id, EmployeeUpdateRequest request) {
+	public EmployeeDetailResponse update(UUID id, EmployeeUpdateRequest request, UUID currentUserId) {
 		Employee employee = employeeRepository.findById(id).orElseThrow(NoSuchElementException::new);
+		String beforeJson = auditService.snapshot(employee);
 		employee.updateProfile(
 				request.firstName(), request.lastName(), request.workEmail(), request.departmentId(),
 				request.locationId(), request.jobFamilyId(), request.jobLevelId(), request.managerId(),
 				request.employmentType(), request.fte());
 		employeeRepository.save(employee);
+		auditService.recordWriteFromJson(currentUserId, "UPDATE_EMPLOYEE", "EMPLOYEE", id, beforeJson, auditService.snapshot(employee));
 		EmployeeCurrentComp comp = employeeCurrentCompRepository.findById(id).orElse(null);
 		return toDetail(employee, comp, findBand(comp), fetchComponents(comp));
 	}
@@ -308,8 +336,9 @@ public class EmployeeService {
 	 * actually be covered. Same convention as {@code EffectiveDating}'s closing math.
 	 */
 	@Transactional
-	public EmployeeDetailResponse terminate(UUID id, LocalDate terminationDate) {
+	public EmployeeDetailResponse terminate(UUID id, LocalDate terminationDate, UUID currentUserId) {
 		Employee employee = employeeRepository.findById(id).orElseThrow(NoSuchElementException::new);
+		String beforeJson = auditService.snapshot(employee);
 		employee.terminate(terminationDate);
 		employeeRepository.save(employee);
 
@@ -322,6 +351,8 @@ public class EmployeeService {
 		// longer exists (Technical-Requirements.md §4.4: the projection is maintained transactionally
 		// by whichever service call changed the ledger, not by a trigger).
 		projector.refresh(id);
+
+		auditService.recordWriteFromJson(currentUserId, "TERMINATE_EMPLOYEE", "EMPLOYEE", id, beforeJson, auditService.snapshot(employee));
 
 		EmployeeCurrentComp comp = employeeCurrentCompRepository.findById(id).orElse(null);
 		return toDetail(employee, comp, findBand(comp), fetchComponents(comp));

@@ -35,6 +35,7 @@ import org.springframework.context.annotation.Import;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -45,8 +46,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * P6.2's own Verify clause: running the job twice writes one record, and a change dated tomorrow
  * is not applied today. Runs against the real injected {@link java.time.Clock} (system UTC, per
  * {@code ClockConfig}) rather than a mocked one — the job only ever compares an effective date
- * against "today", so seeding dates relative to {@link LocalDate#now()} exercises the real
- * boundary without needing a test-only Clock bean.
+ * against "today", so seeding dates relative to {@code LocalDate.now(ZoneOffset.UTC)} exercises
+ * the real boundary without needing a test-only Clock bean. UTC specifically, not the JVM's
+ * default zone — a genuine failure was caught here when the dev machine (IST, UTC+5:30) crossed
+ * midnight into a new day 5.5 hours before UTC did, so {@code LocalDate.now()} and the job's own
+ * UTC "today" briefly disagreed by a full day.
  */
 @SpringBootTest(properties = {
 		"spring.autoconfigure.exclude=",
@@ -89,7 +93,7 @@ class ApplyDueChangesJobTest {
 	void runningTheJobTwiceAppliesADueChangeExactlyOnce() {
 		Fixtures fx = seedFixtures("TWICE");
 		UUID employeeId = hireWithComp(fx, "TWICE", new BigDecimal("100000"));
-		LocalDate today = LocalDate.now();
+		LocalDate today = LocalDate.now(ZoneOffset.UTC);
 
 		ChangeResponse change = changeService.propose(new ProposeChangeRequest(
 				employeeId, today, new BigDecimal("110000"), "USD", "MERIT", null, null), fx.proposerId());
@@ -116,7 +120,7 @@ class ApplyDueChangesJobTest {
 	void aChangeDatedTomorrowIsNotAppliedToday() {
 		Fixtures fx = seedFixtures("TOMORROW");
 		UUID employeeId = hireWithComp(fx, "TOMORROW", new BigDecimal("100000"));
-		LocalDate tomorrow = LocalDate.now().plusDays(1);
+		LocalDate tomorrow = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
 		ChangeResponse change = changeService.propose(new ProposeChangeRequest(
 				employeeId, tomorrow, new BigDecimal("110000"), "USD", "MERIT", null, null), fx.proposerId());
@@ -130,7 +134,7 @@ class ApplyDueChangesJobTest {
 		List<ChangeResponse> stillApproved = changeService.list(employeeId, "APPROVED", null, null);
 		assertThat(stillApproved).extracting(ChangeResponse::id).contains(change.id());
 
-		assertThatThrownBy(() -> changeService.applyDueChange(change.id(), LocalDate.now()))
+		assertThatThrownBy(() -> changeService.applyDueChange(change.id(), LocalDate.now(ZoneOffset.UTC)))
 				.isInstanceOf(ChangeNotDueException.class);
 	}
 
@@ -172,8 +176,8 @@ class ApplyDueChangesJobTest {
 		seedRateIfMissing(LocalDate.of(2020, 1, 1));
 		// The applied change's effective date is "today" or "tomorrow" (real clock), so both
 		// months' rates must exist — a run near a month boundary would otherwise span two.
-		seedRateIfMissing(YearMonth.now().atDay(1));
-		seedRateIfMissing(YearMonth.now().plusMonths(1).atDay(1));
+		seedRateIfMissing(YearMonth.now(ZoneOffset.UTC).atDay(1));
+		seedRateIfMissing(YearMonth.now(ZoneOffset.UTC).plusMonths(1).atDay(1));
 
 		salaryBandRepository.save(SalaryBand.builder()
 				.jobLevelId(level.getId()).countryCode("US").currency("USD")
