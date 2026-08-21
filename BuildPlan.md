@@ -135,8 +135,34 @@ verified.
   > forward-fixing migration if wanted later). `V10V11IndexesAndReferenceDataMigrationTest` checks
   > every §4.3 index via `pg_indexes` and both reference tables' seeded rows.
   > Observed: `./mvnw clean verify` → `Tests run: 19, Failures: 0, Errors: 0`, `BUILD SUCCESS` (8.6s).
-- [ ] **P1.9** JPA entities + repositories for everything above; `Money` value type and converter.
+- [x] **P1.9** JPA entities + repositories for everything above; `Money` value type and converter.
   *Verify:* context loads; a round-trip test per entity; **no `double` anywhere** (grep).
+  > **Done (2026-08-21):** 19 entities (all V1–V11 tables) + a `JpaRepository` per entity, no
+  > `@ManyToOne` object graphs — every FK is a plain `UUID` field, joins happen explicitly in the
+  > service layer later. `common/money/Money` is a record `@Embeddable` (Hibernate 7 supports
+  > records as embeddables directly); embedded twice on `CompensationRecord`
+  > (`base`/`normalizedAnnualBase`) via `@AttributeOverrides` since one row has two currency pairs.
+  > `employee_current_comp.normalized_annual_base` has no currency column of its own — always
+  > `APP_BASE_CURRENCY` (USD) — so it's a plain `BigDecimal` there, not a second `Money`.
+  > **Three Postgres type-mapping fixes, each hit by `ddl-auto=validate` against real Postgres 17
+  > (the reason this project uses Testcontainers, not H2):**
+  > 1. `char(n)` columns (currency/country codes) — plain `String` defaults to `varchar`, mismatching
+  >    `bpchar`. Fixed with `@JdbcTypeCode(SqlTypes.CHAR)`.
+  > 2. `inet` (`user_sessions.ip`, `audit_events.ip`) — Hibernate has a native `InetAddress` mapping
+  >    (`PostgreSQLInetJdbcType`, auto-detected); mapping the field as `java.net.InetAddress` instead
+  >    of `String` just works. A `String` + `@JdbcTypeCode(SqlTypes.OTHER)` attempt bound the value
+  >    as raw bytes (readable back as a bytea hex literal) — don't do that.
+  > 3. `citext` (`users.email`, `employees.work_email`) — no Hibernate built-in. Same `OTHER`-as-bytes
+  >    failure as inet, and no `InetAddress`-style native type exists to swap in. Wrote
+  >    `common/jdbc/CitextJdbcType` (a minimal `JdbcType` reporting `Types.OTHER` for schema
+  >    validation but binding/extracting via plain `setString`/`getString`), applied via
+  >    `@org.hibernate.annotations.JdbcType(CitextJdbcType.class)`.
+  > Also fixed a real bug this surfaced: `V2ReferenceDataMigrationTest`'s raw `INSERT` into
+  > `countries` had no `ON CONFLICT`, and its location-count assertion checked the whole table
+  > instead of its own row — both broke once other test classes seeded overlapping reference data in
+  > the same cached container. Filtered to that test's own row instead.
+  > Observed: `./mvnw clean verify` → `Tests run: 37, Failures: 0, Errors: 0`, `BUILD SUCCESS` (9.9s).
+  > `grep -rn '\bdouble\b'` in `src/main` and `src/test`: only two comment mentions, no primitive use.
 - [ ] **P1.10** `NativeQuerySchemaQualificationTest`. *Verify:* it fails when you temporarily
   unqualify a table name, and passes when you restore it. Prove both directions.
 
@@ -269,8 +295,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P1.8` `V10`+`V11` indexes, static reference rows — **all migrations done** (2026-08-21) |
-| **Current step** | `P1.9` — JPA entities + repositories, `Money` value type |
+| **Last completed** | `P1.9` JPA entities + repositories (19 entities), `Money` value type — **P1 complete** (2026-08-21) |
+| **Current step** | `P1.10` — `NativeQuerySchemaQualificationTest` |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by P1) |
 
 _Update both rows on every completed step._
