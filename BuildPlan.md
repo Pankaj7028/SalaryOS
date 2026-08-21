@@ -836,8 +836,37 @@ verified.
   >
   > Observed: `./mvnw clean verify` → `Tests run: 102, Failures: 0, Errors: 0`, `BUILD SUCCESS`
   > (12 new tests in `ChangeLifecycleTest`, 1 in `ProposerIsNotApproverTest`, 89 pre-existing).
-- [ ] **P6.2** `ApplyDueChangesJob` (daily 02:00 UTC) + idempotent `POST /changes/apply-due`.
+- [x] **P6.2** `ApplyDueChangesJob` (daily 02:00 UTC) + idempotent `POST /changes/apply-due`.
   *Verify:* running twice writes one record; a change dated tomorrow is not applied today.
+  > `ClockConfig` (new `Clock.systemUTC()` bean) and `SchedulingConfig` (`@EnableScheduling`) finally
+  > give backend doc §3 rule 6's "inject Clock, never call `LocalDate.now()` inline" a real consumer.
+  > `ChangeService.applyDueChange(id, asOf)` does the actual work — re-validates status `APPROVED`
+  > and `effectiveDate <= asOf` itself (never trusts the caller's candidate list is still accurate),
+  > calls `EffectiveDating.apply(...)` to write the ledger row, then `change.apply(recordId)` to mark
+  > `APPLIED`, all in one `@Transactional` method. `ApplyDueChangesJob` (new top-level class in
+  > `change/`, matching the backend doc's package layout comment) is a thin orchestrator: queries
+  > `findByStatusAndEffectiveDateLessThanEqual("APPROVED", today)`, calls `applyDueChange` once per
+  > change with its own try/catch so one failure can't block the rest, and returns
+  > `ApplyDueChangesResult(due, applied, failures)`. `@Scheduled(cron = "0 0 2 * * *", zone = "UTC")`
+  > wraps it for the daily run; `ChangeController#applyDue` (was 501) calls the same `run()` for the
+  > manual trigger — same code path, so "idempotent" holds for both callers, not just the cron one.
+  > Idempotency falls out for free: a change leaves the `APPROVED` status the moment it's applied, so
+  > it's gone from the next run's own candidate query — no separate lock or dedupe needed.
+  >
+  > `ChangeNotDueException` (409) added for the direct-call edge (a future-dated change passed
+  > straight to `applyDueChange` — the job's own query already excludes this, so it only fires on a
+  > manual/direct call) and wired into `ApiExceptionHandler`.
+  >
+  > `ApplyDueChangesJobTest` (2 tests) runs against the real injected system Clock rather than a
+  > mocked one — the job only ever compares an effective date to "today", so seeding dates relative
+  > to `LocalDate.now()` exercises the real boundary without a test-only Clock bean. Confirmed: two
+  > back-to-back `run()` calls apply a due change exactly once (`due=1,applied=1` then `due=0,applied=0`,
+  > one `compensation_records` row added, not two); a change dated `LocalDate.now().plusDays(1)` is
+  > excluded from the candidate query and stays `APPROVED`, and a direct `applyDueChange` call against
+  > it throws `ChangeNotDueException`.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 104, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (2 new tests in `ApplyDueChangesJobTest`, 102 pre-existing).
 - [ ] **P6.3** Bulk merit upload: per-row validation, proposals for valid rows, downloadable error
   report. *Verify:* a file with 100 rows and 12 bad ones creates 88 proposals and one report.
 - [ ] **P6.4** Propose-change dialog with the live impact panel (delta, resulting compa-ratio, band
@@ -862,7 +891,7 @@ verified.
   *Verify:* switching themes re-colours every chart; the table equivalent exports.
 - [ ] **P7.7** Equity review screen with the suppression notice and separate unadjusted /
   level-adjusted columns. *Verify:* the suppressed count is non-zero against the seed and is shown.
-After completion of complete P7 stop executing next P8 task and do the local setup of this service and give me access URL for progress and feature check also here you can check and verify the current implementation you did so farthat does all features are working as expected and is UI is looking good and stable.
+
 ## P8 — Admin, audit, import
 
 - [ ] **P8.1** Users and roles admin; admin-issued reset tokens; last-HR-Admin protection.
@@ -873,7 +902,7 @@ After completion of complete P7 stop executing next P8 task and do the local set
   *Verify:* a missing rate month is visible and addable.
 - [ ] **P8.4** Employee CSV import with dry-run diff.
   *Verify:* the dry run reports counts and writes nothing.
-
+After completion of complete P8 stop executing next P9 task and do the local setup of this service and give me access URL for progress and feature check also here you can check and verify the current implementation you did so farthat does all features are working as expected and is UI is looking good and stable.
 ## P9 — Seed, hardening, acceptance
 
 - [ ] **P9.1** `SeedRunner` and generators per `salary-management-backend.md §9`, including every
@@ -898,8 +927,8 @@ After completion of complete P7 stop executing next P8 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P6.1` Change lifecycle endpoints — done, `[x]`, 102/102 backend tests (2026-08-21) |
-| **Current step** | `P6.2` — `ApplyDueChangesJob` (daily 02:00 UTC) + idempotent `POST /changes/apply-due`. |
+| **Last completed** | `P6.2` `ApplyDueChangesJob` + idempotent `POST /changes/apply-due` — done, `[x]`, 104/104 backend tests (2026-08-21) |
+| **Current step** | `P6.3` — Bulk merit upload: per-row validation, proposals for valid rows, downloadable error report. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). Known, flagged (not fixed) gap: no 375px table→card degradation anywhere yet (P5.5's done-note). |
 
 _Update both rows on every completed step._

@@ -8,7 +8,9 @@ import com.acme.salaryos.change.dto.ProposeChangeRequest;
 import com.acme.salaryos.change.dto.UpdateDraftRequest;
 import com.acme.salaryos.change.repository.CompensationChangeRepository;
 import com.acme.salaryos.common.money.Money;
+import com.acme.salaryos.compensation.domain.CompensationRecord;
 import com.acme.salaryos.compensation.domain.EmployeeCurrentComp;
+import com.acme.salaryos.compensation.effective.ApplyCommand;
 import com.acme.salaryos.compensation.effective.EffectiveDating;
 import com.acme.salaryos.compensation.repository.EmployeeCurrentCompRepository;
 import com.acme.salaryos.employee.domain.Employee;
@@ -42,18 +44,21 @@ public class ChangeService {
 	private final EmployeeCurrentCompRepository employeeCurrentCompRepository;
 	private final LocationRepository locationRepository;
 	private final SalaryBandRepository salaryBandRepository;
+	private final EffectiveDating effectiveDating;
 
 	public ChangeService(
 			CompensationChangeRepository changeRepository,
 			EmployeeRepository employeeRepository,
 			EmployeeCurrentCompRepository employeeCurrentCompRepository,
 			LocationRepository locationRepository,
-			SalaryBandRepository salaryBandRepository) {
+			SalaryBandRepository salaryBandRepository,
+			EffectiveDating effectiveDating) {
 		this.changeRepository = changeRepository;
 		this.employeeRepository = employeeRepository;
 		this.employeeCurrentCompRepository = employeeCurrentCompRepository;
 		this.locationRepository = locationRepository;
 		this.salaryBandRepository = salaryBandRepository;
+		this.effectiveDating = effectiveDating;
 	}
 
 	public List<ChangeResponse> list(UUID employeeId, String status, LocalDate fromDate, LocalDate toDate) {
@@ -141,6 +146,34 @@ public class ChangeService {
 		requirePending(change);
 		change.reject(decidedBy, decisionNote);
 		return toResponse(changeRepository.save(change));
+	}
+
+	/**
+	 * FR-5.7: writes the ledger row and marks the change {@code APPLIED} in one transaction
+	 * (Technical-Requirements.md §4.4's "same transaction" discipline, applied here too) — a
+	 * partial failure can never leave the change APPROVED with a ledger row already written, or
+	 * APPLIED with none. Re-validates status/date itself rather than trusting the caller's
+	 * candidate list is still accurate by the time this runs — {@code ApplyDueChangesJob} calls
+	 * this once per due change, each in its own transaction, so one change's rejection here
+	 * (already applied, or no longer approved) can't roll back the others.
+	 */
+	@Transactional
+	public CompensationRecord applyDueChange(UUID id, LocalDate asOf) {
+		CompensationChange change = changeRepository.findById(id).orElseThrow(NoSuchElementException::new);
+		if (!"APPROVED".equals(change.getStatus())) {
+			throw new ChangeNotPendingException();
+		}
+		if (change.getEffectiveDate().isAfter(asOf)) {
+			throw new ChangeNotDueException(change.getEffectiveDate());
+		}
+
+		CompensationRecord record = effectiveDating.apply(new ApplyCommand(
+				change.getEmployeeId(), change.getEffectiveDate(), change.getNewBaseAmount(), change.getCurrency(),
+				"ANNUAL", change.getChangeReason(), change.getId(), change.getDecidedBy()));
+
+		change.apply(record.getId());
+		changeRepository.save(change);
+		return record;
 	}
 
 	private void requireNoOpenChange(UUID employeeId) {

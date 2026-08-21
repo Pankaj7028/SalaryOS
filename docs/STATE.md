@@ -14,15 +14,15 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | P6 (Changes & approval) in progress |
-| **Last completed** | `P6.1` Change lifecycle endpoints — `[x]`, 102/102 backend tests. |
-| **Next step** | `P6.2` — `ApplyDueChangesJob` (daily 02:00 UTC) + idempotent `POST /changes/apply-due`. |
+| **Last completed** | `P6.2` `ApplyDueChangesJob` + idempotent `POST /changes/apply-due` — `[x]`, 104/104 backend tests. |
+| **Next step** | `P6.3` — Bulk merit upload: per-row validation, proposals for valid rows, downloadable error report. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
-Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6.1`.
-Blocked: `P0.3`. Untouched: `P6.2`–`P9`.
+Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6.1`–`P6.2`.
+Blocked: `P0.3`. Untouched: `P6.3`–`P9`.
 
 ---
 
@@ -111,6 +111,9 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   annual salary." One shared `currency` column means a proposal must match the employee's current
   pay currency (`ChangeCurrencyMismatchException` otherwise). `NO_BAND` does **not** trigger
   FR-5.4's mandatory-note rule — only an existing band that the new amount falls outside of does.
+- **`ClockConfig`/`SchedulingConfig` added at P6.2** — the package's first real `Clock` consumer
+  (`ApplyDueChangesJob`). `ChangeService.applyDueChange(id, asOf)` does the write; the job is a thin
+  loop with try/catch per change. `ChangeController#applyDue` and the cron call the same `run()`.
 
 ---
 

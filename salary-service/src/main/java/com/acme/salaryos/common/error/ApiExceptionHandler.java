@@ -7,6 +7,7 @@ import com.acme.salaryos.band.service.BandOrderingException;
 import com.acme.salaryos.change.service.ChangeCurrencyMismatchException;
 import com.acme.salaryos.change.service.ChangeNoteRequiredException;
 import com.acme.salaryos.change.service.ChangeNotDraftException;
+import com.acme.salaryos.change.service.ChangeNotDueException;
 import com.acme.salaryos.change.service.ChangeNotPendingException;
 import com.acme.salaryos.change.service.NoCurrentCompensationException;
 import com.acme.salaryos.change.service.OpenChangeAlreadyExistsException;
@@ -113,6 +114,11 @@ public class ApiExceptionHandler {
 
 	@ExceptionHandler(ChangeNotPendingException.class)
 	public ProblemDetail handleChangeNotPending(ChangeNotPendingException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+	}
+
+	@ExceptionHandler(ChangeNotDueException.class)
+	public ProblemDetail handleChangeNotDue(ChangeNotDueException exception) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
 	}
 

@@ -1,5 +1,7 @@
 package com.acme.salaryos.change.web;
 
+import com.acme.salaryos.change.ApplyDueChangesJob;
+import com.acme.salaryos.change.dto.ApplyDueChangesResult;
 import com.acme.salaryos.change.dto.ChangeResponse;
 import com.acme.salaryos.change.dto.DecisionRequest;
 import com.acme.salaryos.change.dto.ProposeChangeRequest;
@@ -30,9 +32,11 @@ import java.util.UUID;
 public class ChangeController {
 
 	private final ChangeService changeService;
+	private final ApplyDueChangesJob applyDueChangesJob;
 
-	public ChangeController(ChangeService changeService) {
+	public ChangeController(ChangeService changeService, ApplyDueChangesJob applyDueChangesJob) {
 		this.changeService = changeService;
+		this.applyDueChangesJob = applyDueChangesJob;
 	}
 
 	/** Propose a compensation change: HR Admin, HR Manager, Comp Analyst. */
@@ -90,8 +94,8 @@ public class ChangeController {
 	 */
 	@PostMapping("/apply-due")
 	@PreAuthorize("hasRole('HR_ADMIN')")
-	public ResponseEntity<Void> applyDue() {
-		return notImplemented();
+	public ApplyDueChangesResult applyDue() {
+		return applyDueChangesJob.run();
 	}
 
 	/** Import / bulk upload: HR Admin only. */

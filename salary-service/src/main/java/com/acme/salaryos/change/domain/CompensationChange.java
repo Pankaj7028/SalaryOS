@@ -107,4 +107,11 @@ public class CompensationChange {
 		this.decisionNote = decisionNote;
 	}
 
+	/** FR-5.7: the terminal transition — only {@code ApplyDueChangesJob}/{@code ChangeService.applyDueChange} calls this, once the ledger write it names has actually happened. */
+	public void apply(UUID appliedRecordId) {
+		this.status = "APPLIED";
+		this.appliedAt = Instant.now();
+		this.appliedRecordId = appliedRecordId;
+	}
+
 }
