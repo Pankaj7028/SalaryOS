@@ -436,8 +436,49 @@ verified.
   > session end — recreate with `docker run --name salaryos-devdb -e POSTGRES_PASSWORD=devpass -e
   > POSTGRES_DB=salaryos -p 5433:5432 postgres:17`, an `application-local.yml` per the template in
   > `application-local.yml.example` pointed at it, then seed data (schema notes above).
-- [ ] **P4.4** Employee detail: identity, current pay panel, band detail bar, peers panel.
+- [~] **P4.4** Employee detail: identity, current pay panel, band detail bar, peers panel.
   *Verify:* an unbanded employee shows the no-band state, not a centred marker.
+  > **Backend:** `GET /employees/{id}/peers` was a P2.4 stub with `@PreAuthorize` but no logic —
+  > implemented for real (FR-6.6): cohort = active employees at the same `jobLevelId`, any location
+  > sharing the person's location's `countryCode` (`LocationRepository.findByCountryCode` +
+  > `EmployeeRepository.findByJobLevelIdAndLocationIdInAndStatusNot`, new derived-query methods),
+  > percentiles via linear interpolation over `normalizedAnnualBase` (always USD — a cohort spanning
+  > currencies still compares fairly), suppressed under 5 members (`PEER_COHORT_SUPPRESSION_THRESHOLD`,
+  > same value as FR-6.4's cohort threshold) — suppressed responses carry `cohortSize` but every
+  > money/percentile figure `null`. Built now rather than at P7.5 (where BuildPlan also lists "employee
+  > peers, FR-6.6") because Technical-Requirements.md §5's API contract places this route under
+  > **Employees**, not Analytics, and `EmployeeController` already owned the stub — P7.5 should treat
+  > this as done, not redo it. `EmployeeDetailResponse` gained a `components` list
+  > (`CompensationComponentRepository.findByCompensationRecordId`, new derived query).
+  >
+  > **Frontend:** identity header (name, employee number, status badge, a `band-mismatched` flag
+  > badge when true, resolved job-level/department/location names via the P4.3 reference hooks,
+  > manager name via a second `useEmployee(managerId)` call gated on `enabled`). `CurrentPayPanel`
+  > (`figure-lg` base, components listed beneath, `<BandBar detail>`, compa-ratio/range-penetration
+  > figures with formula tooltips — `TooltipProvider` added once in `query-provider.tsx`, same
+  > one-instance-at-root discipline as the root `<Toaster>`). `PeersPanel` (p25/median/p75, this
+  > person's percentile, the suppressed-cohort empty state). "Propose change" is a disabled button,
+  > matching the Overview page's P3.3 placeholder — P6 doesn't exist yet.
+  >
+  > **Deliberately not built:** the ui doc §8.3 "Pay history" panel — its ledger endpoint
+  > (`GET /employees/{id}/compensation`) is explicitly P5.4/P5.5 scope in this very file, not P4.4.
+  >
+  > **Verified:** `./mvnw clean verify` → `Tests run: 63, Failures: 0, Errors: 0`. `npm run
+  > typecheck`/`lint`/`build` all clean (lint: 0 errors, 1 expected TanStack-Table warning, same as
+  > P4.3). `curl`-verified end-to-end against the same seeded throwaway dev DB as P4.3 (recipe in
+  > `docs/STATE.md`): grew the L3/US cohort to exactly 5 people and hand-verified the peers math
+  > (sorted normalized bases 82000/98000/105000/112000/119000 → p25=98000, median=105000, p75=112000,
+  > Alice at 105000 = 60th percentile — all correct); confirmed the <5-member suppression path
+  > separately; confirmed an unbanded employee's detail response returns `band: null` /
+  > `currentBasePay: null` (drives the panel's no-band state, not a centred marker — this step's own
+  > Verify clause, confirmed at the API level).
+  >
+  > **Not done — same Chrome-can't-reach-localhost limitation as P4.3, confirmed again this session**
+  > (a fresh Chrome connection could reach `https://example.com` but not `localhost:3100` or even
+  > `localhost:8080/actuator/health` — the connected browser is not running in this shell's network
+  > namespace). No live-browser pass happened for P4.4 either. Both `P4.3` and `P4.4` stay `[~]` until
+  > a Chrome session that can actually reach this machine's localhost is available — see the recipe
+  > in `docs/STATE.md` to recreate the throwaway dev DB/backend/frontend, then walk both screens.
 
 ## P5 — Compensation & bands
 
@@ -521,9 +562,9 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | Backend + frontend for `P4.3` built and verified except a live browser pass (2026-08-21) |
-| **Current step** | `P4.3` — **`[~]`, not `[x]`.** Code is done (backend 63/63 tests, frontend build/typecheck/lint clean, API-level curl verification against a seeded throwaway DB). Owed: open `/employees` in a real browser and confirm it actually renders/behaves, plus the §12 checklist's keyboard/375px passes. See the done-note under P4.3 in the plan above for the exact recipe to recreate the throwaway dev DB. |
-| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). **Chrome extension was not connected this session** — owed a visual pass over both P2.5 (sign-in) and P4.3 (`/employees`) whenever available. |
+| **Last completed** | Backend + frontend for `P4.3` and `P4.4` built and verified except a live browser pass (2026-08-21) |
+| **Current step** | `P4.4` — **`[~]`, not `[x]`** (and `P4.3` is still `[~]` too). Code for both is done — backend 63/63 tests, frontend build/typecheck/lint clean, API-level curl verification against a seeded throwaway DB (including hand-checked peer-percentile math). Owed for both: open `/employees` and `/employees/[id]` in a real browser and confirm they actually render/behave, plus the §12 checklist's keyboard/375px passes. See the done-notes under P4.3/P4.4 above for the exact recipe to recreate the throwaway dev DB. Next after that: `P5.1` `EffectiveDating`. |
+| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). **Chrome extension cannot reach this machine's `localhost`** — confirmed twice this session (a connected Chrome tab loaded `https://example.com` but got an error page for both `localhost:3100` and `localhost:8080/actuator/health`). Owed a visual pass over P2.5 (sign-in), P4.3 (`/employees`), and P4.4 (`/employees/[id]`) once a Chrome session that can actually reach this machine is available. |
 
 _Update both rows on every completed step._
 
