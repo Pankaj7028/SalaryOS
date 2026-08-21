@@ -22,6 +22,16 @@ spring:
       - org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration
       - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
 
+app:
+  jwt:
+    # ≥32 bytes (CLAUDE.md §10). The fallback is dev/test-only — every real environment sets
+    # APP_JWT_SIGNING_KEY, and this default is obviously not that.
+    signing-key: ${APP_JWT_SIGNING_KEY:dev-only-signing-key-do-not-use-in-prod-32b}
+  session:
+    ttl: ${APP_SESSION_TTL:20m}
+  refresh:
+    ttl: ${APP_REFRESH_TTL:12h}
+
 server:
   port: 8080
 

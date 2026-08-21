@@ -178,8 +178,26 @@ verified.
 
 ## P2 — Auth end to end
 
-- [ ] **P2.1** `SecurityConfig`, `SessionCookieAuthFilter`, JWT mint/validate, Argon2id encoder.
+- [x] **P2.1** `SecurityConfig`, `SessionCookieAuthFilter`, JWT mint/validate, Argon2id encoder.
   *Verify:* unit tests for token validity, expiry, tampering, and revoked `jti`.
+  > **Done (2026-08-21):** `auth/service/JwtService` (JJWT 0.12.6, HS256, claims `sub`/`role`/`iat`/
+  > `exp`/`jti` only) + `auth/filter/SessionCookieAuthFilter` (reads `sos_session`, validates
+  > locally, checks `jti` against `user_sessions` via `findByJti`, sets `ROLE_<role>` — any failure
+  > leaves the request unauthenticated, never throws) + real `SecurityConfig` (STATELESS,
+  > `sos_csrf`/`X-CSRF-Token` double-submit ignoring login/refresh, Argon2id via
+  > `Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8()` wrapped in `DelegatingPasswordEncoder`,
+  > `ProblemDetail` 401/403). `app.jwt.signing-key`/`app.session.ttl`/`app.refresh.ttl` in
+  > `application.yml`, env-overridable per `CLAUDE.md §10`.
+  > **Correctness finding:** Spring Boot 4.0.8 ships **Jackson 3** (`tools.jackson.databind.*`), not
+  > Jackson 2 (`com.fasterxml.jackson.databind.*`) — the Spring-managed `ObjectMapper` bean is the
+  > `tools.jackson` one. `com.fasterxml.jackson.*` is still on the classpath, but only as JJWT's own
+  > bundled (Jackson 2) dependency for its internal token parsing — it is not a Spring bean and
+  > cannot be autowired. Wrong import silently 404s to `NoSuchBeanDefinitionException`. Watch for
+  > this in every future `ObjectMapper` injection.
+  > Also updated `SalaryOsApplicationTests` to the shared Testcontainers wiring: `SecurityConfig`
+  > now hard-requires `UserSessionRepository`, so the P0.2 "boots with no datasource" scenario is no
+  > longer reachable — persistence is required to authenticate any request from here on.
+  > Observed: `./mvnw clean verify` → `Tests run: 51, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
 - [ ] **P2.2** `POST /auth/login`, `/logout`, `/refresh` with rotation and family revocation on
   reuse; `GET /auth/me`. *Verify:* integration test covering the full cycle **plus** the reuse case
   revoking the family.
@@ -305,8 +323,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P1.10` `NativeQuerySchemaQualificationTest` — **P1 complete** (2026-08-21) |
-| **Current step** | `P2.1` — `SecurityConfig`, `SessionCookieAuthFilter`, JWT mint/validate, Argon2id |
-| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (P2 needs it for a running app, but P2.1's unit tests for token validity/expiry/tampering don't) |
+| **Last completed** | `P2.1` SecurityConfig, SessionCookieAuthFilter, JWT mint/validate, Argon2id (2026-08-21) |
+| **Current step** | `P2.2` — `POST /auth/login`, `/logout`, `/refresh`, `GET /auth/me` |
+| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by Testcontainers-backed integration tests) |
 
 _Update both rows on every completed step._
