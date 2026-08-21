@@ -103,8 +103,13 @@ verified.
   > period for the same employee throws `DataIntegrityViolationException` with message containing
   > `comp_no_overlap`; only 1 row persists.
   > Observed: `./mvnw verify` → `Tests run: 12, Failures: 0, Errors: 0`, `BUILD SUCCESS` (8.0s).
-- [ ] **P1.6** `V7` — `compensation_changes` + the partial unique index for one open change.
+- [x] **P1.6** `V7` — `compensation_changes` + the partial unique index for one open change.
   *Verify:* a second `PENDING` change for the same employee is rejected by the index.
+  > **Done (2026-08-21):** `V7__compensation_changes.sql` (`one_open_change_per_employee` partial
+  > unique index on `status IN ('DRAFT','PENDING','APPROVED')`) + `V7CompensationChangesMigrationTest`
+  > — a second `PENDING` change for the same employee throws `DataIntegrityViolationException`
+  > naming the index; exactly 1 open change persists.
+  > Observed: `./mvnw verify` → `Tests run: 14, Failures: 0, Errors: 0`, `BUILD SUCCESS` (7.5s).
 - [ ] **P1.7** `V8` + `V9` — `audit_events` (append-only grants), `employee_current_comp`.
   *Verify:* an `UPDATE` on `audit_events` as the app role is denied.
 - [ ] **P1.8** `V10` + `V11` — indexes and static reference rows.
@@ -243,8 +248,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P1.5` `V6` compensation_records (exclusion constraint) migration (2026-08-21) |
-| **Current step** | `P1.6` — `V7` compensation_changes |
+| **Last completed** | `P1.6` `V7` compensation_changes migration (2026-08-21) |
+| **Current step** | `P1.7` — `V8` + `V9` audit_events, employee_current_comp |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by P1) |
 
 _Update both rows on every completed step._
