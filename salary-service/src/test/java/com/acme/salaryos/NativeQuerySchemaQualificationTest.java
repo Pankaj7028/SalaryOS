@@ -51,6 +51,21 @@ class NativeQuerySchemaQualificationTest {
 	private static final Pattern JDBC_TEMPLATE_CALL_LITERALS = Pattern.compile(
 			"jdbcTemplate\\s*\\.\\s*\\w+\\s*\\(\\s*((?:\"(?:[^\"\\\\]|\\\\.)*\"\\s*\\+?\\s*)+)");
 
+	/**
+	 * salary-management-backend.md §6's own analytics convention: a query lives in a {@code private
+	 * static final String ...SQL} field, passed to {@code jdbcTemplate} by variable name — which
+	 * {@link #JDBC_TEMPLATE_CALL_LITERALS} cannot see, since the literal isn't inline at the call
+	 * site. Scans the DECLARATION instead, for both a concatenated-literal constant and a Java text
+	 * block (the doc's own example uses a text block). Restricted to names containing {@code SQL}
+	 * (matching the doc's naming) so this doesn't false-positive on an unrelated string constant
+	 * that happens to contain a word like "employees" in prose.
+	 */
+	private static final Pattern SQL_CONSTANT_LITERAL_DECLARATION = Pattern.compile(
+			"static\\s+final\\s+String\\s+\\w*SQL\\w*\\s*=\\s*((?:\"(?:[^\"\\\\]|\\\\.)*\"\\s*\\+?\\s*)+);");
+
+	private static final Pattern SQL_CONSTANT_TEXT_BLOCK_DECLARATION = Pattern.compile(
+			"static\\s+final\\s+String\\s+\\w*SQL\\w*\\s*=\\s*\"\"\"([\\s\\S]*?)\"\"\"\\s*;");
+
 	private static final Pattern STRING_LITERAL = Pattern.compile("\"((?:[^\"\\\\]|\\\\.)*)\"");
 
 	// --- unit-level proof, both directions, against crafted fixtures (no real files needed) ---
@@ -84,6 +99,24 @@ class NativeQuerySchemaQualificationTest {
 				+ "    \"select id from \"\n"
 				+ "        + \"salary_schema.employees\",\n"
 				+ "    UUID.class);";
+		assertThat(findViolations(source)).isEmpty();
+	}
+
+	@Test
+	void flagsAnUnqualifiedTableInASqlConstantTextBlock() {
+		String source = "private static final String OVERALL_SQL = \"\"\"\n"
+				+ "    SELECT count(*) FROM employee_current_comp\n"
+				+ "    \"\"\";\n"
+				+ "jdbcTemplate.queryForObject(OVERALL_SQL, Integer.class);";
+		assertThat(findViolations(source)).contains("employee_current_comp");
+	}
+
+	@Test
+	void allowsTheSameSqlConstantTextBlockOnceSchemaQualified() {
+		String source = "private static final String OVERALL_SQL = \"\"\"\n"
+				+ "    SELECT count(*) FROM salary_schema.employee_current_comp\n"
+				+ "    \"\"\";\n"
+				+ "jdbcTemplate.queryForObject(OVERALL_SQL, Integer.class);";
 		assertThat(findViolations(source)).isEmpty();
 	}
 
@@ -123,7 +156,16 @@ class NativeQuerySchemaQualificationTest {
 		collectReconstructedLiterals(QUERY_ANNOTATION_LITERALS_IMPLICIT, javaSource, literalBlocks);
 		collectReconstructedLiterals(QUERY_ANNOTATION_LITERALS_NAMED, javaSource, literalBlocks);
 		collectReconstructedLiterals(JDBC_TEMPLATE_CALL_LITERALS, javaSource, literalBlocks);
+		collectReconstructedLiterals(SQL_CONSTANT_LITERAL_DECLARATION, javaSource, literalBlocks);
+		collectRawTextBlocks(SQL_CONSTANT_TEXT_BLOCK_DECLARATION, javaSource, literalBlocks);
 		return literalBlocks;
+	}
+
+	private static void collectRawTextBlocks(Pattern blockPattern, String javaSource, List<String> out) {
+		Matcher blockMatcher = blockPattern.matcher(javaSource);
+		while (blockMatcher.find()) {
+			out.add(blockMatcher.group(1));
+		}
 	}
 
 	private static void collectReconstructedLiterals(Pattern blockPattern, String javaSource, List<String> out) {

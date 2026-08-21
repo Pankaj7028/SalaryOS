@@ -13,16 +13,17 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 
 | | |
 |---|---|
-| **Phase** | P6 (Changes & approval) in progress |
-| **Last completed** | `P6.5` Changes screen with tabs in the URL and inline approve/reject — `[x]`, 109/109 backend tests. |
-| **Next step** | `P7.1` — `payroll-cost`, `headcount` (FR-6.1) with the full basis envelope. |
+| **Phase** | P7 (Insights) in progress |
+| **Last completed** | `P7.1` `payroll-cost`, `headcount` — `[x]`, 113/113 backend tests. |
+| **Next step** | `P7.2` — `out-of-band` (FR-6.2) including cost-to-minimum. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
-Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6` (all).
-Blocked: `P0.3`. Untouched: `P7`–`P9`.
+Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6` (all) ·
+`P7.1`.
+Blocked: `P0.3`. Untouched: `P7.2`–`P9`.
 
 ---
 

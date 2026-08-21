@@ -1,5 +1,8 @@
 package com.acme.salaryos.analytics.web;
 
+import com.acme.salaryos.analytics.dto.HeadcountResponse;
+import com.acme.salaryos.analytics.dto.PayrollCostResponse;
+import com.acme.salaryos.analytics.service.AnalyticsService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -16,10 +19,22 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/analytics")
 public class AnalyticsController {
 
+	private final AnalyticsService analyticsService;
+
+	public AnalyticsController(AnalyticsService analyticsService) {
+		this.analyticsService = analyticsService;
+	}
+
 	@GetMapping("/payroll-cost")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
-	public ResponseEntity<Void> payrollCost() {
-		return notImplemented();
+	public PayrollCostResponse payrollCost() {
+		return analyticsService.payrollCost();
+	}
+
+	@GetMapping("/headcount")
+	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
+	public HeadcountResponse headcount() {
+		return analyticsService.headcount();
 	}
 
 	@GetMapping("/out-of-band")
@@ -43,12 +58,6 @@ public class AnalyticsController {
 	@GetMapping("/increase-cycle")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
 	public ResponseEntity<Void> increaseCycle() {
-		return notImplemented();
-	}
-
-	@GetMapping("/headcount")
-	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
-	public ResponseEntity<Void> headcount() {
 		return notImplemented();
 	}
 

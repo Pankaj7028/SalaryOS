@@ -979,8 +979,49 @@ verified.
 
 ## P7 — Insights
 
-- [ ] **P7.1** `payroll-cost`, `headcount` (FR-6.1) with the full basis envelope.
+- [x] **P7.1** `payroll-cost`, `headcount` (FR-6.1) with the full basis envelope.
   *Verify:* totals reconcile against a direct SQL sum over the seed.
+  > **Done (2026-08-21):** First real native SQL in the app — `analytics/query/{PayrollCostQuery,
+  > HeadcountQuery}` (plain `JdbcTemplate`, aggregation in the database per backend doc §6, never a
+  > per-employee Java loop). Both join from `employee_current_comp`, not `employees` alone — a
+  > terminated employee's row is deleted there (P5.2), so exclusion is free, no explicit status
+  > filter needed for the cost/headcount totals themselves; `byStatus`/`terminatedCount` query
+  > `employees` directly so the excluded count still has somewhere to be seen (FR-6.8).
+  > `AnalyticsService` assembles the envelope (`asAtDate` from the P6.2 `Clock` bean,
+  > `app.base-currency`, `AnalyticsPopulation{headcount, excluded}`).
+  >
+  > **A genuine interpretive call, reasoned through rather than guessed:** the envelope's
+  > `fxRateMonth` (FR-6.8) has no single value for this report — `normalized_annual_base` is already
+  > pinned per-employee to whichever rate was in force when *that employee's own record* was written
+  > (CLAUDE.md §6.4), so a population spanning many employees has no one governing rate month.
+  > `PayrollCostResponse.fxRateMonth` is `null` rather than a fabricated "today's month," which would
+  > wrongly imply live recomputation. `HeadcountResponse` omits the field entirely (no money in it at
+  > all). Documented on the record itself, not just here.
+  >
+  > **A real, pre-existing test gap found and fixed, not routed around:** `NativeQuerySchemaQualificationTest`
+  > only ever scanned a literal string passed *inline* to a `jdbcTemplate.<method>(...)` call or
+  > `@Query(...)` — backend doc §6's own documented convention (a `private static final String
+  > ...SQL` field referenced by name) was invisible to it, undetected until analytics finally
+  > exercised that pattern for the first time (flagged as a "starts earning its keep at P4+" item
+  > back at P1.10, four phases early). Extended with two more literal-collecting patterns — a
+  > concatenated-string constant declaration and a Java text-block constant declaration, both scoped
+  > to field names containing `SQL` to avoid false-positiving on an unrelated string constant.
+  > Proved both directions against the real `PayrollCostQuery.java`, not just the fixture tests:
+  > temporarily unqualified all four `employee_current_comp` references, confirmed
+  > `realSourceTreeQualifiesEveryNativeQuery` failed naming exactly that file/table, restored, confirmed green.
+  >
+  > **Verify scoped to what's seedable today** — same reasoning as every P5/P6 step's Verify-scope
+  > notes; `P9`'s `SeedRunner` doesn't exist yet. `PayrollCostAndHeadcountTest` hand-seeds employees
+  > (including one terminated) under a unique department/level pair, then reconciles the response's
+  > `byDepartment`/`byLevel` breakdown — filtered to that pair only, never an unscoped global total,
+  > same shared-Testcontainers-container discipline as `EmployeeListPaginationTest`/`BandVersioningTest`
+  > — against an independent direct SQL sum computed in the test itself. Both the total and the
+  > terminated-employee exclusion are proven exactly, not approximately.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 113, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (2 new tests in `PayrollCostAndHeadcountTest`, 2 new fixture tests + reuse of the real-tree scan
+  > in `NativeQuerySchemaQualificationTest`, 109 pre-existing). No frontend change this step — the
+  > Overview/Pay-analysis screens are P7.6.
 - [ ] **P7.2** `out-of-band` (FR-6.2) including cost-to-minimum.
   *Verify:* count matches the seeded anomaly count exactly.
 - [ ] **P7.3** `compa-ratio-distribution` (FR-6.3). *Verify:* quartiles match a SQL cross-check.
@@ -1029,8 +1070,8 @@ After completion of complete P8 stop executing next P9 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P6.5` Changes screen with tabs in the URL and inline approve/reject — done, `[x]`, 109/109 backend tests (2026-08-21) |
-| **Current step** | `P7.1` — `payroll-cost`, `headcount` (FR-6.1) with the full basis envelope. |
+| **Last completed** | `P7.1` `payroll-cost`, `headcount` — done, `[x]`, 113/113 backend tests (2026-08-21) |
+| **Current step** | `P7.2` — `out-of-band` (FR-6.2) including cost-to-minimum. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._
