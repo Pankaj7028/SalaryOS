@@ -377,3 +377,7 @@ verified.
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by Testcontainers-backed backend tests; P2.5 is frontend and needs a running backend to test against manually) |
 
 _Update both rows on every completed step._
+
+**Phase close (2026-08-21), P2 → P2.5:** backend `./mvnw clean verify` → `Tests run: 58, Failures: 0,
+Errors: 0`, `BUILD SUCCESS`. Frontend `npm run lint` / `npm run typecheck` / `npm run build` — all
+clean, no errors or warnings.
