@@ -1,0 +1,109 @@
+/* ============================================================================
+ * chrome.css — the application shell from docs/salary-management-ui.md §6.3.
+ *
+ * Collapse is driven by `data-sidebar` on <html>, not React state. An inline
+ * script in the root layout sets that attribute from localStorage before first
+ * paint, so the sidebar is already the right width when the page appears —
+ * no flash of an expanded rail, and nothing to reconcile during hydration.
+ * ========================================================================= */
+
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+.app-topbar {
+  height: 56px;
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--topbar);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(6px);
+}
+
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.app-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 56px;
+  height: calc(100dvh - 56px);
+  background: var(--sidebar);
+  border-right: 1px solid var(--sidebar-border);
+  transition: width 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  overflow: hidden;
+}
+
+:root[data-sidebar="collapsed"] .app-sidebar {
+  width: 60px;
+}
+
+/* The collapsed rail peeks open on hover (§6.2). Pointer-only: a touch device
+ * has no hover, and this must never trap a tap. */
+@media (hover: hover) and (min-width: 768px) {
+  :root[data-sidebar="collapsed"] .app-sidebar:hover {
+    width: 240px;
+    box-shadow: 1px 0 0 0 var(--sidebar-border);
+  }
+}
+
+.app-content {
+  flex: 1;
+  min-width: 0;
+  background: var(--content);
+  padding: 24px;
+}
+
+/* Group captions and item labels fade out as the rail narrows, rather than
+ * wrapping or clipping mid-word. */
+.app-sidebar .nav-label {
+  transition:
+    max-width 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease;
+  max-width: 12rem;
+  opacity: 1;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+:root[data-sidebar="collapsed"] .app-sidebar:not(:hover) .nav-label {
+  max-width: 0;
+  opacity: 0;
+}
+
+:root[data-sidebar="collapsed"] .app-sidebar:not(:hover) .nav-caption {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The collapse chevron mirrors to point the other way (§6.2). */
+:root[data-sidebar="collapsed"] .app-sidebar .collapse-icon {
+  transform: scaleX(-1);
+}
+
+@media (max-width: 767px) {
+  /* Under 768px the sidebar is not a rail at all — it is a Sheet, rendered by
+   * MobileNav and opened from the topbar hamburger. The static one is removed
+   * from the layout entirely so it cannot reserve width or receive focus. */
+  .app-sidebar {
+    display: none;
+  }
+  .app-content {
+    padding: 16px;
+  }
+}
+
+/* §11 / §12.11 — no motion when the reader has asked for none. */
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar,
+  .app-sidebar .nav-label {
+    transition: none;
+  }
+}

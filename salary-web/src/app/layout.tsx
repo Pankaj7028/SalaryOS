@@ -27,12 +27,25 @@ export const metadata: Metadata = {
   description: "Compensation management for ACME.",
 };
 
+/**
+ * Runs before first paint so the sidebar is already the right width when the page
+ * appears. Without it the rail renders expanded and snaps closed a frame later,
+ * and the width would have to be reconciled during hydration.
+ *
+ * Kept tiny and dependency-free on purpose — it is inlined into every document.
+ */
+const SIDEBAR_INIT = `try{var s=localStorage.getItem("sos.sidebar");document.documentElement.dataset.sidebar=s==="collapsed"?"collapsed":"expanded"}catch(e){document.documentElement.dataset.sidebar="expanded"}`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`app-light ${plexSans.variable} ${plexMono.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SIDEBAR_INIT }} />
+      </head>
       <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );

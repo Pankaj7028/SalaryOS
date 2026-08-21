@@ -5,6 +5,7 @@
 @import "shadcn/tailwind.css";
 @import "./theme.css";
 @import "./typography.css";
+@import "./chrome.css";
 
 @layer base {
   * {

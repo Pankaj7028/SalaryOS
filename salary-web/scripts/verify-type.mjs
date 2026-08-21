@@ -20,7 +20,7 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 1200 }, deviceScaleFactor: 2 });
 const problems = [];
 
-await page.goto(`${BASE}/dev/type`, { waitUntil: "networkidle" });
+await page.goto(`${BASE}/dev/type`, { waitUntil: "load" });
 await page.evaluate(() => document.fonts.ready);
 
 // 1 — the face actually in use
@@ -74,7 +74,7 @@ const zeroShot = await page.locator(".figure-lg").first().screenshot();
 if (zeroShot.length < 100) problems.push("could not capture the slashed-zero sample");
 
 await page.screenshot({ path: `${OUT}/p3.2-type-scale.png`, fullPage: true });
-await page.goto(`${BASE}/dev/tokens`, { waitUntil: "networkidle" });
+await page.goto(`${BASE}/dev/tokens`, { waitUntil: "load" });
 await page.evaluate(() => document.fonts.ready);
 await page.screenshot({ path: `${OUT}/p3.1-tokens.png`, fullPage: true });
 
