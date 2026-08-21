@@ -73,4 +73,38 @@ public class CompensationChange {
 
 	private UUID appliedRecordId;
 
+	/**
+	 * No {@code @Setter}: every transition goes through a named method (CLAUDE.md §9), matching
+	 * the lifecycle in CLAUDE.md §8 — {@code DRAFT → PENDING → APPROVED → APPLIED}, or
+	 * {@code PENDING → REJECTED}.
+	 */
+	public void updateDraft(
+			LocalDate effectiveDate, BigDecimal newBaseAmount, String currency, String changeReason,
+			String performanceRating, String note) {
+		this.effectiveDate = effectiveDate;
+		this.newBaseAmount = newBaseAmount;
+		this.currency = currency;
+		this.changeReason = changeReason;
+		this.performanceRating = performanceRating;
+		this.note = note;
+	}
+
+	public void submit() {
+		this.status = "PENDING";
+	}
+
+	public void approve(UUID decidedBy, String decisionNote) {
+		this.status = "APPROVED";
+		this.decidedBy = decidedBy;
+		this.decidedAt = Instant.now();
+		this.decisionNote = decisionNote;
+	}
+
+	public void reject(UUID decidedBy, String decisionNote) {
+		this.status = "REJECTED";
+		this.decidedBy = decidedBy;
+		this.decidedAt = Instant.now();
+		this.decisionNote = decisionNote;
+	}
+
 }

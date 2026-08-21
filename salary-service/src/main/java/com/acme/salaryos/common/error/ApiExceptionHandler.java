@@ -4,6 +4,13 @@ import com.acme.salaryos.band.service.BandAlreadyExistsException;
 import com.acme.salaryos.band.service.BandBackdatedException;
 import com.acme.salaryos.band.service.BandNotOpenException;
 import com.acme.salaryos.band.service.BandOrderingException;
+import com.acme.salaryos.change.service.ChangeCurrencyMismatchException;
+import com.acme.salaryos.change.service.ChangeNoteRequiredException;
+import com.acme.salaryos.change.service.ChangeNotDraftException;
+import com.acme.salaryos.change.service.ChangeNotPendingException;
+import com.acme.salaryos.change.service.NoCurrentCompensationException;
+import com.acme.salaryos.change.service.OpenChangeAlreadyExistsException;
+import com.acme.salaryos.change.service.SelfApprovalException;
 import com.acme.salaryos.common.paging.InvalidCursorException;
 import com.acme.salaryos.compensation.effective.BackdatedBeforeOpenPeriodException;
 import com.acme.salaryos.compensation.effective.CorrectionOutsideOriginalPeriodException;
@@ -81,6 +88,44 @@ public class ApiExceptionHandler {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
 	}
 
+	/** FR-5.6: exposes the open change's id so the UI can link straight to it, not just say "one exists somewhere". */
+	@ExceptionHandler(OpenChangeAlreadyExistsException.class)
+	public ProblemDetail handleOpenChangeAlreadyExists(OpenChangeAlreadyExistsException exception) {
+		ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+		problem.setProperty("openChangeId", exception.getOpenChangeId());
+		return problem;
+	}
+
+	@ExceptionHandler(SelfApprovalException.class)
+	public ProblemDetail handleSelfApproval(SelfApprovalException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, exception.getMessage());
+	}
+
+	@ExceptionHandler(ChangeNoteRequiredException.class)
+	public ProblemDetail handleChangeNoteRequired(ChangeNoteRequiredException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+	}
+
+	@ExceptionHandler(ChangeNotDraftException.class)
+	public ProblemDetail handleChangeNotDraft(ChangeNotDraftException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+	}
+
+	@ExceptionHandler(ChangeNotPendingException.class)
+	public ProblemDetail handleChangeNotPending(ChangeNotPendingException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+	}
+
+	@ExceptionHandler(NoCurrentCompensationException.class)
+	public ProblemDetail handleNoCurrentCompensation(NoCurrentCompensationException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+	}
+
+	@ExceptionHandler(ChangeCurrencyMismatchException.class)
+	public ProblemDetail handleChangeCurrencyMismatch(ChangeCurrencyMismatchException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+	}
+
 	/**
 	 * The {@code comp_no_overlap} exclusion constraint is the backstop against a race the service
 	 * layer's own open-period check can still lose (backend doc §3, rule 2) — never swallowed,
@@ -92,6 +137,10 @@ public class ApiExceptionHandler {
 		if (message.contains("comp_no_overlap")) {
 			return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
 					"This employee already has an overlapping pay period. Choose a non-overlapping effective date.");
+		}
+		if (message.contains("one_open_change_per_employee")) {
+			return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+					"A change for this employee is already awaiting approval.");
 		}
 		throw exception;
 	}

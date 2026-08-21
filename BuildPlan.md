@@ -784,8 +784,58 @@ verified.
 
 ## P6 — Changes & approval
 
-- [ ] **P6.1** Change lifecycle endpoints; one-open-change rule; `ProposerIsNotApproverTest`.
+- [x] **P6.1** Change lifecycle endpoints; one-open-change rule; `ProposerIsNotApproverTest`.
   *Verify:* self-approval is 403; a second proposal is 409 naming the open change.
+  > **Scaffolding already existed** (domain entity, repository, controller stubs with correct
+  > `@PreAuthorize` annotations, and `RolePermissionMatrixTest` entries) from an earlier phase —
+  > this step wired real logic behind it: `ChangeService` (propose/updateDraft/submit/discardDraft/
+  > approve/reject/list) plus named domain-mutation methods on `CompensationChange`
+  > (`submit()`/`approve()`/`reject()`/`updateDraft()` — no raw setters, matching the pattern
+  > everywhere else this session).
+  >
+  > **`newBaseAmount`/`currentBaseAmount` are annual figures, not period amounts** —
+  > `compensation_changes` has no `pay_frequency` column at all (unlike the ledger), so a proposal
+  > is always phrased as "their new annual salary," matching how a merit/promotion conversation
+  > actually happens and sidestepping the annualisation question entirely for this table.
+  > `currentBaseAmount` is snapshotted from `employee_current_comp.annualBaseAmount` at propose
+  > time — an employee with no current comp can't have a "change" proposed against them
+  > (`NoCurrentCompensationException`, 400); that's an initial hire, a different flow. The single
+  > shared `currency` column (not two `Money` embeds) means a proposal must be in the employee's
+  > current pay currency or it's rejected (`ChangeCurrencyMismatchException`, 400) — the schema
+  > can't represent a currency change as a "change" proposal.
+  >
+  > **FR-5.2/FR-5.4's mandatory-note rule implemented for real, not just documented:** a note is
+  > required for `CORRECTION`, and separately for any proposal whose new amount lands outside the
+  > band effective on the proposed date — computed via `SalaryBandRepository.findEffective` +
+  > `EffectiveDating.bandStatus` (reused, not re-implemented). `NO_BAND` (no band exists at all) is
+  > deliberately **not** treated as "outside the band" for this rule — FR-5.4's wording is about a
+  > proposal landing outside an *existing* band, not the absence of one.
+  >
+  > **The one-open-change rule is enforced twice, on purpose**, same backstop discipline as
+  > `comp_no_overlap`: `ChangeService.propose()` checks proactively
+  > (`findByEmployeeIdAndStatusIn`) and throws `OpenChangeAlreadyExistsException` with the exact
+  > backend doc §8 copy, exposing `openChangeId` as a `ProblemDetail` extension property (curl-
+  > verified: `{"detail":"A change for this employee is already awaiting approval.",...,
+  > "openChangeId":"..."}`) so the UI can link straight to it. V7's `one_open_change_per_employee`
+  > partial unique index is the real guarantee underneath — `ApiExceptionHandler`'s existing
+  > `DataIntegrityViolationException` handler extended with a matching branch for it, same pattern
+  > as `comp_no_overlap`.
+  >
+  > **Verified three ways:** `ChangeLifecycleTest` (12 tests — snapshot correctness, duplicate
+  > rejection with the right id, self-approval then a different approver succeeding, reject,
+  > draft-only edit/submit/discard, pending-only approve/reject, both note-required rules, no-comp
+  > rejection, currency-mismatch rejection, list filtering) plus a literally-named
+  > `ProposerIsNotApproverTest` matching this step's own line in `BuildPlan.md`. Then `curl`-verified
+  > the full lifecycle against the running dev server signed in as a real user: propose → 200 with
+  > the correct `currentBase` snapshot (Alice's real $105,000) → a second proposal for the same
+  > employee → 409 with `openChangeId` matching the first → submit → 200, `status: PENDING` →
+  > self-approve as the proposer → 403 with the exact backend doc §8 copy.
+  >
+  > **Not built here, deliberately:** `apply-due` and `bulk-upload` stay `501` — P6.2 and P6.3's
+  > jobs, not this one's. No live-browser UI for any of this yet — that's P6.4/P6.5.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 102, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (12 new tests in `ChangeLifecycleTest`, 1 in `ProposerIsNotApproverTest`, 89 pre-existing).
 - [ ] **P6.2** `ApplyDueChangesJob` (daily 02:00 UTC) + idempotent `POST /changes/apply-due`.
   *Verify:* running twice writes one record; a change dated tomorrow is not applied today.
 - [ ] **P6.3** Bulk merit upload: per-row validation, proposals for valid rows, downloadable error
@@ -848,9 +898,9 @@ After completion of complete P7 stop executing next P8 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P5.5` Pay-history UI + bands grid — done, `[x]`, 89/89 backend tests. **Live browser verification finally done** (the "Chrome can't reach localhost" issue was a second, different paired machine) — `P4.3`/`P4.4` retroactively marked `[x]` too (2026-08-21) |
-| **Current step** | `P6.1` — Change lifecycle endpoints, one-open-change rule, `ProposerIsNotApproverTest`. |
-| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). Two known, flagged (not fixed) gaps: no 375px table→card degradation anywhere yet (P5.5's done-note), and `EmployeeService.terminate()`'s pay-through-termination-date semantics were only just resolved this session (P5.4) — worth a sanity-check if P6 touches termination. |
+| **Last completed** | `P6.1` Change lifecycle endpoints — done, `[x]`, 102/102 backend tests (2026-08-21) |
+| **Current step** | `P6.2` — `ApplyDueChangesJob` (daily 02:00 UTC) + idempotent `POST /changes/apply-due`. |
+| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). Known, flagged (not fixed) gap: no 375px table→card degradation anywhere yet (P5.5's done-note). |
 
 _Update both rows on every completed step._
 

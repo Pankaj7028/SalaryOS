@@ -13,16 +13,16 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 
 | | |
 |---|---|
-| **Phase** | P5 complete; P6 (Changes & approval) next |
-| **Last completed** | `P5.5` Pay-history UI + bands grid — `[x]`, 89/89 backend tests. Live browser verification finally happened this session (see gotcha below) — `P4.3`/`P4.4` retroactively `[x]` too. |
-| **Next step** | `P6.1` — Change lifecycle endpoints, one-open-change rule, `ProposerIsNotApproverTest`. |
+| **Phase** | P6 (Changes & approval) in progress |
+| **Last completed** | `P6.1` Change lifecycle endpoints — `[x]`, 102/102 backend tests. |
+| **Next step** | `P6.2` — `ApplyDueChangesJob` (daily 02:00 UTC) + idempotent `POST /changes/apply-due`. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
-Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all). Blocked:
-`P0.3`. Untouched: `P6`–`P9`.
+Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6.1`.
+Blocked: `P0.3`. Untouched: `P6.2`–`P9`.
 
 ---
 
@@ -106,6 +106,11 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   sign-in's plain `useState` predates this and wasn't redone). `bandFormSchema` is the pattern to
   follow for P6's propose-change dialog: one shared Zod schema per form, `.refine()` for
   cross-field checks mirroring (never replacing) the backend's own validation.
+- **`compensation_changes.newBaseAmount`/`currentBaseAmount` are annual figures** (P6.1) — the
+  table has no `pay_frequency` column at all, unlike the ledger, so a proposal is always "their new
+  annual salary." One shared `currency` column means a proposal must match the employee's current
+  pay currency (`ChangeCurrencyMismatchException` otherwise). `NO_BAND` does **not** trigger
+  FR-5.4's mandatory-note rule — only an existing band that the new amount falls outside of does.
 
 ---
 
