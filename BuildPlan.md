@@ -1022,8 +1022,32 @@ verified.
   > (2 new tests in `PayrollCostAndHeadcountTest`, 2 new fixture tests + reuse of the real-tree scan
   > in `NativeQuerySchemaQualificationTest`, 109 pre-existing). No frontend change this step — the
   > Overview/Pay-analysis screens are P7.6.
-- [ ] **P7.2** `out-of-band` (FR-6.2) including cost-to-minimum.
+- [x] **P7.2** `out-of-band` (FR-6.2) including cost-to-minimum.
   *Verify:* count matches the seeded anomaly count exactly.
+  > **Done (2026-08-21):** `analytics/query/OutOfBandQuery` filters `employee_current_comp` on the
+  > already-precomputed `band_status IN ('BELOW_MIN','ABOVE_MAX')` — a straight filter, not a
+  > recomputation. `NO_BAND` is deliberately excluded (a coverage gap, not a "paid outside the band"
+  > anomaly — same distinction P6.1's mandatory-note rule already draws), proven by its own test.
+  > `gapAmount` per row is always positive, in the **band's own native currency** (matching how
+  > `EffectiveDating.compaRatio`/`bandStatus` already compare `annual_base_amount` — not the
+  > normalized figure — against the band, since a band's currency is the location's pay currency).
+  >
+  > **`totalCostToMinimum` is the one figure that legitimately needs `baseCurrency`**, not native:
+  > summing gaps across employees paid (and banded) in different currencies has no single-currency
+  > answer otherwise. Computed as one aggregate SQL expression —
+  > `normalized_annual_base * (min_amount - annual_base_amount) / annual_base_amount` — which is
+  > algebraically `gap_native × fx_rate` using each row's own already-pinned rate (implicit in the
+  > ratio of its two stored amounts), never a live rate, never a second FX lookup.
+  >
+  > **Verify scoped to what's seedable today**, same discipline as P7.1: `/analytics/out-of-band` has
+  > no per-department filter, so `OutOfBandTest` filters the response's `rows` down to its own two
+  > seeded employee numbers (one below-min, one above-max, one in-band as a negative control) and
+  > asserts exactly those two appear with the exact expected gap — never an unscoped count, since the
+  > shared Testcontainers container may carry other tests' own anomalies (e.g. `EffectiveDatingTest`'s
+  > above-max case). A second test proves a `NO_BAND` employee never appears at all.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 115, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (2 new tests in `OutOfBandTest`, 113 pre-existing).
 - [ ] **P7.3** `compa-ratio-distribution` (FR-6.3). *Verify:* quartiles match a SQL cross-check.
 - [ ] **P7.4** `pay-gap` (FR-6.4) with suppression **inside** the query and a suppressed-cohort
   count. *Verify:* no cohort under 5 appears in any response, at any parameter combination.
@@ -1070,8 +1094,8 @@ After completion of complete P8 stop executing next P9 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P7.1` `payroll-cost`, `headcount` — done, `[x]`, 113/113 backend tests (2026-08-21) |
-| **Current step** | `P7.2` — `out-of-band` (FR-6.2) including cost-to-minimum. |
+| **Last completed** | `P7.2` `out-of-band` (FR-6.2) — done, `[x]`, 115/115 backend tests (2026-08-21) |
+| **Current step** | `P7.3` — `compa-ratio-distribution` (FR-6.3). |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._

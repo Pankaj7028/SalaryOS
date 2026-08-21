@@ -1,6 +1,7 @@
 package com.acme.salaryos.analytics.web;
 
 import com.acme.salaryos.analytics.dto.HeadcountResponse;
+import com.acme.salaryos.analytics.dto.OutOfBandResponse;
 import com.acme.salaryos.analytics.dto.PayrollCostResponse;
 import com.acme.salaryos.analytics.service.AnalyticsService;
 import org.springframework.http.HttpStatus;
@@ -39,8 +40,8 @@ public class AnalyticsController {
 
 	@GetMapping("/out-of-band")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
-	public ResponseEntity<Void> outOfBand() {
-		return notImplemented();
+	public OutOfBandResponse outOfBand() {
+		return analyticsService.outOfBand();
 	}
 
 	@GetMapping("/compa-ratio-distribution")
