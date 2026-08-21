@@ -364,7 +364,7 @@ header.
 
 ## 7. Components
 
-shadcn/ui, `new-york` style, copied into `src/components/ui/` and edited in place. **Every control
+shadcn/ui 4.x, `radix-nova` style, copied into `src/components/ui/` and edited in place. **Every control
 that takes a size takes `sm`.** Product components live in `src/components/salary/`.
 
 ### 7.1 `<BandBar>` — the signature component

@@ -126,7 +126,7 @@ survives a session ending mid-task.
 | Database | **Neon** PostgreSQL | **17** | Serverless Postgres; pooled connection string |
 | Password hashing | Argon2id | Spring Security | via `DelegatingPasswordEncoder`, id `argon2` |
 | Frontend | **Next.js** | **16** | App Router, Server Components by default |
-| UI kit | **shadcn/ui** | latest, `new-york` | Copied into `src/components/ui/`, ours to edit |
+| UI kit | **shadcn/ui** | 4.x, `radix-nova` | Radix primitives. Copied into `src/components/ui/`, ours to edit |
 | CSS | Tailwind | **v4** | `@theme inline`, CSS-first config, no `tailwind.config.js` |
 | Data fetching | TanStack Query | v5 | Client islands only |
 | Tables | TanStack Table | v8 | Headless; shadcn `Table` renders it |

@@ -43,7 +43,7 @@ verified.
   > `application-local.yml.example` (Hikari + schema per §2.1). To finish: copy the example to
   > `application-local.yml`, fill in the three credential lines, create `salary_schema`, then delete
   > the `spring.autoconfigure.exclude` block from `application.yml` and run the Verify.
-- [ ] **P0.4** Next.js 16 app (`salary-web`), TypeScript strict, Tailwind v4, shadcn/ui `new-york`
+- [x] **P0.4** Next.js 16 app (`salary-web`), TypeScript strict, Tailwind v4, shadcn/ui `radix-nova`
   initialised, path aliases, ESLint + Prettier.
   *Verify:* `npm run dev` serves a page; `npm run lint && npm run typecheck && npm run build` clean.
 - [ ] **P0.5** Testcontainers Postgres 17 base test class; one trivial integration test.
@@ -203,8 +203,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P0.2` Spring Boot 4.0.8 scaffold (2026-08-21) |
-| **Current step** | `P0.3` Neon project + `salary_schema` — **needs the human** |
-| **Blockers** | `P0.3` blocked: no Neon project or `DATABASE_URL` yet |
+| **Last completed** | `P0.4` Next.js 16 scaffold (2026-08-21) |
+| **Current step** | `P0.5` Testcontainers — **blocked, Docker not installed** |
+| **Blockers** | `P0.3` no Neon/`DATABASE_URL`; `P0.5`+`P1.*` no Docker for Testcontainers |
 
 _Update both rows on every completed step._

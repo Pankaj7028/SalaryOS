@@ -23,6 +23,7 @@ dist/
 *.tsbuildinfo
 next-env.d.ts
 .eslintcache
+.vercel/
 
 # ── Test / coverage ──────────────────────────────────────────
 coverage/
