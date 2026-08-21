@@ -123,8 +123,18 @@ verified.
   > `V8V9AuditAndProjectionMigrationTest` connects a second `DriverManagerDataSource` as
   > `salaryos_app` and proves INSERT/SELECT succeed, UPDATE fails with `permission denied`.
   > Observed: `./mvnw clean verify` → `Tests run: 16, Failures: 0, Errors: 0`, `BUILD SUCCESS` (7.9s).
-- [ ] **P1.8** `V10` + `V11` — indexes and static reference rows.
+- [x] **P1.8** `V10` + `V11` — indexes and static reference rows.
   *Verify:* `\di salary_schema.*` matches `Technical-Requirements.md §4.3`.
+  > **Done (2026-08-21):** `V10__indexes.sql` (all 9 indexes from TR §4.3; `employees
+  > (job_level_id)` already existed from V3, not repeated). `V11__static_reference_rows.sql` adds
+  > `currencies` and `reason_codes` — new lookup tables not in TR §4.1's table list, introduced to
+  > back `GET /reference/currencies` and the FR-5.2 reason-code vocabulary (+ `INITIAL` for a
+  > first-hire record) as data rather than a hardcoded `CHECK` — matches why `change_reason`/
+  > `component_type` were left unconstrained in V6/V7. No FK added retrofitting those columns to
+  > `reason_codes` (out of scope for this step; migrations are immutable, so that would need its own
+  > forward-fixing migration if wanted later). `V10V11IndexesAndReferenceDataMigrationTest` checks
+  > every §4.3 index via `pg_indexes` and both reference tables' seeded rows.
+  > Observed: `./mvnw clean verify` → `Tests run: 19, Failures: 0, Errors: 0`, `BUILD SUCCESS` (8.6s).
 - [ ] **P1.9** JPA entities + repositories for everything above; `Money` value type and converter.
   *Verify:* context loads; a round-trip test per entity; **no `double` anywhere** (grep).
 - [ ] **P1.10** `NativeQuerySchemaQualificationTest`. *Verify:* it fails when you temporarily
@@ -259,8 +269,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P1.7` `V8`+`V9` audit_events (append-only grants), employee_current_comp (2026-08-21) |
-| **Current step** | `P1.8` — `V10` + `V11` indexes, static reference rows |
+| **Last completed** | `P1.8` `V10`+`V11` indexes, static reference rows — **all migrations done** (2026-08-21) |
+| **Current step** | `P1.9` — JPA entities + repositories, `Money` value type |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by P1) |
 
 _Update both rows on every completed step._
