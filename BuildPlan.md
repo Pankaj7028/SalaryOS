@@ -1077,8 +1077,52 @@ verified.
   >
   > Observed: `./mvnw clean verify` → `Tests run: 117, Failures: 0, Errors: 0`, `BUILD SUCCESS`
   > (2 new tests in `CompaRatioDistributionTest`, 115 pre-existing).
-- [ ] **P7.4** `pay-gap` (FR-6.4) with suppression **inside** the query and a suppressed-cohort
+- [x] **P7.4** `pay-gap` (FR-6.4) with suppression **inside** the query and a suppressed-cohort
   count. *Verify:* no cohort under 5 appears in any response, at any parameter combination.
+  > **A genuine methodology ambiguity, asked rather than guessed:** FR-6.4/ui doc §8.8 want both an
+  > "unadjusted" and "level-adjusted" figure, "two separate columns... conflating them is
+  > indefensible" — but the schema has only `gender`/`ethnicity_code` as demographic dimensions, no
+  > other covariates, and the doc gives exactly one worked SQL example (the level-adjusted cohort
+  > table itself). Asked the user directly rather than inventing a statistical adjustment with
+  > nothing in the requirements to back it: **unadjusted = org-wide median-by-gender, ignoring job
+  > level entirely; level-adjusted = the job-level × country cohort table**, which controls for
+  > level by construction (grouping) rather than any regression-style adjustment. Only `gender` is
+  > used as the grouping dimension — `ethnicity_code` could be added the same way later, but nothing
+  > in the requirements asks for both at once, and doubling the dimension doubles the suppression
+  > bookkeeping for no stated benefit yet.
+  >
+  > **Suppression is genuinely IN the query, not filtered afterward:** both `PayGapQuery.
+  > unadjustedGroups()` and `.cohortGroups()` carry their own `HAVING count(*) >= 5` — there is no
+  > code path, buggy or otherwise, that can fetch a group under five into the JVM at all (backend
+  > doc §6's stated design goal, quoted in its own `PayGapQuery` example). A THIRD query,
+  > `totalCohortsWithDemographicCoverage()`, returns only an aggregate count of how many level×country
+  > pairings have *any* demographic coverage — never a small group's data — so
+  > `suppressedCohorts = totalCohorts − cohortsThatSurvived` can be reported without ever having
+  > fetched what was suppressed.
+  >
+  > **A cohort with only one surviving gender group also can't show a gap** (nothing to compare
+  > against) — assembled out of `levelAdjustedCohorts` in `AnalyticsService.payGap()`, and counted
+  > toward `suppressedCohorts` alongside the true privacy-threshold case, since both mean "not shown
+  > here" to the reader even though only one is the FR-6.4 threshold specifically. Documented as a
+  > combined definition on `PayGapResponse` itself, not left implicit.
+  >
+  > **`gapAmount`/`gapPercent` are highest-minus-lowest across however many groups survive**, not a
+  > fixed "A vs B" — the schema has no two-value gender enumeration to assume, so a defined,
+  > always-computable spread was chosen over guessing which two groups to compare.
+  >
+  > **Verified — no cohort under five appears, in either direction:** `PayGapTest` seeds one cohort
+  > with 6 Male + 5 Female + 2 Non-binary (a fresh, uniquely-generated job level, isolated from the
+  > shared Testcontainers container by construction) — asserts the response's matching cohort has
+  > **exactly** the Male and Female groups with the exact expected median and gap
+  > (105000 vs 94000 → gap 11000, 10.4762%), and that Non-binary (n=2) is absent, not merely hidden.
+  > A second test seeds a cohort where all 3 people share one gender — asserts it never appears in
+  > `levelAdjustedCohorts` at all and contributes to `suppressedCohorts`. `unadjustedGroups` is only
+  > checked structurally (every entry `count >= 5`) since `EmployeeEntitiesRoundTripTest` also seeds
+  > a demographic row into the same shared container, making an exact org-wide median unassertable.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 119, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (2 new tests in `PayGapTest`, 117 pre-existing). No `DemographicsIsolationTest` yet (P9.3) — every
+  > pay-gap DTO lives in `analytics/dto`, the one package that test will exempt.
 - [ ] **P7.5** `increase-cycle` (FR-6.5) and employee `peers` (FR-6.6).
   *Verify:* increase spend for the seeded cycle matches a SQL sum.
 - [ ] **P7.6** Overview and Pay analysis screens; charts themed from CSS variables; every card
@@ -1122,8 +1166,8 @@ After completion of complete P8 stop executing next P9 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P7.3` `compa-ratio-distribution` (FR-6.3) — done, `[x]`, 117/117 backend tests (2026-08-21) |
-| **Current step** | `P7.4` — `pay-gap` (FR-6.4) with suppression inside the query. |
+| **Last completed** | `P7.4` `pay-gap` (FR-6.4) — done, `[x]`, 119/119 backend tests (2026-08-21) |
+| **Current step** | `P7.5` — `increase-cycle` (FR-6.5) and employee `peers` (FR-6.6, already built at P4.4). |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._

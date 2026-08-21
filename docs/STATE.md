@@ -14,16 +14,16 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | P7 (Insights) in progress |
-| **Last completed** | `P7.3` `compa-ratio-distribution` (FR-6.3) — `[x]`, 117/117 backend tests. |
-| **Next step** | `P7.4` — `pay-gap` (FR-6.4) with suppression inside the query. |
+| **Last completed** | `P7.4` `pay-gap` (FR-6.4) — `[x]`, 119/119 backend tests. |
+| **Next step** | `P7.5` — `increase-cycle` (FR-6.5) and employee `peers` (FR-6.6, already built at P4.4). |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
 Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6` (all) ·
-`P7.1`–`P7.3`.
-Blocked: `P0.3`. Untouched: `P7.4`–`P9`.
+`P7.1`–`P7.4`.
+Blocked: `P0.3`. Untouched: `P7.5`–`P9`.
 
 ---
 
@@ -120,6 +120,11 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   wraps each row's call to the existing `propose()` in `try/catch(RuntimeException)`, turning any
   domain exception's own message into that row's `ERROR` entry — no separate per-row validation
   logic to keep in sync with `propose()`'s own rules.
+- **Pay-gap methodology (P7.4, user-confirmed):** unadjusted = org-wide median-by-gender ignoring
+  job level; level-adjusted = the job-level × country cohort table itself (controls for level by
+  grouping, not a statistical adjustment). Only `gender` is grouped on, not `ethnicity_code`.
+  `gapAmount`/`gapPercent` are highest-minus-lowest across however many groups survive suppression,
+  not a fixed two-value comparison. Full reasoning in `BuildPlan.md`'s P7.4 done-note.
 
 ---
 

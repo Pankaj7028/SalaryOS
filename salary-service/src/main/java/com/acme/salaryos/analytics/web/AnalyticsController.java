@@ -3,6 +3,7 @@ package com.acme.salaryos.analytics.web;
 import com.acme.salaryos.analytics.dto.CompaRatioDistributionResponse;
 import com.acme.salaryos.analytics.dto.HeadcountResponse;
 import com.acme.salaryos.analytics.dto.OutOfBandResponse;
+import com.acme.salaryos.analytics.dto.PayGapResponse;
 import com.acme.salaryos.analytics.dto.PayrollCostResponse;
 import com.acme.salaryos.analytics.service.AnalyticsService;
 import org.springframework.http.HttpStatus;
@@ -59,8 +60,8 @@ public class AnalyticsController {
 
 	@GetMapping("/pay-gap")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
-	public ResponseEntity<Void> payGap() {
-		return notImplemented();
+	public PayGapResponse payGap() {
+		return analyticsService.payGap();
 	}
 
 	@GetMapping("/increase-cycle")
