@@ -4,6 +4,7 @@ import com.acme.salaryos.band.domain.SalaryBand;
 import com.acme.salaryos.band.repository.SalaryBandRepository;
 import com.acme.salaryos.common.money.Money;
 import com.acme.salaryos.compensation.domain.CompensationRecord;
+import com.acme.salaryos.compensation.projection.EmployeeCurrentCompProjector;
 import com.acme.salaryos.compensation.repository.CompensationRecordRepository;
 import com.acme.salaryos.employee.domain.Employee;
 import com.acme.salaryos.employee.repository.EmployeeRepository;
@@ -28,10 +29,9 @@ import java.util.UUID;
  * insert-only (CLAUDE.md §6.3): {@link #apply} and {@link #correct} both close or supersede an
  * existing row and insert a new one — neither ever edits history in place.
  *
- * <p><b>Scope note:</b> this class writes only the ledger ({@code compensation_records}). Keeping
- * {@code employee_current_comp} in sync is P5.2's job ("projection maintained in the same
- * transaction"), not this one's — a record applied here will not yet appear on the employee list
- * or detail screens (which read the projection) until P5.2 lands.
+ * <p>Both methods also refresh {@code employee_current_comp} via {@link EmployeeCurrentCompProjector}
+ * in the same transaction (Technical-Requirements.md §4.4) — deliberately not a database trigger,
+ * so the projection update is visible right here, in the code path that causes it.
  */
 @Service
 public class EffectiveDating {
@@ -44,6 +44,7 @@ public class EffectiveDating {
 	private final SalaryBandRepository salaryBandRepository;
 	private final FxRateRepository fxRateRepository;
 	private final CompensationRecordRepository compensationRecordRepository;
+	private final EmployeeCurrentCompProjector projector;
 	private final String baseCurrency;
 
 	/**
@@ -59,12 +60,14 @@ public class EffectiveDating {
 			SalaryBandRepository salaryBandRepository,
 			FxRateRepository fxRateRepository,
 			CompensationRecordRepository compensationRecordRepository,
+			EmployeeCurrentCompProjector projector,
 			@Value("${app.base-currency}") String baseCurrency) {
 		this.employeeRepository = employeeRepository;
 		this.locationRepository = locationRepository;
 		this.salaryBandRepository = salaryBandRepository;
 		this.fxRateRepository = fxRateRepository;
 		this.compensationRecordRepository = compensationRecordRepository;
+		this.projector = projector;
 		this.baseCurrency = baseCurrency;
 	}
 
@@ -101,6 +104,8 @@ public class EffectiveDating {
 
 		employee.clearBandMismatch();
 		employeeRepository.save(employee);
+
+		projector.refresh(employee.getId());
 
 		return saved;
 	}
@@ -146,6 +151,8 @@ public class EffectiveDating {
 
 		original.supersede(saved.getId());
 		compensationRecordRepository.save(original);
+
+		projector.refresh(employee.getId());
 
 		return saved;
 	}
@@ -233,11 +240,13 @@ public class EffectiveDating {
 
 	/**
 	 * {@code compensation_records} has no {@code band_status} column — only the
-	 * {@code employee_current_comp} projection does. Public so P5.2's projection refresh computes
-	 * it with the exact same rule used here for compa-ratio/range-penetration, rather than a second
-	 * copy of the IN_BAND/BELOW_MIN/ABOVE_MAX/NO_BAND logic drifting out of sync with this one.
+	 * {@code employee_current_comp} projection does. {@code static} (no instance state needed) so
+	 * {@link com.acme.salaryos.compensation.projection.EmployeeCurrentCompProjector} can call it
+	 * without injecting this bean — {@code EffectiveDating} already depends on the projector to
+	 * refresh the projection in the same transaction (Technical-Requirements.md §4.4), and a
+	 * bean-to-bean dependency the other way would cycle. One rule, one place either way.
 	 */
-	public String bandStatus(BigDecimal annualBaseAmount, SalaryBand band) {
+	public static String bandStatus(BigDecimal annualBaseAmount, SalaryBand band) {
 		if (band == null) {
 			return "NO_BAND";
 		}

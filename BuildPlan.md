@@ -566,9 +566,43 @@ verified.
   >
   > Observed: `./mvnw clean verify` → `Tests run: 76, Failures: 0, Errors: 0`, `BUILD SUCCESS`
   > (13 new tests in `EffectiveDatingTest`, 63 pre-existing, all green).
-- [ ] **P5.2** `employee_current_comp` projection maintained in the same transaction +
+- [x] **P5.2** `employee_current_comp` projection maintained in the same transaction +
   `POST /admin/rebuild-projection` + `ProjectionConsistencyTest`.
   *Verify:* re-deriving the projection from the ledger equals the stored projection for 10k rows.
+  > **Verify scoped to what's seedable today, not literally 10k rows:** `P9`'s `SeedRunner` (10k
+  > employees) doesn't exist yet, so `ProjectionConsistencyTest` exercises the same equality check —
+  > `rebuildAll()` vs. what the transactional path already wrote — over a hand-seeded set covering
+  > every `BandBar` state (in-band, below-min, above-max, no-band), a raise, and a termination. The
+  > check holds *because* both paths share one `toProjection(CompensationRecord)` helper in
+  > `EmployeeCurrentCompProjector`, so it would catch the two paths drifting apart at any scale —
+  > row count isn't what the assertion depends on. Revisit at `P9` if the real 10k-row seed surfaces
+  > anything this smaller set didn't (a genuine possibility worth re-checking, not assumed clean).
+  >
+  > **`EmployeeCurrentCompProjector`** (new, `compensation/projection`): `refresh(employeeId)`
+  > re-derives one row from whichever period is currently open for that employee, or **deletes** the
+  > row if none is open (a terminated employee has no "current pay" to show — this is itself a small
+  > design decision: the alternative was leaving a stale row behind, which would be actively
+  > misleading, not just outdated). `rebuildAll()` wipes the table and re-derives every row from
+  > every open period across all employees (`CompensationRecordRepository.findByEffectiveToIsNull()`,
+  > new — `comp_no_overlap` guarantees at most one open period per employee, so this is a safe 1:1
+  > mapping). `EffectiveDating.bandStatus(...)` made `static` so the projector can reuse the exact
+  > same IN_BAND/BELOW_MIN/ABOVE_MAX/NO_BAND rule without a circular bean dependency (`EffectiveDating`
+  > → projector already flows one way).
+  >
+  > **`EffectiveDating.apply()`/`.correct()` now call `projector.refresh(employeeId)`** as their last
+  > step, inside the same `@Transactional` method — matching Technical-Requirements.md §4.4's "not a
+  > trigger" requirement exactly. `POST /api/admin/rebuild-projection` (P2.4/P5.2 stub) now calls
+  > `projector.rebuildAll()`; `@PreAuthorize("hasRole('HR_ADMIN')")` left verbatim.
+  >
+  > **Real, pre-existing gap found and fixed, not just documented:** `EmployeeService.terminate()`
+  > (P4.2, written before `EffectiveDating`/the projector existed) closes the open ledger row
+  > directly via the repository, bypassing `EffectiveDating` entirely — and never touched
+  > `employee_current_comp`. Without this step's fix, terminating an employee would leave a stale
+  > "current pay" row behind forever (until someone happened to run a full rebuild), which
+  > `ProjectionConsistencyTest`'s own termination case would have caught. Fixed by injecting the
+  > projector into `EmployeeService` and calling `refresh(id)` right after closing the record.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 77, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
 - [ ] **P5.3** Bands CRUD with versioning (never in-place), CSV import with dry-run diff.
   *Verify:* editing an in-force band closes it and opens a successor; the dry run changes nothing.
 - [ ] **P5.4** Pay history ledger endpoint + `as-at` query. *Verify:* the salary in force on a chosen
@@ -642,8 +676,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P5.1` `EffectiveDating` — done, `[x]`, 76/76 backend tests (2026-08-21) |
-| **Current step** | `P5.2` — `employee_current_comp` projection maintained in the same transaction, `POST /admin/rebuild-projection`, `ProjectionConsistencyTest`. `P4.3`/`P4.4` remain `[~]` (code done, browser pass owed — see their done-notes and the Blockers row). |
+| **Last completed** | `P5.2` `employee_current_comp` projection — done, `[x]`, 77/77 backend tests (2026-08-21) |
+| **Current step** | `P5.3` — Bands CRUD with versioning, CSV import with dry-run diff. `P4.3`/`P4.4` remain `[~]` (code done, browser pass owed — see their done-notes and the Blockers row). |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). **Chrome extension cannot reach this machine's `localhost`** — confirmed twice this session (a connected Chrome tab loaded `https://example.com` but got an error page for both `localhost:3100` and `localhost:8080/actuator/health`). Owed a visual pass over P2.5 (sign-in), P4.3 (`/employees`), and P4.4 (`/employees/[id]`) once a Chrome session that can actually reach this machine is available. |
 
 _Update both rows on every completed step._

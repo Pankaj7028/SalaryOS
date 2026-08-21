@@ -14,15 +14,16 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | P5 in progress; P4 UI work code-complete but unverified in a browser |
-| **Last completed** | `P5.1` `EffectiveDating` — `[x]`, 76/76 backend tests. |
-| **Next step** | `P5.2` — `employee_current_comp` projection maintenance. Separately: get a Chrome session that can reach this machine's `localhost` and run the P4.3/P4.4 visual passes. |
+| **Last completed** | `P5.2` `employee_current_comp` projection — `[x]`, 77/77 backend tests. |
+| **Next step** | `P5.3` — Bands CRUD with versioning, CSV import with dry-run diff. Separately: get a Chrome session that can reach this machine's `localhost` and run the P4.3/P4.4 visual passes. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). Chrome extension cannot reach `localhost` on this machine — see gotcha below. |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
-Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4.1`, `P4.2` · `P5.1`. In progress:
-`P4.3`, `P4.4` (both code done, both need a browser pass). Blocked: `P0.3`. Untouched: `P5.2`–`P9`.
+Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4.1`, `P4.2` · `P5.1`, `P5.2`. In
+progress: `P4.3`, `P4.4` (both code done, both need a browser pass). Blocked: `P0.3`. Untouched:
+`P5.3`–`P9`.
 
 ---
 
@@ -92,6 +93,10 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   assumption) already IS the FTE=1.0 figure; dividing by FTE again would double-count.
 - **`app.base-currency` (`APP_BASE_CURRENCY`, default `USD`) added at P5.1** — the normalisation
   target `EffectiveDating` reads via `@Value`.
+- **`employee_current_comp` is refreshed by `EmployeeCurrentCompProjector`** (P5.2), called from
+  `EffectiveDating.apply()`/`.correct()` and from `EmployeeService.terminate()` — any future write
+  path that opens, closes, or supersedes a `compensation_records` row must call
+  `projector.refresh(employeeId)` too, or the projection silently goes stale for that employee.
 
 ---
 

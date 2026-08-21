@@ -8,6 +8,7 @@ import com.acme.salaryos.common.paging.CursorCodec;
 import com.acme.salaryos.common.paging.KeysetPage;
 import com.acme.salaryos.compensation.domain.CompensationComponent;
 import com.acme.salaryos.compensation.domain.EmployeeCurrentComp;
+import com.acme.salaryos.compensation.projection.EmployeeCurrentCompProjector;
 import com.acme.salaryos.compensation.repository.CompensationComponentRepository;
 import com.acme.salaryos.compensation.repository.CompensationRecordRepository;
 import com.acme.salaryos.compensation.repository.EmployeeCurrentCompRepository;
@@ -53,6 +54,7 @@ public class EmployeeService {
 	private final CompensationComponentRepository compensationComponentRepository;
 	private final SalaryBandRepository salaryBandRepository;
 	private final LocationRepository locationRepository;
+	private final EmployeeCurrentCompProjector projector;
 	private final CursorCodec cursorCodec;
 
 	public EmployeeService(
@@ -62,6 +64,7 @@ public class EmployeeService {
 			CompensationComponentRepository compensationComponentRepository,
 			SalaryBandRepository salaryBandRepository,
 			LocationRepository locationRepository,
+			EmployeeCurrentCompProjector projector,
 			CursorCodec cursorCodec) {
 		this.employeeRepository = employeeRepository;
 		this.employeeCurrentCompRepository = employeeCurrentCompRepository;
@@ -69,6 +72,7 @@ public class EmployeeService {
 		this.compensationComponentRepository = compensationComponentRepository;
 		this.salaryBandRepository = salaryBandRepository;
 		this.locationRepository = locationRepository;
+		this.projector = projector;
 		this.cursorCodec = cursorCodec;
 	}
 
@@ -236,6 +240,11 @@ public class EmployeeService {
 			open.close(terminationDate);
 			compensationRecordRepository.save(open);
 		});
+		// Closing the ledger's open period leaves no open period at all — refresh removes the now-stale
+		// employee_current_comp row, so a terminated employee stops showing a "current pay" that no
+		// longer exists (Technical-Requirements.md §4.4: the projection is maintained transactionally
+		// by whichever service call changed the ledger, not by a trigger).
+		projector.refresh(id);
 
 		EmployeeCurrentComp comp = employeeCurrentCompRepository.findById(id).orElse(null);
 		return toDetail(employee, comp, findBand(comp), fetchComponents(comp));

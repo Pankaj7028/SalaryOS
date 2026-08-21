@@ -265,7 +265,7 @@ class EffectiveDatingTest {
 		assertThat(record.getBandId()).isNull();
 		assertThat(record.getCompaRatio()).isNull();
 		assertThat(record.getRangePenetration()).isNull();
-		assertThat(effectiveDating.bandStatus(record.getAnnualBaseAmount(), null)).isEqualTo("NO_BAND");
+		assertThat(EffectiveDating.bandStatus(record.getAnnualBaseAmount(), null)).isEqualTo("NO_BAND");
 	}
 
 	@Test
@@ -287,7 +287,7 @@ class EffectiveDatingTest {
 
 		assertThat(record.getBandId()).isEqualTo(band.getId());
 		assertThat(record.getRangePenetration()).isEqualByComparingTo("250.0000");
-		assertThat(effectiveDating.bandStatus(record.getAnnualBaseAmount(), band)).isEqualTo("ABOVE_MAX");
+		assertThat(EffectiveDating.bandStatus(record.getAnnualBaseAmount(), band)).isEqualTo("ABOVE_MAX");
 	}
 
 	@Test
