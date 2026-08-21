@@ -13,99 +13,94 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 
 | | |
 |---|---|
-| **Phase** | P0 — Foundations |
-| **Last completed** | `P3.1` theme.css tokens |
-| **Next step** | `P3.2` fonts + type scale |
-| **Blockers** | **Docker not installed** → `P0.5` and every `P1.*` migration test. `P0.3` needs Neon. |
+| **Phase** | P0 partly blocked · **P3 complete** |
+| **Last completed** | `P3.7` — Money, Delta, BandStatusBadge, BandBar |
+| **Next step** | Nothing is unblocked. See "Blocked on the environment" below. |
+| **Blockers** | **Docker not installed** and **no Neon database** |
 
-`BuildPlan.md` remains the authority on step status. This row is the fast path, not a second source
-of truth — if they disagree, `BuildPlan.md` wins.
+`BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
+`BuildPlan.md` wins.
+
+Done: `P0.1` `P0.2` `P0.4` · `P3.1`–`P3.7`. Blocked: `P0.3` `P0.5`. Untouched: `P1` `P2` `P4`–`P9`.
+
+---
+
+## Blocked on the environment — read this first
+
+Everything remaining needs one of two things that only a human can provide.
+
+1. **Docker is not installed** (`docker: command not found`). Testcontainers cannot start, so `P0.5`
+   and every `P1.*` migration test are blocked, and `P2` depends on `P1`. Install Docker Desktop or
+   colima, start it, then run `P0.5`'s Verify.
+   **Do not work around this by adding H2.** `CLAUDE.md §3` and §12.12 forbid it: the schema uses a
+   `daterange` exclusion constraint and `btree_gist`, so an H2 suite would pass while production
+   fails.
+2. **No Neon project or `DATABASE_URL`** — blocks `P0.3`. Templates are already committed
+   (`.env.example`, `salary-service/src/main/resources/application-local.yml.example` with the
+   Hikari settings from backend §2.1). To finish: copy the example to `application-local.yml`, fill
+   in url/username/password, create `salary_schema`, **delete the `spring.autoconfigure.exclude`
+   block from `application.yml`**, then run the Verify.
+
+`P2.5` is frontend but still needs the API running, so it is blocked behind both.
 
 ---
 
 ## Environment facts (verified 2026-08-21)
 
-- **Java 25** (`java -version` → 25+37-LTS). Toolchain target stays **17** per the pinned stack;
-  Spring Boot 4.0.8 requires 17+, so 25 runs it fine. Do not raise `maven.compiler.release` past 17
-  without an ADR.
-- **Node v26.3.0**, **npm 11.16.0**. Scaffolded Next **16.3.1** / React **19.2.8**.
-- **Docker is NOT installed** (`docker: command not found`). Testcontainers cannot run, so `P0.5`
-  and every `P1.*` migration test are blocked until Docker Desktop (or colima) is installed and
-  running. Frontend steps (`P3.*`) need neither Docker nor Neon.
-- **No system Maven.** Use `./mvnw` — the wrapper is generated in P0.2. `mvn` will not resolve.
-- **Neon / `DATABASE_URL`:** not yet provisioned — this is what blocks P0.3. A human must create
-  the Neon project; the pooled connection string goes in the git-ignored
-  `salary-service/src/main/resources/application-local.yml`.
-- **Build works offline after P0.2** — `~/.m2` is populated for Boot 4.0.8.
-- **Docker** is required from P0.5 onward (Testcontainers Postgres 17). Confirm it is running
-  before starting P0.5, not halfway through.
+- **Java 25**; toolchain targets **17** per the pinned stack. Do not raise `maven.compiler.release`
+  past 17 without an ADR.
+- **No system Maven** — use `./mvnw`. **Node v26.3.0 / npm 11.16.0.**
+- `~/.m2` is populated for Boot 4.0.8, so the backend builds offline.
 
 ---
 
 ## Decisions taken outside the docs
 
-- **Layer docs moved to `docs/`** at P0.1 (`git mv`). They were at the repo root; `CLAUDE.md §2`
-  specifies `docs/`. All references in `CLAUDE.md` already pointed at `docs/…`, so nothing broke.
-- **`Salary Management Assessment- Candidates.pdf` stays at the repo root.** It is the original
-  brief — an input, not part of the source tree that `CLAUDE.md §2` describes.
-- **`.claude/settings.json` is committed; `.claude/settings.local.json` is git-ignored.** Shared
-  permissions travel with the repo; personal overrides do not.
-- **Spring Boot pinned to 4.0.8, not the 4.0.3 the docs originally named** (decided 2026-08-21).
-  Same minor line, five patch releases of fixes, no API change. Every doc and the pom were updated
-  together — if you find a `4.0.3` anywhere, it is a leftover.
-- **`application.yml` carries a `spring.autoconfigure.exclude` block that must be deleted at P0.3.**
-  It exists only so the context starts with no database. Left in place it silently disables
-  repositories and Flyway while the app still boots clean.
-- **`config/SecurityConfig.java` is a P0.2 stub** — health permitted, everything else authenticated
-  via HTTP Basic. P2.1 replaces it entirely with the cookie/JWT chain in `CLAUDE.md §4`.
-- **shadcn style is `radix-nova`, not the `new-york` the docs named** (2026-08-21). shadcn v4 removed
-  `new-york` entirely; the CLI now takes a *base* (`base` | `radix` | `aria`) and a *preset*
-  (`nova` | `vega` | `maia` | `lyra` | `mira` | `luma` | `sera` | `rhea`). We chose **radix** over
-  v4's `base` default because the screens in the UI doc assume Radix primitives. `CLAUDE.md §3` and
-  the UI doc were updated to match.
-- **`salary-web/.gitignore` was deleted; the root `.gitignore` is the only one.** Same choice as
-  `salary-service`. Add new ignores at the root.
-- **Build order deviates from BuildPlan while the environment blocks P0.3/P0.5.** P3 (design system,
-  shell, components) needs neither Neon nor Docker, so it runs first. Nothing in P3 pre-empts the
-  skipped steps; go back to them the moment Docker and Neon exist.
-- **`globals.css` is a 4-line entry point; all tokens live in `src/app/theme.css`.** shadcn's
-  generated palette and its `.dark` binding were replaced by ours (`.app-dark`).
-- **`npm run verify`** = token drift + contrast + lint + typecheck + build. Use it to close a UI
-  step rather than running the four by hand.
+- **Layer docs moved to `docs/`** at P0.1; the assessment PDF stays at the repo root as an input.
+- **`.claude/settings.json` is committed; `.claude/settings.local.json` is git-ignored.**
+- **Spring Boot pinned to 4.0.8, not the 4.0.3 the docs first named** — same minor line, five patch
+  releases of fixes. Every doc and the pom were updated together.
+- **shadcn is 4.x `radix-nova`, not `new-york`** — v4 removed new-york; the CLI now takes a *base*
+  (`base`|`radix`|`aria`) and a *preset* (`nova`|`vega`|…). Radix was chosen over v4's `base`
+  default because the screens in the UI doc assume Radix primitives.
+- **Build order deviates from BuildPlan while P0.3/P0.5 are blocked.** P3 ran first because it needs
+  neither Neon nor Docker. Nothing in P3 pre-empts the skipped steps.
+- **One `.gitignore`, at the root** — the generated ones in `salary-service/` and `salary-web/` were
+  removed. Add new ignores at the root.
+- **`config/SecurityConfig.java` is a P0.2 stub** (health open, everything else authenticated);
+  P2.1 replaces it with the cookie/JWT chain in `CLAUDE.md §4`.
+- **`getCurrentUser()` in `src/lib/auth/current-user.ts` is a placeholder** and the single seam where
+  `GET /api/auth/me` lands at P2.5. Change `role` there to view the app as another role.
 
 ---
 
 ## Gotchas found the hard way
 
-_Add to this list whenever something costs more than ten minutes to work out. One line each._
-
-- **Boot 4 moved every autoconfiguration class into a per-module package.** It is
-  `org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration`, *not* Boot 3's
-  `org.springframework.boot.autoconfigure.jdbc.…`. Same for `…boot.flyway.autoconfigure.…`,
-  `…boot.hibernate.autoconfigure.…`, `…boot.data.jpa.autoconfigure.…`. A wrong name in an
-  `spring.autoconfigure.exclude` list is **ignored silently** — nothing warns. Confirm against
-  `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` inside the jar.
-- **Boot 4 renamed the starters.** Initializr emits `spring-boot-starter-webmvc` (not `-web`), and
-  test support is per-module: `spring-boot-starter-{webmvc,data-jpa,security,…}-test`.
-- **Lombok on JDK 25 prints `sun.misc.Unsafe` warnings on every compile.** Cosmetic; the build
-  passes. Do not "fix" it by downgrading the JDK.
-- **Two scaffold defaults still contradict the design system and must be fixed at P3:**
-  `globals.css` ships `@custom-variant dark (&:is(.dark *))` — P3.1 rebinds it to `.app-dark`
-  (`CLAUDE.md §5.3`); and `layout.tsx` loads **Geist**, which P3.2 replaces with IBM Plex Sans/Mono.
-- **shadcn v4 puts `shadcn` itself in `dependencies`** and `globals.css` does
-  `@import "shadcn/tailwind.css"`. That is correct for v4, not a mistake to clean up.
-- **`salary-web/AGENTS.md` and `salary-web/CLAUDE.md` are generated by `next dev`**, not by us
-  (`node_modules/next/dist/server/lib/generate-agent-files.js`). They are committed on purpose:
-  deleting them only produces an uncommitted change the next `next dev` re-creates. The nested
-  `CLAUDE.md` is one line — `@AGENTS.md` — and adds to the root context, it does not replace it.
+- **Boot 4 moved every autoconfiguration class into a per-module package** —
+  `org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration`, not Boot 3's
+  `…boot.autoconfigure.jdbc.…`. A wrong name in `spring.autoconfigure.exclude` is **ignored
+  silently**. Confirm against `AutoConfiguration.imports` inside the jar.
+- **Boot 4 renamed the starters**: `spring-boot-starter-webmvc` (not `-web`), test support per
+  module (`…-webmvc-test`, `…-data-jpa-test`).
+- **Lombok on JDK 25 prints `sun.misc.Unsafe` warnings on every compile.** Cosmetic.
+- **Verify UI steps against `next start`, not `next dev`** — the dev overlay covers the bottom-left
+  corner and swallows clicks (it ate the sidebar Collapse button). Use `BASE_URL=…:3100`.
+- **Playwright: use `waitUntil: "load"`, not `"networkidle"`** — networkidle never fires against
+  `next start` and every navigation times out.
+- **The collapsed sidebar peeks open on hover**, so a test measuring its width right after clicking
+  Collapse reads 240px and is reading it *correctly*. Move the pointer away first.
+- **Two shadcn components shipped broken and were repaired in place** (they are ours to edit):
+  `command.tsx` never wrapped its children in `<Command>`, so the palette threw and silently never
+  opened; `sonner.tsx` resolved its theme with next-themes, which is not our theme system.
+- **`salary-web/AGENTS.md` and `salary-web/CLAUDE.md` are generated by `next dev`** and are committed
+  deliberately — deleting them only produces churn.
+- **Scanning-style tests must exclude test files and strip comments**, or they report themselves and
+  their own prose (`notify.test.ts` did both before it was right).
 
 ---
 
-## Open questions for the human
+## Verification entry points
 
-- **P0.3 needs a Neon project + database, and its pooled connection string** (the host containing
-  `-pooler`, with `?sslmode=require`). Everything that does not need the credential is already
-  committed: `.env.example` and `salary-service/src/main/resources/application-local.yml.example`
-  (Hikari and schema settings per backend §2.1). To finish P0.3: copy the example to
-  `application-local.yml`, fill in url/username/password, create `salary_schema`, **delete the
-  `spring.autoconfigure.exclude` block from `application.yml`**, then run the step's Verify.
+`npm run verify` (tokens + contrast + lint + typecheck + tests + build) closes a UI step.
+The browser-driven ones need `next start` on :3100 — `verify:visual` `verify:shell` `verify:topbar`
+`verify:components`. Backend: `./mvnw clean package`.
