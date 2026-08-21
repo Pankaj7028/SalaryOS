@@ -46,23 +46,33 @@ verified.
 - [x] **P0.4** Next.js 16 app (`salary-web`), TypeScript strict, Tailwind v4, shadcn/ui `radix-nova`
   initialised, path aliases, ESLint + Prettier.
   *Verify:* `npm run dev` serves a page; `npm run lint && npm run typecheck && npm run build` clean.
-- [~] **P0.5** Testcontainers Postgres 17 base test class; one trivial integration test.
+- [x] **P0.5** Testcontainers Postgres 17 base test class; one trivial integration test.
   *Verify:* `./mvnw verify` starts a container and the test passes. **No H2 anywhere in the POM.**
-  > **Blocked (2026-08-21):** Docker is not installed on this machine (`docker: command not found`),
-  > so Testcontainers cannot start a container. Install Docker Desktop or colima, then run the
-  > Verify. Do **not** work around this by adding H2 — `CLAUDE.md §3` and §12.12 forbid it, and an
-  > H2 suite would pass while the `daterange`/`btree_gist` schema fails in production.
+  > **Unblocked (2026-08-21):** installed `colima` + `docker` CLI via Homebrew (`brew install colima
+  > docker`), started the VM (`colima start`). Testcontainers needed `DOCKER_HOST=unix:///Users/
+  > pankajmandal/.colima/default/docker.sock` and `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/
+  > docker.sock` — colima doesn't symlink the standard socket path, so Testcontainers' Docker
+  > client strategy can't find it without these. Persisted both in `~/.zshrc`. Added
+  > `PostgresContainerIntegrationTest`, which clears the P0.2 `spring.autoconfigure.exclude`
+  > property for its context only (via `@SpringBootTest(properties = ...)`) so the datasource/JPA
+  > actually connect through the container, and runs `select 1` + `show server_version` against it.
+  > **Observed:** `./mvnw verify` → `Tests run: 2, Failures: 0, Errors: 0` (server_version 17.11),
+  > `BUILD SUCCESS` in 5.0s. No H2 in the POM.
 
-  > **Sequencing note (2026-08-21):** `P0.3` (needs Neon) and `P0.5`/`P1.*` (need Docker) are both
-  > blocked on the environment, so the build continues at **P3** — the design system, shell and
-  > components depend on neither a database nor the API. Return to `P0.3`/`P0.5` as soon as the
-  > environment allows; nothing in P3 pre-empts them.
+  > **Sequencing note (2026-08-21):** `P0.3` (Neon) is still blocked — no project/credentials yet —
+  > but P1 (migrations) only needs Testcontainers, not Neon itself, so it is unblocked now too.
+  > Return to `P0.3` once Neon credentials are available; nothing in P1 depends on it.
 
 ## P1 — Data model & migrations
 
-- [ ] **P1.1** `V1` — schema, extensions (`btree_gist`, `pg_trgm`, `citext`), `users`,
+- [x] **P1.1** `V1` — schema, extensions (`btree_gist`, `pg_trgm`, `citext`), `users`,
   `user_sessions`, `password_reset_tokens`. *Verify:* Flyway migrate against a container; tables and
   extensions present.
+  > **Done (2026-08-21):** `V1__schema_extensions_users_sessions.sql` + `FlywayMigrationTest`.
+  > Observed: `./mvnw verify` → `Tests run: 3, Failures: 0, Errors: 0`, `BUILD SUCCESS` (6.8s).
+  > Note: Flyway's schema auto-creation writes a `<< Flyway Schema Creation >>` pseudo-row
+  > (`version IS NULL`) alongside the real `V1` row in `flyway_schema_history` — filter to
+  > `version = '1'` when asserting a specific migration's success in later steps.
 - [ ] **P1.2** `V2` — reference tables. *Verify:* migrate clean; FKs correct.
 - [ ] **P1.3** `V3` — `employees`, `employee_demographics` (no FK from employee to demographics
   in JPA — see `CLAUDE.md §6.6`). *Verify:* migrate clean.
@@ -212,8 +222,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P3.7` Money/Delta/BandStatusBadge/BandBar — **P3 complete** (2026-08-21) |
-| **Current step** | `P0.3`/`P0.5` when the environment allows; otherwise P2.5 needs the API |
-| **Blockers** | `P0.3` no Neon/`DATABASE_URL`; `P0.5`+`P1.*` no Docker for Testcontainers |
+| **Last completed** | `P1.1` `V1` schema/extensions/users/sessions migration (2026-08-21) |
+| **Current step** | `P1.2` — `V2` reference tables |
+| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by P1) |
 
 _Update both rows on every completed step._
