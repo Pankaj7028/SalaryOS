@@ -16,4 +16,6 @@ export const referenceKeys = {
 
 export const employeeKeys = {
   list: (params: Record<string, string | number | undefined>) => ["employees", "list", params] as const,
+  detail: (id: string) => ["employees", "detail", id] as const,
+  peers: (id: string) => ["employees", "peers", id] as const,
 };

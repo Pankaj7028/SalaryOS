@@ -48,6 +48,48 @@ export type EmployeePage = {
   nextCursor: string | null;
 };
 
+export type CompensationComponent = {
+  componentType: string;
+  amount: Money;
+  percentOfBase: number | null;
+  isRecurring: boolean;
+};
+
+export type EmployeeDetail = {
+  id: string;
+  employeeNumber: string;
+  firstName: string;
+  lastName: string;
+  workEmail: string;
+  departmentId: string | null;
+  locationId: string | null;
+  jobFamilyId: string | null;
+  jobLevelId: string | null;
+  managerId: string | null;
+  employmentType: string;
+  fte: string;
+  status: string;
+  hireDate: string;
+  terminationDate: string | null;
+  bandMismatched: boolean;
+  currentBasePay: Money | null;
+  compaRatio: number | null;
+  rangePenetration: number | null;
+  bandStatus: BandStatus | null;
+  band: Band | null;
+  components: CompensationComponent[];
+};
+
+/** FR-6.6. `suppressed` is true, and every figure null, when the cohort has fewer than 5 members. */
+export type PeerComparison = {
+  cohortSize: number;
+  suppressed: boolean;
+  p25: Money | null;
+  median: Money | null;
+  p75: Money | null;
+  percentile: number | null;
+};
+
 function buildQuery(params: EmployeeListParams): string {
   const search = new URLSearchParams();
   if (params.q) search.set("q", params.q);
@@ -65,6 +107,16 @@ export async function fetchEmployees(params: EmployeeListParams): Promise<Employ
   const query = buildQuery(params);
   const response = await apiFetch(`/api/employees${query ? `?${query}` : ""}`);
   return (await response.json()) as EmployeePage;
+}
+
+export async function fetchEmployee(id: string): Promise<EmployeeDetail> {
+  const response = await apiFetch(`/api/employees/${id}`);
+  return (await response.json()) as EmployeeDetail;
+}
+
+export async function fetchPeers(id: string): Promise<PeerComparison> {
+  const response = await apiFetch(`/api/employees/${id}/peers`);
+  return (await response.json()) as PeerComparison;
 }
 
 /**

@@ -6,6 +6,7 @@ import com.acme.salaryos.employee.dto.EmployeeDetailResponse;
 import com.acme.salaryos.employee.dto.EmployeeSummaryResponse;
 import com.acme.salaryos.employee.dto.EmployeeTerminateRequest;
 import com.acme.salaryos.employee.dto.EmployeeUpdateRequest;
+import com.acme.salaryos.employee.dto.PeerComparisonResponse;
 import com.acme.salaryos.employee.service.EmployeeService;
 import com.acme.salaryos.reference.dto.DepartmentResponse;
 import com.acme.salaryos.reference.dto.JobLevelResponse;
@@ -85,10 +86,11 @@ public class EmployeeController {
 		return notImplemented();
 	}
 
+	/** FR-6.6: this employee's position against their (job level × country) cohort's pay distribution. */
 	@GetMapping("/{id}/peers")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST','AUDITOR')")
-	public ResponseEntity<Void> peers(@PathVariable UUID id) {
-		return notImplemented();
+	public PeerComparisonResponse peers(@PathVariable UUID id) {
+		return employeeService.peers(id);
 	}
 
 	/** FR-2.7: CSV of the exact same filter as {@link #list} — never a separate, driftable query. */

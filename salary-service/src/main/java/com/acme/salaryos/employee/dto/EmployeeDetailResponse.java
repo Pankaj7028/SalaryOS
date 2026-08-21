@@ -4,9 +4,10 @@ import com.acme.salaryos.common.money.Money;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
-/** Employee detail — identity, org placement, and current pay. Ledger and peers are separate endpoints (P4.4/P5.4). */
+/** Employee detail — identity, org placement, and current pay. Ledger is a separate endpoint (P5.4). */
 public record EmployeeDetailResponse(
 		UUID id,
 		String employeeNumber,
@@ -28,5 +29,6 @@ public record EmployeeDetailResponse(
 		BigDecimal compaRatio,
 		BigDecimal rangePenetration,
 		String bandStatus,
-		BandBoundaries band) {
+		BandBoundaries band,
+		List<CompensationComponentResponse> components) {
 }
