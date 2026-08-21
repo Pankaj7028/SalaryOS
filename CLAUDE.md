@@ -56,7 +56,7 @@ Two deployables, one repository:
 
 | Piece | Tech | Responsibility |
 |---|---|---|
-| `salary-service` | Spring Boot 4.0.3 (Java 17+) | Domain, persistence, auth, analytics, seeding |
+| `salary-service` | Spring Boot 4.0.8 (Java 17+) | Domain, persistence, auth, analytics, seeding |
 | `salary-web` | Next.js 16 (App Router) + shadcn/ui | The only user interface |
 
 This is a **modular monolith**, deliberately. One service, one schema, packages by domain module.
@@ -84,7 +84,7 @@ salary-os/
 ├── .claude/
 │   ├── settings.json                      ← shared permission allowlist (committed)
 │   └── commands/                          ← /sos-start · /sos-wrap
-├── salary-service/                        ← Spring Boot 4.0.3
+├── salary-service/                        ← Spring Boot 4.0.8
 │   └── src/main/resources/db/migration/   ← Flyway, salary_schema
 └── salary-web/                            ← Next.js 16 + shadcn/ui + Tailwind v4
 ```
@@ -121,7 +121,7 @@ survives a session ending mid-task.
 
 | Layer | Tech | Version | Notes |
 |---|---|---|---|
-| Backend | Spring Boot | **4.0.3** | Java 17+; Spring Framework 7, Spring Security 7 |
+| Backend | Spring Boot | **4.0.8** | Java 17+; Spring Framework 7, Spring Security 7 |
 | Persistence | Spring Data JPA + Hibernate | bundled | Flyway for migrations |
 | Database | **Neon** PostgreSQL | **17** | Serverless Postgres; pooled connection string |
 | Password hashing | Argon2id | Spring Security | via `DelegatingPasswordEncoder`, id `argon2` |

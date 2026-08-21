@@ -30,7 +30,7 @@ verified.
 - [x] **P0.1** Create the repo skeleton per `CLAUDE.md §2`: `salary-service/`, `salary-web/`,
   `docs/`, and place the five planning docs. Root `.gitignore`, `.editorconfig`, `README.md`.
   *Verify:* `git status` clean after the initial commit; the tree matches §2 exactly.
-- [ ] **P0.2** Spring Boot 4.0.3 project (`com.acme.salaryos`), Java 17+, dependencies: web, data-jpa,
+- [x] **P0.2** Spring Boot 4.0.8 project (`com.acme.salaryos`), Java 17+, dependencies: web, data-jpa,
   security, validation, flyway, postgresql, lombok, actuator, testcontainers.
   *Verify:* `./mvnw clean package` succeeds; `./mvnw spring-boot:run` starts and `/actuator/health`
   returns UP with no datasource configured yet (`spring.autoconfigure.exclude` or a stub).
@@ -198,8 +198,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P0.1` repo skeleton (2026-08-21) |
-| **Current step** | `P0.2` Spring Boot 4.0.3 project |
-| **Blockers** | none |
+| **Last completed** | `P0.2` Spring Boot 4.0.8 scaffold (2026-08-21) |
+| **Current step** | `P0.3` Neon project + `salary_schema` — **needs the human** |
+| **Blockers** | `P0.3` blocked: no Neon project or `DATABASE_URL` yet |
 
 _Update both rows on every completed step._

@@ -5,7 +5,7 @@ authoritative record of what everyone is paid.
 
 | Piece | Tech | Responsibility |
 |---|---|---|
-| `salary-service/` | Spring Boot 4.0.3 (Java 17+) | Domain, persistence, auth, analytics, seeding |
+| `salary-service/` | Spring Boot 4.0.8 (Java 17+) | Domain, persistence, auth, analytics, seeding |
 | `salary-web/` | Next.js 16 (App Router) + shadcn/ui | The only user interface |
 
 ## Documentation

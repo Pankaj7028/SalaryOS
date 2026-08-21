@@ -3,7 +3,7 @@
 **BINDING for all `salary-service/` work.** Read before touching a controller, an entity, or a
 migration. Where this and a framework default disagree, this wins.
 
-Spring Boot **4.0.3** · Java 17+ · Spring Security 7 · Spring Data JPA · Flyway · Neon PostgreSQL 17.
+Spring Boot **4.0.8** · Java 17+ · Spring Security 7 · Spring Data JPA · Flyway · Neon PostgreSQL 17.
 
 ---
 

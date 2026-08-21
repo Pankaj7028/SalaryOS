@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: salary-service
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # P0.2 ONLY. data-jpa, flyway and the postgres driver are on the classpath, but
+  # no database exists until P0.3 provisions Neon. Without these exclusions the
+  # context fails to start for want of a DATABASE_URL.
+  #
+  # DELETE THIS WHOLE `autoconfigure` BLOCK AT P0.3. Left in place it silently
+  # disables persistence: repositories stop being created and Flyway never runs,
+  # and the app still starts cleanly — which is the worst way to find out.
+  #
+  # Class names are Boot 4 per-module packages (…boot.jdbc.autoconfigure.…),
+  # not the Boot 3 …boot.autoconfigure.jdbc.… ones.
+  # ─────────────────────────────────────────────────────────────────────────────
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration
+      - org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration
+      - org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration
+      - org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  level:
+    com.acme.salaryos: DEBUG

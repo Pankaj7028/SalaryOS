@@ -53,7 +53,7 @@ seconds each; (3) no salary change is ever made without a recorded reason and ap
 
 ## Constraints
 
-Spring Boot 4.0.3 (Java 17+) · Next.js 16 App Router + shadcn/ui · Neon PostgreSQL 17 ·
+Spring Boot 4.0.8 (Java 17+) · Next.js 16 App Router + shadcn/ui · Neon PostgreSQL 17 ·
 database-backed auth, no Firebase · a reproducible seed script that generates 10,000 employees with
 six years of pay history.
 
