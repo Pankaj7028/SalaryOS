@@ -163,9 +163,14 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   `package.json`/`node_modules` — typecheck/lint/build all still passed, because Node's module
   resolution walks up the directory tree and found the packages there anyway. Always confirm `pwd`
   (or use an absolute `cd` in the same command) before any `npm install` in this repo.
-- **Neither the Employees table nor the Bands grid degrades to cards at 375px** (CLAUDE.md/ui doc
-  §12.10) — a known, unfixed gap. shadcn's `Table` wrapper has its own `overflow-x-auto`, so a
-  narrow viewport scrolls the table internally rather than the page, but that's not the same thing.
+- **Employees table and Bands grid now degrade to `md:hidden` card lists below 768px** (CLAUDE.md/ui
+  doc §12.10) — `<div className="hidden md:block">…table…</div>` beside a `<ul className="flex
+  flex-col gap-3 md:hidden">…cards…</ul>`, same pattern in both screens. `EmployeesTable`'s cards
+  reuse the desktop column cell renderers via a `CellFor` helper instead of duplicating formatting.
+  Verified by `npm run build`/`lint`/`typecheck`, not a live 375px screenshot — this session's
+  Chrome extension's `resize_window` changed the OS window's `outerWidth` but left `innerWidth`
+  (what CSS media queries read) stuck at the real display width; if you hit the same thing, try a
+  fresh tab/window before concluding the CSS itself is broken.
 
 ---
 

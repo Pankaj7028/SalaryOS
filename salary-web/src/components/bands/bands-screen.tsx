@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/comp/money";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/feedback/states";
@@ -41,7 +42,22 @@ export function BandsScreen() {
   }, [bands.data]);
 
   if (bands.isLoading || jobLevels.isLoading || countries.isLoading) {
-    return <TableSkeleton columns={["140px", "100px", "100px", "100px"]} rows={6} />;
+    return (
+      <>
+        <div className="hidden md:block">
+          <TableSkeleton columns={["140px", "100px", "100px", "100px"]} rows={6} />
+        </div>
+        <div className="flex flex-col gap-3 md:hidden">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="border-border rounded-lg border p-5">
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="mt-4 h-3 w-full" />
+              <Skeleton className="mt-3 h-3 w-full" />
+            </div>
+          ))}
+        </div>
+      </>
+    );
   }
 
   if (bands.isError) {
@@ -75,7 +91,7 @@ export function BandsScreen() {
         </p>
       </header>
 
-      <div className="border-border overflow-x-auto rounded-lg border">
+      <div className="border-border hidden overflow-x-auto rounded-lg border md:block">
         <Table>
           <TableHeader className="bg-muted/40">
             <TableRow className="h-10">
@@ -130,6 +146,51 @@ export function BandsScreen() {
           </TableBody>
         </Table>
       </div>
+
+      <ul className="flex flex-col gap-3 md:hidden" aria-label="Salary bands by level">
+        {levels.map((level) => (
+          <li key={level.id} className="border-border bg-card rounded-lg border p-5">
+            <h2 className="type-body-sm text-foreground mb-2">{level.title}</h2>
+            <div className="divide-border flex flex-col divide-y">
+              {countryList.map((country) => {
+                const versions = byCell.get(`${level.id}|${country.code}`);
+                const inForce = versions?.[0];
+                return (
+                  <div key={country.code} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+                    <span className="type-caption text-muted-foreground shrink-0">{country.name}</span>
+                    {inForce ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedVersions(versions!)}
+                        className="hover:bg-muted focus-visible:ring-ring/50 -mx-2 flex flex-col items-end gap-0.5 rounded-md px-2 py-1 text-right focus-visible:ring-3 focus-visible:outline-none"
+                      >
+                        <span className="figure-sm">
+                          <Money value={inForce.min} size="figure-sm" showCurrency={false} />
+                          {" – "}
+                          <Money value={inForce.mid} size="figure-sm" showCurrency={false} />
+                          {" – "}
+                          <Money value={inForce.max} size="figure-sm" />
+                        </span>
+                        <span className="type-caption text-muted-foreground">
+                          {inForce.headcount} {inForce.headcount === 1 ? "employee" : "employees"}
+                        </span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEmptyCell({ jobLevelId: level.id, countryCode: country.code })}
+                        className="text-muted-foreground hover:text-foreground -mx-2 rounded-md px-2 py-1 text-right"
+                      >
+                        <span className="type-caption">+ Add band</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </li>
+        ))}
+      </ul>
 
       {emptyCell && emptyCellLevel && emptyCellCountry ? (
         <CreateBandDialog

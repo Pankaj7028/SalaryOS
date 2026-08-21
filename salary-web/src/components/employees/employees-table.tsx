@@ -6,6 +6,7 @@ import {
   getCoreRowModel,
   useReactTable,
   type ColumnDef,
+  type Row,
 } from "@tanstack/react-table";
 import {
   Table,
@@ -15,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Money } from "@/components/comp/money";
 import { BandBar } from "@/components/comp/band-bar";
 import { EmptyState, TableSkeleton } from "@/components/feedback/states";
@@ -32,6 +34,14 @@ const STATUS_LABEL: Record<string, string> = {
 const SKELETON_COLUMNS = ["180px", "140px", "120px", "100px", "110px", "60px", "70px", "70px"];
 
 type NameLookup = Map<string, string>;
+
+/** Renders one named column's cell for a row — lets the 375px card layout (§12.10) reuse the
+ * exact same formatting as the desktop table instead of duplicating it per field. */
+function CellFor({ row, id }: { row: Row<EmployeeSummary>; id: string }) {
+  const cell = row.getAllCells().find((c) => c.column.id === id);
+  if (!cell) return null;
+  return <>{flexRender(cell.column.columnDef.cell, cell.getContext())}</>;
+}
 
 export function EmployeesTable({
   data,
@@ -153,7 +163,22 @@ export function EmployeesTable({
   });
 
   if (isLoading && data.length === 0) {
-    return <TableSkeleton columns={SKELETON_COLUMNS} />;
+    return (
+      <>
+        <div className="hidden md:block">
+          <TableSkeleton columns={SKELETON_COLUMNS} />
+        </div>
+        <div className="flex flex-col gap-3 md:hidden">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="border-border rounded-lg border p-5">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="mt-2 h-3 w-1/3" />
+              <Skeleton className="mt-4 h-3 w-full" />
+            </div>
+          ))}
+        </div>
+      </>
+    );
   }
 
   if (data.length === 0) {
@@ -166,40 +191,70 @@ export function EmployeesTable({
   }
 
   return (
-    <div className="border-border overflow-hidden rounded-lg border">
-      <Table>
-        <TableHeader className="bg-muted/40 sticky top-0 z-20">
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id} className="h-10">
-              {headerGroup.headers.map((header) => (
-                <TableHead key={header.id} className="type-label text-muted-foreground">
-                  {flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id} className="relative h-10">
-              {row.getVisibleCells().map((cell, index) => (
-                <TableCell key={cell.id}>
-                  {index === 0 ? (
-                    <Link
-                      href={`/employees/${row.original.id}`}
-                      className="absolute inset-0 z-10"
-                      aria-label={`Open ${row.original.firstName} ${row.original.lastName}`}
-                    />
-                  ) : null}
-                  <span className="relative z-0">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </span>
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <>
+      <div className="border-border hidden overflow-hidden rounded-lg border md:block">
+        <Table>
+          <TableHeader className="bg-muted/40 sticky top-0 z-20">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id} className="h-10">
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id} className="type-label text-muted-foreground">
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id} className="relative h-10">
+                {row.getVisibleCells().map((cell, index) => (
+                  <TableCell key={cell.id}>
+                    {index === 0 ? (
+                      <Link
+                        href={`/employees/${row.original.id}`}
+                        className="absolute inset-0 z-10"
+                        aria-label={`Open ${row.original.firstName} ${row.original.lastName}`}
+                      />
+                    ) : null}
+                    <span className="relative z-0">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </span>
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <ul className="flex flex-col gap-3 md:hidden" aria-label="Employees">
+        {table.getRowModel().rows.map((row) => (
+          <li key={row.id}>
+            <Link
+              href={`/employees/${row.original.id}`}
+              className="border-border bg-card hover:bg-muted/40 focus-visible:ring-ring/50 flex flex-col gap-3 rounded-lg border p-5 focus-visible:ring-3 focus-visible:outline-none"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <CellFor row={row} id="name" />
+                <CellFor row={row} id="status" />
+              </div>
+              <div className="type-body-sm text-muted-foreground flex flex-wrap gap-x-3 gap-y-1">
+                <CellFor row={row} id="department" />
+                <CellFor row={row} id="location" />
+                <CellFor row={row} id="level" />
+              </div>
+              <div className="flex items-end justify-between gap-3">
+                <div className="flex flex-col gap-1">
+                  <CellFor row={row} id="basePay" />
+                  <CellFor row={row} id="compaRatio" />
+                </div>
+                <CellFor row={row} id="band" />
+              </div>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

@@ -756,13 +756,15 @@ verified.
   > removed the stray root artifacts (asked the user first, since it's a `rm -rf`-shaped operation
   > even though everything deleted was untracked and created this session).
   >
-  > **Genuine gap found and flagged, not fixed:** neither the Employees table (P4.3) nor the Bands
-  > grid has a responsive card-degradation at 375px (CLAUDE.md/ui doc §12.10's merge-checklist item).
-  > shadcn's `Table` wrapper has `overflow-x-auto` built in, so a narrow viewport gets an
-  > internally-scrolling table rather than page-level horizontal scroll — but that is not the same
-  > as "table degraded to cards," which neither table has. Not attempted here (a real, separate
-  > responsive-redesign effort); worth a dedicated pass before this product ships to anyone on a
-  > phone.
+  > **Genuine gap found and flagged, since fixed (P6.2's commit):** neither the Employees table
+  > (P4.3) nor the Bands grid had a responsive card-degradation at 375px (CLAUDE.md/ui doc §12.10's
+  > merge-checklist item) — shadcn's `Table` wrapper's built-in `overflow-x-auto` gave a narrow
+  > viewport an internally-scrolling table rather than the required "degrades to cards." Both screens
+  > now render `<div className="hidden md:block">` around the desktop table beside a
+  > `<ul className="flex flex-col gap-3 md:hidden">` card list; `EmployeesTable`'s cards reuse the
+  > desktop column cell renderers via a small `CellFor` helper rather than duplicating formatting.
+  > Verified by `npm run build`/`lint`/`typecheck` — see `docs/STATE.md`'s gotchas for why this
+  > session's live 375px screenshot pass didn't work (a `resize_window` tool quirk, not a CSS bug).
   >
   > **Chrome-can't-reach-localhost, resolved:** turned out to be a *second physically different*
   > paired browser (a Linux machine) that every earlier `tabs_context_mcp` call in this session had
@@ -929,7 +931,7 @@ After completion of complete P8 stop executing next P9 task and do the local set
 |---|---|
 | **Last completed** | `P6.2` `ApplyDueChangesJob` + idempotent `POST /changes/apply-due` — done, `[x]`, 104/104 backend tests (2026-08-21) |
 | **Current step** | `P6.3` — Bulk merit upload: per-row validation, proposals for valid rows, downloadable error report. |
-| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). Known, flagged (not fixed) gap: no 375px table→card degradation anywhere yet (P5.5's done-note). |
+| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._
 
