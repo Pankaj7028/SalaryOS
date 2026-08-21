@@ -191,7 +191,12 @@ public class BandService {
 	private SalaryBand versionBand(
 			SalaryBand current, String currency, BigDecimal minAmount, BigDecimal midAmount, BigDecimal maxAmount,
 			LocalDate effectiveFrom, String note, UUID createdBy) {
-		current.close(effectiveFrom.minusDays(1));
+		// close(effectiveFrom), not minusDays(1): findEffective's "asAt" check is
+		// effectiveTo > asAt (exclusive), the same convention as compensation_records' `[)` daterange
+		// (EffectiveDating.apply()'s comment has the full reasoning + empirical verification).
+		// Subtracting a day here would leave the day before a new version starts covered by neither
+		// version.
+		current.close(effectiveFrom);
 		salaryBandRepository.saveAndFlush(current);
 
 		SalaryBand successor = SalaryBand.builder()

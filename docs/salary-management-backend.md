@@ -147,7 +147,7 @@ public CompensationRecord apply(ApplyCommand cmd) {
         .changeReason(cmd.reason()).changeId(cmd.changeId())
         .build();
 
-    open.closeOn(cmd.effectiveFrom().minusDays(1));   // the only mutation permitted on this table
+    open.closeOn(cmd.effectiveFrom());   // NOT minusDays(1) — see rule 1 below
     repo.save(open);
     var saved = repo.save(record);
     projection.refresh(cmd.employeeId());
@@ -158,8 +158,13 @@ public CompensationRecord apply(ApplyCommand cmd) {
 
 Rules encoded here and asserted by tests:
 
-1. Closing sets `effective_to = newFrom − 1 day`. Off-by-one here pays somebody twice for a day, or
-   nothing at all, and no screen will show it.
+1. Closing sets `effective_to = newFrom` — **not** `newFrom − 1 day`. `validity` is a `[)` range
+   (inclusive start, exclusive end): `effective_to` already excludes itself from the closed period,
+   so setting it to `newFrom` makes `[oldFrom, newFrom)` butt exactly against `[newFrom, …)` — zero
+   gap, zero overlap. Subtracting a day is the "off-by-one… pays somebody nothing at all" bug this
+   rule exists to prevent, not a way to satisfy it: verified against a real Postgres instance,
+   `daterange('a','2024-07-01','[)') @> '2024-06-30'` is `false`. (An earlier revision of this rule
+   said `newFrom − 1 day`; that was wrong — P5.4 found the resulting gap via the `as-at` query.)
 2. The exclusion constraint is the backstop. **Do not catch and swallow its violation** — surface it
    as a 409 with the conflicting period in the `ProblemDetail`.
 3. **No band means `compa_ratio = null`**, and the employee appears in the `NO_BAND` exception list.

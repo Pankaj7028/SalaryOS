@@ -7,6 +7,7 @@ import com.acme.salaryos.common.paging.Cursor;
 import com.acme.salaryos.common.paging.CursorCodec;
 import com.acme.salaryos.common.paging.KeysetPage;
 import com.acme.salaryos.compensation.domain.CompensationComponent;
+import com.acme.salaryos.compensation.domain.CompensationRecord;
 import com.acme.salaryos.compensation.domain.EmployeeCurrentComp;
 import com.acme.salaryos.compensation.projection.EmployeeCurrentCompProjector;
 import com.acme.salaryos.compensation.repository.CompensationComponentRepository;
@@ -15,6 +16,7 @@ import com.acme.salaryos.compensation.repository.EmployeeCurrentCompRepository;
 import com.acme.salaryos.employee.domain.Employee;
 import com.acme.salaryos.employee.dto.BandBoundaries;
 import com.acme.salaryos.employee.dto.CompensationComponentResponse;
+import com.acme.salaryos.employee.dto.CompensationRecordResponse;
 import com.acme.salaryos.employee.dto.EmployeeCreateRequest;
 import com.acme.salaryos.employee.dto.EmployeeDetailResponse;
 import com.acme.salaryos.employee.dto.EmployeeSummaryResponse;
@@ -37,6 +39,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -196,6 +199,32 @@ public class EmployeeService {
 		return new PeerComparisonResponse(cohortSize, false, p25, median, p75, percentileRank);
 	}
 
+	/** FR-6.7: the full ledger, newest period first. */
+	public List<CompensationRecordResponse> compensationHistory(UUID id) {
+		if (!employeeRepository.existsById(id)) {
+			throw new NoSuchElementException();
+		}
+		return compensationRecordRepository.findByEmployeeIdOrderByEffectiveFromDesc(id).stream()
+				.map(this::toCompensationRecordResponse)
+				.toList();
+	}
+
+	/** FR-3.6: the one period valid on {@code asAt}, or empty if this employee had no pay yet on that date. */
+	public Optional<CompensationRecordResponse> compensationAsAt(UUID id, LocalDate asAt) {
+		if (!employeeRepository.existsById(id)) {
+			throw new NoSuchElementException();
+		}
+		return compensationRecordRepository.findAsAt(id, asAt).map(this::toCompensationRecordResponse);
+	}
+
+	private CompensationRecordResponse toCompensationRecordResponse(CompensationRecord record) {
+		return new CompensationRecordResponse(
+				record.getId(), record.getEffectiveFrom(), record.getEffectiveTo(), record.getBase(),
+				record.getPayFrequency(), record.getAnnualBaseAmount(), record.getNormalizedAnnualBase(),
+				record.getBandId(), record.getCompaRatio(), record.getRangePenetration(), record.getChangeReason(),
+				record.getChangeId(), record.getSupersededBy(), record.getCreatedBy(), record.getCreatedAt());
+	}
+
 	@Transactional
 	public EmployeeDetailResponse create(EmployeeCreateRequest request) {
 		Employee employee = Employee.builder()
@@ -229,7 +258,13 @@ public class EmployeeService {
 		return toDetail(employee, comp, findBand(comp), fetchComponents(comp));
 	}
 
-	/** FR-2.6: sets status and closes the open comp period on the termination date, if one exists. */
+	/**
+	 * FR-2.6: sets status and closes the open comp period on the termination date, if one exists.
+	 * Pay runs through and includes the termination date (user-confirmed, P5.4) — {@code validity}
+	 * is a `[)` range (inclusive start, exclusive end), so the row must close at
+	 * {@code terminationDate.plusDays(1)}, not {@code terminationDate} itself, for that last day to
+	 * actually be covered. Same convention as {@code EffectiveDating}'s closing math.
+	 */
 	@Transactional
 	public EmployeeDetailResponse terminate(UUID id, LocalDate terminationDate) {
 		Employee employee = employeeRepository.findById(id).orElseThrow(NoSuchElementException::new);
@@ -237,7 +272,7 @@ public class EmployeeService {
 		employeeRepository.save(employee);
 
 		compensationRecordRepository.findByEmployeeIdAndEffectiveToIsNull(id).ifPresent(open -> {
-			open.close(terminationDate);
+			open.close(terminationDate.plusDays(1));
 			compensationRecordRepository.save(open);
 		});
 		// Closing the ledger's open period leaves no open period at all — refresh removes the now-stale

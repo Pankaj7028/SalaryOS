@@ -71,7 +71,9 @@ class BandVersioningTest {
 				LocalDate.of(2033, 6, 1), "Annual market adjustment."), fx.userId());
 
 		var reloadedOriginal = salaryBandRepository.findById(original.id()).orElseThrow();
-		assertThat(reloadedOriginal.getEffectiveTo()).isEqualTo(LocalDate.of(2033, 5, 31));
+		// effective_to = the successor's effective_from, not minusDays(1) — see EffectiveDating.apply()'s
+		// comment for why (validity/findEffective both use an exclusive-end convention).
+		assertThat(reloadedOriginal.getEffectiveTo()).isEqualTo(LocalDate.of(2033, 6, 1));
 		assertThat(successor.id()).isNotEqualTo(original.id());
 		assertThat(successor.effectiveTo()).isNull();
 		assertThat(successor.mid().amount()).isEqualByComparingTo("115000.00");

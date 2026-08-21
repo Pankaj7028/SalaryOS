@@ -1,6 +1,7 @@
 package com.acme.salaryos.employee.web;
 
 import com.acme.salaryos.common.paging.KeysetPage;
+import com.acme.salaryos.employee.dto.CompensationRecordResponse;
 import com.acme.salaryos.employee.dto.EmployeeCreateRequest;
 import com.acme.salaryos.employee.dto.EmployeeDetailResponse;
 import com.acme.salaryos.employee.dto.EmployeeSummaryResponse;
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -74,16 +76,18 @@ public class EmployeeController {
 		return employeeService.get(id);
 	}
 
+	/** FR-6.7: the full pay-history ledger, newest period first. */
 	@GetMapping("/{id}/compensation")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST','AUDITOR')")
-	public ResponseEntity<Void> compensationHistory(@PathVariable UUID id) {
-		return notImplemented();
+	public List<CompensationRecordResponse> compensationHistory(@PathVariable UUID id) {
+		return employeeService.compensationHistory(id);
 	}
 
+	/** FR-3.6: what this employee was paid on a chosen date. 404 (via NoSuchElementException) if there was no pay yet on that date. */
 	@GetMapping("/{id}/compensation/as-at")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST','AUDITOR')")
-	public ResponseEntity<Void> compensationAsAt(@PathVariable UUID id) {
-		return notImplemented();
+	public CompensationRecordResponse compensationAsAt(@PathVariable UUID id, @RequestParam LocalDate date) {
+		return employeeService.compensationAsAt(id, date).orElseThrow();
 	}
 
 	/** FR-6.6: this employee's position against their (job level × country) cohort's pay distribution. */

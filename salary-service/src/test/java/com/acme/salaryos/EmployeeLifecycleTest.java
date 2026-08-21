@@ -162,7 +162,9 @@ class EmployeeLifecycleTest {
 		assertThat(responseBody.get("terminationDate").asString()).isEqualTo(terminationDate.toString());
 
 		CompensationRecord reloaded = compensationRecordRepository.findById(openRecord.getId()).orElseThrow();
-		assertThat(reloaded.getEffectiveTo()).isEqualTo(terminationDate);
+		// Pay runs through and includes the termination date (user-confirmed, P5.4) — validity is a
+		// `[)` range, so effective_to is terminationDate + 1, not terminationDate itself.
+		assertThat(reloaded.getEffectiveTo()).isEqualTo(terminationDate.plusDays(1));
 	}
 
 	@Test

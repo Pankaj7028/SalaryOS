@@ -91,8 +91,16 @@ public class EffectiveDating {
 		// ordering runs every pending INSERT before any UPDATE regardless of call order, so without
 		// the explicit flush here the new row's insert would hit the database while the old row's
 		// range is still open-ended — comp_no_overlap would reject it as a false conflict.
+		//
+		// close(effectiveFrom) — NOT effectiveFrom.minusDays(1). V6's validity column is a `[)`
+		// (inclusive-start, EXCLUSIVE-end) daterange, so effective_to already excludes itself from
+		// the old period; setting it to newFrom makes the old range end exactly where the new one
+		// begins — [oldFrom, newFrom) then [newFrom, ...), zero gap and zero overlap. Subtracting a
+		// day here is the "off-by-one... pays somebody nothing at all" bug backend doc §3 rule 1
+		// warns about, not a fix for it — verified empirically against a real Postgres instance:
+		// `daterange('a','2024-07-01','[)') @> '2024-06-30'` is false, `@> '2024-06-29'` is true.
 		openPeriod.ifPresent(open -> {
-			open.close(cmd.effectiveFrom().minusDays(1));
+			open.close(cmd.effectiveFrom());
 			compensationRecordRepository.saveAndFlush(open);
 		});
 
@@ -114,8 +122,8 @@ public class EffectiveDating {
 	 * Fixes a mistake inside an existing period: {@code effectiveFrom} must fall strictly after the
 	 * original period's own start (rule 1's day-boundary closing math has no earlier date to close
 	 * to) and, if that period is already closed, before its end. The original row is closed at
-	 * {@code effectiveFrom − 1 day} and marked {@link CompensationRecord#supersede superseded} —
-	 * never deleted, never edited beyond that.
+	 * {@code effectiveFrom} (the `[)` range's exclusive end — see the comment in {@link #apply}) and
+	 * marked {@link CompensationRecord#supersede superseded} — never deleted, never edited beyond that.
 	 */
 	@Transactional
 	public CompensationRecord correct(CorrectCommand cmd) {
@@ -139,8 +147,9 @@ public class EffectiveDating {
 		LocalDate originalEffectiveTo = original.getEffectiveTo();
 
 		// Same ordering requirement as apply(): close and FLUSH the original before inserting the
-		// corrected row, or comp_no_overlap sees two open-ended ranges at insert time.
-		original.close(cmd.effectiveFrom().minusDays(1));
+		// corrected row, or comp_no_overlap sees two open-ended ranges at insert time. close(effectiveFrom),
+		// not minusDays(1) — see apply()'s comment for why.
+		original.close(cmd.effectiveFrom());
 		compensationRecordRepository.saveAndFlush(original);
 
 		CompensationRecord corrected = buildRecord(

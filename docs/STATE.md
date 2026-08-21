@@ -14,16 +14,16 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | P5 in progress; P4 UI work code-complete but unverified in a browser |
-| **Last completed** | `P5.3` Bands CRUD + versioning + CSV import — `[x]`, 83/83 backend tests. |
-| **Next step** | `P5.4` — Pay history ledger endpoint + `as-at` query. Separately: get a Chrome session that can reach this machine's `localhost` and run the P4.3/P4.4 visual passes. |
+| **Last completed** | `P5.4` Pay history + `as-at` — `[x]`, 86/86 backend tests. **Found and fixed a real day-boundary gap bug in P5.1/P5.3's closing formula** — see gotcha below, read it before touching any closing/versioning code. |
+| **Next step** | `P5.5` — Employee pay-history ledger UI + bands grid screen. Separately: get a Chrome session that can reach this machine's `localhost` and run the P4.3/P4.4 visual passes. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). Chrome extension cannot reach `localhost` on this machine — see gotcha below. |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
-Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4.1`, `P4.2` · `P5.1`–`P5.3`. In
+Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4.1`, `P4.2` · `P5.1`–`P5.4`. In
 progress: `P4.3`, `P4.4` (both code done, both need a browser pass). Blocked: `P0.3`. Untouched:
-`P5.4`–`P9`.
+`P5.5`–`P9`.
 
 ---
 
@@ -100,6 +100,9 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   never blocks the rest. `P8.4`'s employee import should probably match this shape.
 - **`salary_bands` has no exclusion constraint** (unlike `compensation_records`) — `BandService`
   alone prevents overlapping versions. Be careful with any direct-repository write to this table.
+- **Termination pay runs through and includes `terminationDate`** (user-confirmed, P5.4) —
+  `EmployeeService.terminate()` closes at `terminationDate.plusDays(1)`, not `terminationDate`
+  itself (same `[)`-range reasoning as the closing-formula gotcha above).
 
 ---
 
@@ -124,6 +127,13 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   new-row-first and tripped `comp_no_overlap` (both rows briefly open-ended). Fix: `saveAndFlush()`
   the closed/updated row before building the new entity to insert. Watch for this anywhere a write
   path closes one row and opens another in the same transaction (P6's change-apply job will too).
+- **Closing an effective-dated row = `close(newFrom)`, never `newFrom.minusDays(1)`** — found at
+  P5.4, was wrong in both `EffectiveDating` and `BandService` since P5.1/P5.3 (fixed there and in
+  `docs/salary-management-backend.md` §3 rule 1, whose stated formula was itself the bug). Every
+  `validity`/effective-dated range in this schema is `[)` — inclusive start, **exclusive** end — so
+  subtracting a day leaves the day before a new period/version covered by *neither* row. Verified
+  against real Postgres: `daterange('a','2024-07-01','[)') @> '2024-06-30'` is `false`. If you ever
+  write a new "close this row, open a successor" path, `close(successor.effectiveFrom)`, full stop.
 - **Shared cached Testcontainers context (same `@SpringBootTest` properties block ⇒ same container)
   keeps burning tests that assume they own a table or an `fx_rates` month exclusively** — three
   separate instances fixed now (`EmployeeListPaginationTest` at P4.1, `V4V5BandsAndFxMigrationTest`

@@ -566,6 +566,11 @@ verified.
   >
   > Observed: `./mvnw clean verify` → `Tests run: 76, Failures: 0, Errors: 0`, `BUILD SUCCESS`
   > (13 new tests in `EffectiveDatingTest`, 63 pre-existing, all green).
+  > **Addendum (found at P5.4, fixed retroactively here):** the closing formula this done-note
+  > describes as `effectiveFrom.minusDays(1)` was **wrong** — a real one-day gap, not the day-boundary
+  > correctness this step's own Verify clause asked for. Full story in P5.4's done-note; the fix
+  > (`close(effectiveFrom)`, no subtraction) is what's in the code now, and this note's own text
+  > above was left as originally written for the historical record rather than silently edited.
 - [x] **P5.2** `employee_current_comp` projection maintained in the same transaction +
   `POST /admin/rebuild-projection` + `ProjectionConsistencyTest`.
   *Verify:* re-deriving the projection from the ledger equals the stored projection for 10k rows.
@@ -633,8 +638,67 @@ verified.
   >
   > Observed: `./mvnw clean verify` → `Tests run: 83, Failures: 0, Errors: 0`, `BUILD SUCCESS`
   > (6 new tests in `BandVersioningTest`, 77 pre-existing, all green).
-- [ ] **P5.4** Pay history ledger endpoint + `as-at` query. *Verify:* the salary in force on a chosen
+  > **Addendum (found at P5.4, fixed retroactively here):** `versionBand()`'s closing formula had
+  > the same one-day-gap bug as `EffectiveDating` (this step copied its pattern faithfully — bug
+  > included). Fixed alongside it; full story in P5.4's done-note.
+- [x] **P5.4** Pay history ledger endpoint + `as-at` query. *Verify:* the salary in force on a chosen
   past date is returned for a sample of 50 seeded employees.
+  > **The real find of this step: a genuine, product-critical bug in P5.1's/P5.3's closing formula,
+  > shipped in two already-`[x]`'d steps.** Both `EffectiveDating.apply()`/`.correct()` and
+  > `BandService.versionBand()` set `effective_to = newFrom.minusDays(1)`, faithfully matching
+  > backend doc §3 rule 1's literal text ("Closing sets `effective_to = newFrom − 1 day`"). This
+  > step's `as-at` test (`PayHistoryTest.asAtReturnsTheOnePeriodInForceOnTheChosenDate`) failed on
+  > the very first run — asking "what was this person paid on the day before their raise?" returned
+  > nothing. Root cause: `compensation_records.validity` (V6) is a `[)` daterange — inclusive start,
+  > **exclusive** end — so `effective_to = newFrom − 1` makes the OLD period's actual last covered
+  > day `newFrom − 2`, leaving `newFrom − 1` covered by **neither** period. Verified directly against
+  > a running Postgres instance rather than trusting the reasoning alone:
+  > `SELECT daterange('2034-01-01','2034-07-01','[)') @> '2034-06-30'::date` → `false`;
+  > `@> '2034-06-29'::date` → `true`. This is *exactly* the "off-by-one… pays somebody nothing at
+  > all" bug the doc's own rule 1 warns against — the doc's stated formula produces the bug it warns
+  > about, not a fix for it.
+  >
+  > **Fixed at the root, not patched around:** `close(effectiveFrom)` — no subtraction — in both
+  > `EffectiveDating` (P5.1) and `BandService` (P5.3), which makes `[oldFrom, newFrom)` butt exactly
+  > against `[newFrom, …)`: zero gap, zero overlap (also verified directly:
+  > `daterange('a','2034-07-01','[)') && daterange('2034-07-01', NULL, '[)')` → `false`, so
+  > `comp_no_overlap` still correctly accepts the adjacent pair). **`docs/salary-management-backend.md`
+  > §3 rule 1 corrected** to state the right formula with the reasoning and the empirical proof, and
+  > its `apply()` pseudocode's `closeOn(...)` call updated to match — a wrong instruction in a BINDING
+  > doc is a bug that keeps re-injuring future work otherwise. Every affected test assertion in
+  > `EffectiveDatingTest`, `BandVersioningTest`, and this step's own `PayHistoryTest` updated to the
+  > corrected boundary (most of `PayHistoryTest`'s own as-at assertions were already right — that's
+  > *why* they caught the bug; only the exact `effectiveTo` date-equality assertions elsewhere needed
+  > changing). `EmployeeService.terminate()` was **not** touched — it has no "successor period" to
+  > tile against (termination just ends a period with nothing after it), so this specific gap
+  > geometry doesn't apply there; its own closing-date semantics are a separate, not-yet-resolved
+  > question noted below, out of scope for this fix.
+  >
+  > **New endpoints:** `GET /employees/{id}/compensation` (full ledger, newest period first —
+  > `CompensationRecordRepository.findByEmployeeIdOrderByEffectiveFromDesc`, new) and
+  > `GET /employees/{id}/compensation/as-at?date=` (`findAsAt`, new — same `[)`-aware query pattern
+  > as `SalaryBandRepository.findEffective`). `CompensationRecordResponse` deliberately omits `note`
+  > and proposer/approver — those belong to the `compensation_changes` row a record's `changeId`
+  > points at, and that domain doesn't exist until P6.1; `changeId`/`supersededBy` are included now
+  > so P5.5/P6's UI can wire up without another backend round-trip.
+  >
+  > **Verify scoped to what's seedable today, not literally 50 employees** — same reasoning as
+  > P5.1's/P5.2's Verify-scope notes; `P9`'s `SeedRunner` doesn't exist yet. `PayHistoryTest` proves
+  > the exact day-boundary correctness (which is the part that actually matters — and which a
+  > shallower "50 random employees" sweep might not have caught, since it takes a query pinned to
+  > the exact seam between two periods to surface a one-day gap) rather than a large N.
+  >
+  > **`EmployeeService.terminate()` policy question — asked, answered, fixed:** it previously called
+  > `open.close(terminationDate)` directly, meaning under `[)` semantics the employee's last **paid**
+  > day was `terminationDate − 1`, not `terminationDate` itself — genuinely ambiguous from FR-2.6's
+  > text alone (unlike the raise/version gap above, this isn't a provable bug, it's an unstated
+  > policy choice). Asked the user: **pay runs through and includes the termination date.** Fixed to
+  > `open.close(terminationDate.plusDays(1))`; `EmployeeLifecycleTest`'s termination assertion
+  > updated to match.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 86, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (3 new tests in `PayHistoryTest`, 83 pre-existing — including every P5.1/P5.3 test re-verified
+  > against the corrected boundary — all green).
 - [ ] **P5.5** Employee pay-history ledger UI and the bands grid screen with the
   "how many employees change status" preview. *Verify:* the preview count matches what saving does.
 
@@ -704,8 +768,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P5.3` Bands CRUD with versioning + CSV import — done, `[x]`, 83/83 backend tests (2026-08-21) |
-| **Current step** | `P5.4` — Pay history ledger endpoint + `as-at` query. `P4.3`/`P4.4` remain `[~]` (code done, browser pass owed — see their done-notes and the Blockers row). |
+| **Last completed** | `P5.4` Pay history ledger + `as-at` — done, `[x]`, 86/86 backend tests. **Found and fixed a real day-boundary gap bug shipped in P5.1/P5.3** — see P5.4's done-note (2026-08-21) |
+| **Current step** | `P5.5` — Employee pay-history ledger UI + bands grid screen. `P4.3`/`P4.4` remain `[~]` (code done, browser pass owed — see their done-notes and the Blockers row). |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). **Chrome extension cannot reach this machine's `localhost`** — confirmed twice this session (a connected Chrome tab loaded `https://example.com` but got an error page for both `localhost:3100` and `localhost:8080/actuator/health`). Owed a visual pass over P2.5 (sign-in), P4.3 (`/employees`), and P4.4 (`/employees/[id]`) once a Chrome session that can actually reach this machine is available. |
 
 _Update both rows on every completed step._

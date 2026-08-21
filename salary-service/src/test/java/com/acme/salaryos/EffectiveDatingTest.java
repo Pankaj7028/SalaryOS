@@ -94,7 +94,7 @@ class EffectiveDatingTest {
 	}
 
 	@Test
-	void applyingARaiseClosesTheOpenPeriodOnTheDayBeforeTheNewOne() {
+	void applyingARaiseClosesTheOldPeriodExactlyWhereTheNewOneBegins() {
 		Fixtures fx = seedFixtures("DAYBOUNDARY", new BigDecimal("1.00"));
 		saveUsdRate(2031, 1);
 		saveUsdRate(2031, 6);
@@ -108,7 +108,9 @@ class EffectiveDatingTest {
 				"MERIT", null, fx.userId()));
 
 		CompensationRecord reloadedOriginal = compensationRecordRepository.findById(original.getId()).orElseThrow();
-		assertThat(reloadedOriginal.getEffectiveTo()).isEqualTo(LocalDate.of(2031, 5, 31));
+		// effective_to = the new period's effective_from, NOT minusDays(1) — validity is a `[)`
+		// range, so this is what makes [Jan 1, Jun 1) butt exactly against [Jun 1, ...) with no gap.
+		assertThat(reloadedOriginal.getEffectiveTo()).isEqualTo(LocalDate.of(2031, 6, 1));
 		assertThat(raise.getEffectiveFrom()).isEqualTo(LocalDate.of(2031, 6, 1));
 		assertThat(raise.getEffectiveTo()).isNull();
 	}
@@ -149,7 +151,7 @@ class EffectiveDatingTest {
 
 		CompensationRecord reloadedOriginal = compensationRecordRepository.findById(original.getId()).orElseThrow();
 		assertThat(reloadedOriginal.getSupersededBy()).isEqualTo(corrected.getId());
-		assertThat(reloadedOriginal.getEffectiveTo()).isEqualTo(LocalDate.of(2031, 4, 9));
+		assertThat(reloadedOriginal.getEffectiveTo()).isEqualTo(LocalDate.of(2031, 4, 10));
 		assertThat(corrected.getChangeReason()).isEqualTo("CORRECTION");
 		assertThat(corrected.getEffectiveTo()).isNull();
 		// The original row still exists, untouched apart from close()/supersede() — insert-only.
@@ -200,10 +202,10 @@ class EffectiveDatingTest {
 				"MERIT", null, fx.userId()));
 
 		CompensationRecord reloadedOriginal = compensationRecordRepository.findById(original.getId()).orElseThrow();
-		assertThat(reloadedOriginal.getEffectiveTo()).isEqualTo(LocalDate.of(2031, 5, 31));
+		assertThat(reloadedOriginal.getEffectiveTo()).isEqualTo(LocalDate.of(2031, 6, 1));
 
 		assertThatThrownBy(() -> effectiveDating.correct(new CorrectCommand(
-				original.getId(), LocalDate.of(2031, 5, 31), new BigDecimal("96000"), "USD", "ANNUAL",
+				original.getId(), LocalDate.of(2031, 6, 1), new BigDecimal("96000"), "USD", "ANNUAL",
 				"Attempting to correct on the closing date itself.", fx.userId())))
 				.isInstanceOf(CorrectionOutsideOriginalPeriodException.class);
 	}
