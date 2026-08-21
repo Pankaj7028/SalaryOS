@@ -81,8 +81,13 @@ verified.
   > Note: test classes with an identical `@SpringBootTest` config share a cached context/container
   > — `FlywayMigrationTest` had to filter its table check to V1's own names, not an exact-set match,
   > once V2's tables landed in the same container. Keep every migration test filtered this way.
-- [ ] **P1.3** `V3` — `employees`, `employee_demographics` (no FK from employee to demographics
+- [x] **P1.3** `V3` — `employees`, `employee_demographics` (no FK from employee to demographics
   in JPA — see `CLAUDE.md §6.6`). *Verify:* migrate clean.
+  > **Done (2026-08-21):** `V3__employees_demographics.sql` + `V3EmployeesMigrationTest` — tables
+  > present, employees has no FK/column referencing demographics (query over
+  > `information_schema.table_constraints`), and a demographics row for an unknown employee is
+  > rejected. Observed: `./mvnw verify` → `Tests run: 8, Failures: 0, Errors: 0`, `BUILD SUCCESS`
+  > (7.5s).
 - [ ] **P1.4** `V4` + `V5` — `salary_bands` (with the ordering check), `fx_rates` (unique on month +
   pair). *Verify:* the band check constraint rejects `min > mid`.
 - [ ] **P1.5** `V6` — `compensation_records` with the generated `validity` column and the
@@ -229,8 +234,8 @@ verified.
 
 | | |
 |---|---|
-| **Last completed** | `P1.2` `V2` reference tables migration (2026-08-21) |
-| **Current step** | `P1.3` — `V3` employees, employee_demographics |
+| **Last completed** | `P1.3` `V3` employees, employee_demographics migration (2026-08-21) |
+| **Current step** | `P1.4` — `V4` + `V5` salary_bands, fx_rates |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by P1) |
 
 _Update both rows on every completed step._
