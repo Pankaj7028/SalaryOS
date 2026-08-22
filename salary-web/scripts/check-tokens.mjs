@@ -92,7 +92,11 @@ const ratio = (a, b) => {
   return (x + 0.05) / (y + 0.05);
 };
 
-// [foreground, background, minimum] — 4.5 is WCAG AA for body text.
+// [foreground, background, minimum] — 4.5 is WCAG AA for body text, 3.0 is WCAG 1.4.11 for a
+// UI-component boundary that's the only way to identify it (an unfocused input/select/textarea
+// border, per components/ui/input.tsx's border-input — --border itself is exempt, a decorative
+// table/panel divider rather than a control's sole identifying edge). P9.5 found --input at
+// ~1.4-1.9:1 in both themes with nothing here catching it; added so it can't regress silently.
 const PAIRS = [
   ["foreground", "background", 4.5],
   ["card-foreground", "card", 4.5],
@@ -106,6 +110,8 @@ const PAIRS = [
   ["neutral-figure", "background", 4.5],
   ["sidebar-foreground", "sidebar", 4.5],
   ["destructive-foreground", "destructive", 4.5],
+  ["input", "background", 3.0],
+  ["input", "card", 3.0],
 ];
 
 const themes = { light: resolve(":root,\n.app-light {"), dark: resolve(".app-dark {") };

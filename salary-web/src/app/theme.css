@@ -43,7 +43,13 @@
   --destructive-foreground: #ffffff;
 
   --border: #e4e4e7;
-  --input: #d4d4d8;
+  /* 3.22:1 vs --background, 3.36:1 vs --card -- P9.5 found the original #d4d4d8 (1.4:1) failing
+     ui.md §10's "3:1 for UI boundaries" for an unfocused input/select/textarea's resting-state
+     border (components/ui/input.tsx etc. all use border-input), the one WCAG 1.4.11 boundary
+     that's genuinely load-bearing here (focus already gets a high-contrast --ring). --border
+     itself stays as-is -- it's a decorative table/panel divider, not the sole way to identify a
+     control, so 1.4.11 doesn't apply to it. */
+  --input: #8c8c8c;
   --ring: #0b6e4f;
 
   /* product semantics — band status and deltas */
@@ -112,7 +118,9 @@
   --destructive-foreground: #1a0505;
 
   --border: #27272a;
-  --input: #3f3f46;
+  /* 3.79:1 vs --background, 3.53:1 vs --card -- see the light-theme --input comment above; same
+     fix, same reasoning, dark side of the same P9.5 measurement. */
+  --input: #6c6c6c;
   --ring: #34d399;
 
   --positive: #34d399;

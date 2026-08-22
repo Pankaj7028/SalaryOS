@@ -1684,8 +1684,46 @@ afterward.
   font/CSS paint time, so it is not a substitute for a real FCP measurement. Flagging as an open
   item for whenever browser tooling is available, rather than reporting a number that wasn't
   actually observed (CLAUDE.md §12.13).
-- [ ] **P9.5** Accessibility and responsive pass (`salary-management-ui.md §10`, §12 checklist).
+- [x] **P9.5** Accessibility and responsive pass (`salary-management-ui.md §10`, §12 checklist).
   *Verify:* contrast measured in both themes; keyboard-only run through the core flow; 375px.
+
+  **Contrast (measured, not eyeballed):** extended the existing `npm run check:tokens` — which
+  already measured 12 WCAG-AA (4.5:1) text pairs per theme but had no check at all for ui.md
+  §10's "3:1 for UI boundaries" — with `--input` (the token `components/ui/input.tsx`/`select.tsx`/
+  `textarea.tsx` all use for their resting-state border) against both `--background` and `--card`,
+  in both themes. **Found a real gap**: `--input` measured 1.42:1 (light, vs background) / 1.48:1
+  (vs card) / 1.91:1 (dark, vs background) / 1.78:1 (dark, vs card) — an unfocused text
+  input/select/textarea's boundary was nearly invisible against its surface, well under the 3:1
+  floor (WCAG 1.4.11: the boundary is the only way to identify the control before focus lands and
+  the high-contrast `--ring` takes over). Fixed in `theme.css`: light `--input` `#d4d4d8`→`#8c8c8c`
+  (now 3.22:1 / 3.36:1), dark `#3f3f46`→`#6c6c6c` (now 3.79:1 / 3.53:1). Left `--border` itself
+  unchanged — it's a decorative table/panel divider, not a control's sole identifying edge, so
+  1.4.11 doesn't apply to it. Added the two new pairs to `check:tokens` permanently so this can't
+  regress silently again. `npm run check:tokens` → `✓ contrast — 28 pairs measured, all at or
+  above WCAG AA` (both themes).
+
+  **Keyboard-only pass** (`scripts/verify-a11y-p9.5.mjs`, new — real Chromium via Playwright, one
+  continuous session per the standing note above about P9.5/P9.6 walkthroughs): signed in using
+  only Tab/type/Enter (no click), Tab-hunted the real `<a href="/employees">Employees</a>` nav
+  link and activated it with Enter, opened the employee detail route, Tab'd to "Propose change"
+  and opened it with Enter, confirmed focus moved inside the dialog, confirmed focus stayed
+  trapped inside it across 8 Tabs, closed with Escape, confirmed focus returned to the trigger
+  button — and confirmed a visible focus ring at each of the three explicitly-checked stops
+  (email field, nav link, Propose-change button). Observed: `✓ keyboard-only pass and 375px pass
+  both clean` — every check passed, no violations found.
+
+  **375px pass**: same script, `375×812` viewport, five routes (dashboard, employee list, employee
+  detail, bands, an insights page) — `document.documentElement.scrollWidth` never exceeded
+  `clientWidth` on any of them (no horizontal scroll). Confirmed `/employees` specifically shows
+  the card layout (`ul[aria-label="Employees"]`, real content, 50 rows) and NOT the desktop table
+  at this width — table-to-cards degradation genuinely works, not just present in markup.
+
+  Two real environment snags along the way, neither a product bug: (1) the local `application-
+  local.yml` CORS config allows `http://localhost:3100`, not the default `next start` port 3000 —
+  ran the frontend with `PORT=3100` to match; (2) the script's own first attempt at the 375px
+  card-list check ran before the client-side data fetch resolved (a `ul[aria-label="Employees"]`
+  with 0 children is technically "attached" but the visibility check raced it) — added a
+  `waitFor({state:"attached"})` before checking.
 - [ ] **P9.6** Walk the twelve acceptance criteria in `Technical-Requirements.md §6`.
   *Verify:* each one demonstrated, with the observed result written next to it.
 - [ ] **P9.7** README: run instructions, seeded credentials, the seven questions and where each is
@@ -1697,8 +1735,8 @@ afterward.
 
 | | |
 |---|---|
-| **Last completed** | `P9.4` Performance pass — done, `[x]`, NFR-1/2/3 all measured against the real 10k-employee local seed and well within budget, no index changes needed; NFR-4 (FCP) needs a real browser and is flagged as unmeasured this session (2026-08-22). |
-| **Current step** | `P9.5` — accessibility and responsive pass (`salary-management-ui.md §10`, §12 checklist). |
+| **Last completed** | `P9.5` Accessibility/responsive pass — done, `[x]`, found and fixed a real `--input` contrast gap (1.4-1.9:1, needed 3:1) in both themes, added a permanent regression check; keyboard-only pass and 375px pass both clean via a real Playwright session (2026-08-22). |
+| **Current step** | `P9.6` — walk the twelve acceptance criteria in `Technical-Requirements.md §6`. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._
