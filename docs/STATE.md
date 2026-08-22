@@ -13,17 +13,17 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 
 | | |
 |---|---|
-| **Phase** | **P8 complete + two post-P8 passes** (nav/QA fixes, then an add-employee-via-UI feature that surfaced a critical CSRF bug). Full done-notes in `BuildPlan.md`. Awaiting the user's review before P9. |
-| **Last completed** | Add-employee-via-UI + `POST /employees/{id}/initial-compensation` + a `NonDeletingCsrfTokenRepository` fix for a bug that broke every mutation after the first page navigation of a session. `129/129` backend, `verify:routes`/`verify:sidebar`/`verify:mobile-nav` all clean. |
-| **Next step** | `P9.1` — `SeedRunner` and generators, once the user says go. |
-| **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
+| **Phase** | **P9 (seed, hardening, acceptance), P9.1–P9.6 done.** Full done-notes in `BuildPlan.md`. |
+| **Last completed** | `P9.6` — all 12 acceptance criteria demonstrated live against seeded data. **9 pass, 3 have real documented gaps**: no band-status filter or compa-ratio sort on the employee list (criterion #2 — the P4.3 gap noted below was never closed), and no `fxRateMonth` field on analytics responses (criterion #8 — a *deliberate, reasoned* omission per `PayrollCostResponse`'s own javadoc, not an oversight, but it conflicts with the criterion's literal wording). See `BuildPlan.md`'s P9.6 note for full detail per criterion. |
+| **Next step** | `P9.7` — README. |
+| **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). Open product decision: fix the 3 P9.6 gaps (real feature work — new filter dimension, keyset-stable secondary sort, and an FX-month design call) or accept them as documented limitations before calling the build "done" per `Technical-Requirements.md §6`'s own bar. |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
 Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6` (all) ·
-`P7` (all) · `P8` (all).
-Blocked: `P0.3`. Untouched: `P9`.
+`P7` (all) · `P8` (all) · `P9.1`–`P9.6`.
+Blocked: `P0.3`. Remaining: `P9.7`.
 
 ---
 
@@ -211,14 +211,11 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   `package.json`/`node_modules` — typecheck/lint/build all still passed, because Node's module
   resolution walks up the directory tree and found the packages there anyway. Always confirm `pwd`
   (or use an absolute `cd` in the same command) before any `npm install` in this repo.
-- **Employees table and Bands grid now degrade to `md:hidden` card lists below 768px** (CLAUDE.md/ui
+- **Employees table and Bands grid degrade to `md:hidden` card lists below 768px** (CLAUDE.md/ui
   doc §12.10) — `<div className="hidden md:block">…table…</div>` beside a `<ul className="flex
   flex-col gap-3 md:hidden">…cards…</ul>`, same pattern in both screens. `EmployeesTable`'s cards
   reuse the desktop column cell renderers via a `CellFor` helper instead of duplicating formatting.
-  Verified by `npm run build`/`lint`/`typecheck`, not a live 375px screenshot — this session's
-  Chrome extension's `resize_window` changed the OS window's `outerWidth` but left `innerWidth`
-  (what CSS media queries read) stuck at the real display width; if you hit the same thing, try a
-  fresh tab/window before concluding the CSS itself is broken.
+  Confirmed live at 375px with real rendered content by P9.5's Playwright pass, not just markup.
 - **A backend serialisation-format change (e.g. P8.2's `JacksonConfig` BigDecimal-as-string fix)
   is invisible to `npm run typecheck` at every frontend call site that predates it** — TypeScript
   trusts the type annotation, not the network. Found post-P8: `employees.ts`/`changes.ts` (P4/P6)

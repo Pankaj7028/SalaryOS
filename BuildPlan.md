@@ -1724,8 +1724,83 @@ afterward.
   card-list check ran before the client-side data fetch resolved (a `ul[aria-label="Employees"]`
   with 0 children is technically "attached" but the visibility check raced it) — added a
   `waitFor({state:"attached"})` before checking.
-- [ ] **P9.6** Walk the twelve acceptance criteria in `Technical-Requirements.md §6`.
+- [x] **P9.6** Walk the twelve acceptance criteria in `Technical-Requirements.md §6`.
   *Verify:* each one demonstrated, with the observed result written next to it.
+
+  Every criterion demonstrated live against the P9.1 seed via one continuous session (curl with
+  real cookie jars per role + one raw-SQL bypass), per the P9.5 standing note above about
+  multi-page sessions being the only honest way to run this kind of check. **9 of 12 fully pass.
+  3 reveal a real, specific gap** — recorded below rather than glossed over, since `Technical-
+  Requirements.md §6` itself says "the build is done when all of these pass."
+
+  1. **PASS.** Logged in as all four seeded roles (`admin`/`manager`/`analyst`/`auditor@acme.test`).
+     7 RBAC boundary checks against CLAUDE.md §7's matrix, live: analyst creating a band → 403,
+     manager reading `/admin/users` → 403, analyst approving a change → 403 (not 404 — authz runs
+     before lookup), manager bulk-uploading → 403, auditor proposing a change → 403, auditor
+     running an insight → 403, manager reading the audit log → 403; admin+auditor reading the
+     audit log → 200. All matched the matrix exactly. Backed by the passing `RolePermissionMatrixTest`
+     in the full suite for the complete `@PreAuthorize` surface, not just these 7 samples.
+  2. **PARTIAL.** Walked keyset pagination end-to-end: 50 pages × 200, **10,000 rows seen, 10,000
+     distinct ids, 0 duplicates** — no skip, no dup, confirmed against the real employee count.
+     Filter by department + country + status: API returned exactly 119 rows, matching a direct DB
+     count for the same predicate. **Two real gaps found**: there is no band-status filter
+     parameter anywhere (`EmployeeController#list` has no such `@RequestParam`, and `bandStatus`
+     never appears as a filter in the frontend either — only as a display field), and sort-by-
+     compa-ratio isn't wired — `employees-screen.tsx`'s own javadoc already says so ("Column sort
+     is likewise not wired: the service sorts a fixed `lastName, id`... arbitrary column sort
+     needs backend work this pass didn't do"). Not fixed here — implementing keyset-stable
+     secondary sort and a new filter dimension is real feature work, not something a verification
+     step should silently expand into.
+  3. **PASS.** Full ledger for a real employee: 5 periods, sequential, no gaps. Picked
+     `2025-12-01`, inside the `2025-11-19..2025-12-26` period; `as-at?date=2025-12-01` returned
+     that exact period (`69315.44 USD`, same record id) — not an adjacent one.
+  4. **PASS.** `impact-preview` for a proposed raise returned `deltaAmount`, `deltaPercent`,
+     `currentCompaRatio`/`proposedCompaRatio`, `currentBandStatus`/`proposedBandStatus`, and
+     `peerCohortSize`/`peerSuppressed`/`peerPercentileBefore`/`peerPercentileAfter` — delta, compa-
+     ratio, and peer distribution, all before submission, in one response. Proposed a real change,
+     then a second proposal for the same employee → `409` with `"A change for this employee is
+     already awaiting approval."` and `openChangeId` naming the exact open one.
+  5. **PASS.** The proposer (`admin`) tried to approve their own submitted change → `403`, `"You
+     proposed this change, so someone else has to approve it."` A different user (`manager`)
+     approved it → `200`. Ran `apply-due` → applied it: the employee's record count went 6→7
+     (exactly one new row), the new period starts `2026-08-15` (the change's effective date), and
+     the previous period's `effective_to` was set to the same `2026-08-15` — correct half-open
+     `[from, to)` semantics (every other period in this employee's own ledger uses the identical
+     touching-boundary convention, not an off-by-one "day before" gap).
+  6. **PASS.** Ran `apply-due` again immediately after: `{"due":0,"applied":0,"failures":[]}` —
+     nothing written the second time; the employee's record count stayed at 7.
+  7. **PASS, and proven at the right layer.** A raw `psql` `INSERT` directly into
+     `compensation_records` for an overlapping period — bypassing the Java service, the
+     controller, and HTTP entirely — was rejected by Postgres itself: `ERROR: conflicting key
+     value violates exclusion constraint "comp_no_overlap"`. Not a service-layer check that a
+     direct SQL client could route around.
+  8. **PARTIAL.** All 7 insight surfaces answer their question with real seeded numbers: payroll
+     cost (`$1.13B` total, by country/department/level), out-of-band (`belowMinCount=216,
+     aboveMaxCount=6696`, real cost-to-minimum), compa-ratio distribution (p25/median/p75 +
+     histogram, `excluded.noBand=33`), pay-gap (unadjusted + level-adjusted, see #9), increase-
+     cycle, peer comparison (`/employees/{id}/peers`), and full pay history (#3). Every analytics
+     response carries `asAtDate` and `population` (with an `excluded` breakdown). **`fxRateMonth`
+     is not exposed anywhere** — and this is a *documented, reasoned* omission, not an oversight:
+     `PayrollCostResponse`'s own javadoc explains that every aggregate figure is already pinned
+     per-record to whichever FX rate was in force when *that employee's own record* was written
+     (CLAUDE.md §6.4), so a population spanning thousands of employees has no single governing
+     rate month to report — inventing one (e.g. "today's month") would misleadingly imply a live
+     recompute that never happens. This is a genuine tension between the acceptance criterion's
+     literal wording and a considered design decision already made and explained in code; flagging
+     it for a product decision rather than papering over it either way.
+  9. **PASS.** Pay-gap: `suppressedCohorts: 206`, `levelAdjustedCohorts` has 270 shown — and the
+     minimum group size across every group in every SHOWN cohort is exactly 5 (verified
+     programmatically over the full response), confirming both halves: nothing under five is
+     shown, and the suppressed count is reported.
+  10. **PASS**, per P9.3 — `DemographicsIsolationTest` over every DTO outside `analytics`.
+  11. **PASS**, per P9.5 — 28 contrast pairs (both themes) at/above WCAG AA including the newly-
+      added `--input` boundary pairs; keyboard-only pass and 375px pass both clean.
+  12. **PASS**, per P9.2 — `SeedReproducibilityTest`, two runs from empty, identical totals/
+      medians/anomalies.
+
+  This session's demonstration mutated the local dev database (one new change proposed, approved,
+  and applied) — re-seed (`truncate` + `spring-boot:run -Dspring-boot.run.profiles=local,seed`) if
+  a pristine P9.1 snapshot is needed for a demo.
 - [ ] **P9.7** README: run instructions, seeded credentials, the seven questions and where each is
   answered. *Verify:* a clean clone reaches a signed-in seeded app using only the README.
 
@@ -1735,8 +1810,8 @@ afterward.
 
 | | |
 |---|---|
-| **Last completed** | `P9.5` Accessibility/responsive pass — done, `[x]`, found and fixed a real `--input` contrast gap (1.4-1.9:1, needed 3:1) in both themes, added a permanent regression check; keyboard-only pass and 375px pass both clean via a real Playwright session (2026-08-22). |
-| **Current step** | `P9.6` — walk the twelve acceptance criteria in `Technical-Requirements.md §6`. |
+| **Last completed** | `P9.6` Acceptance-criteria walkthrough — done, `[x]`, all 12 demonstrated live against seeded data; **9 pass, 3 have real documented gaps** (no band-status filter, no compa-ratio sort, no `fxRateMonth` field on analytics responses — see the criterion notes for #2 and #8) (2026-08-22). |
+| **Current step** | `P9.7` — README (run instructions, seeded credentials, the seven questions and where each is answered). |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._
