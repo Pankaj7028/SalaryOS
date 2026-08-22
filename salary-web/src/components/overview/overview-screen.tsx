@@ -258,7 +258,7 @@ function ApprovalQueuePreview() {
   }
 
   return (
-    <div className="border-border overflow-hidden rounded-lg border">
+    <div className="border-border overflow-x-auto rounded-lg border">
       <Table>
         <TableHeader className="bg-muted/40">
           <TableRow className="h-10">

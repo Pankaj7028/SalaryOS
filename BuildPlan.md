@@ -1422,6 +1422,87 @@ verified.
   > exactly the one valid employee and left the bad row rejected with its error message intact.
   > `/admin/import` renders server-side (curled with a real session cookie, `200` with the expected
   > heading) against a rebuilt `next start`. Test data cleaned up afterward.
+
+### Post-P8 QA pass (2026-08-22) — user-reported: nav tabs 404ing, sidebar states
+
+User report after the local-setup handoff: "some of the navigation tabs are not working it
+says not found and more errors" — a real, correct report. Ran the full app end to end (four
+seeded roles, every nav-reachable route, both sidebar states, 375px) rather than re-reading
+code, and found six issues, all fixed:
+
+1. **Four nav items had never had a page built**: `/admin/users`, `/levels`, `/locations`,
+   `/insights/reports` were declared in `nav.ts`/`roles.ts` since P3.5 and rendered as real
+   sidebar links, but no `page.tsx` existed for any of them — a straight 404. `npm run build`
+   never catches this class of gap: a route only fails the build if literally no page exists
+   for a href anywhere, which was true here, but nothing in the P8.1–P8.4 verify steps actually
+   clicked the links, so it shipped. Built all four:
+   - `/admin/users` — P8.1's backend (`UserAdminService`) was complete but had no screen; added
+     one (list, create, edit role/status, issue-reset-token-shown-once), the actual missing
+     piece, not new backend work.
+   - `/levels`, `/locations` — `GET /api/reference/*` are the only endpoints either domain has
+     (no create/update/delete exists), so these are read-only browse screens, not CRUD — matches
+     how they're actually seeded reference data today, not a scope cut.
+   - `/insights/reports` — the seven FR-6 questions are already fully covered by Pay analysis and
+     Equity; this screen is the first UI for the `headcount` analytics endpoint's `byCountry`/
+     `byDepartment`/`byLevel`/`byStatus` breakdown (already built at P7, never surfaced beyond
+     Overview's single stat card) plus links to the two existing CSV exports. Not a report
+     builder — v1 deliberately excludes free-form reporting (requirements-one-pager.md).
+2. **A real crash, found by actually clicking through, not by reading code**: `/employees` and
+   every employee detail page threw `e.toFixed is not a function` and rendered Next's client
+   error boundary ("This page couldn't load") for any employee with a non-null compa-ratio —
+   i.e., most of them. Root cause: the `JacksonConfig` fix adopted during P8.2 (every `BigDecimal`
+   now serialises as a JSON string) was correctly matched by the analytics screens built after it
+   (P7, all wrapped with `Number(...)`), but `employees.ts`/`changes.ts` predate that fix and kept
+   `compaRatio`/`rangePenetration`/`deltaPercent`/`currentCompaRatio`/etc. typed `number` — `npm
+   run typecheck` can't catch a runtime type lying about itself. Fixed by retyping those fields
+   `string`/`string | null` and wrapping every call site with `Number(...)` (`employees-table.tsx`,
+   `current-pay-panel.tsx`, `propose-change-dialog.tsx`, `changes-table.tsx`) — same pattern the
+   P7 screens already used correctly.
+3. **A retry-storm on every role-gated route**: `QueryProvider`'s `QueryClient` had no retry
+   policy, so TanStack Query's default (3 attempts) retried a 403 three times, each retry
+   re-triggering `apiFetch`'s toast — three stacked "Access denied" toasts and a stuck loading
+   skeleton for several seconds before the real error state ever showed, on any role-gated page
+   reached directly (a stale bookmark, browser back, a shared link — not just a nav click, which
+   the sidebar already hides). Fixed with a `retry` function that skips retrying any 4xx.
+4. **`FxRateService.missingMonths()` had two real gaps**, found by actually proposing a change
+   and hitting a 422: it excluded the base currency from the scan (but `EffectiveDating.findRate`
+   looks up a real pinned row for a same-currency USD→USD conversion too, no short-circuit — every
+   comp record needs one, CLAUDE.md §6.4's "every comp record" is literal), and it only looked
+   backward (trailing 13 months), never forward — but a proposal is routinely dated a cycle or two
+   ahead. Fixed both; the dev DB only had a USD→USD row for the one month it was seeded in, so
+   essentially every future-dated proposal was 422ing. Added rates for the next three months via
+   the real `POST /admin/fx-rates` endpoint (not a backend seed) to unblock testing; a full year's
+   worth is `SeedRunner` work (P9.1), not a hand-patch.
+5. **Topbar overflowed 375px by ~12px on every single page**, pre-existing (present on `/employees`
+   too, untouched by P8) — not a P8 regression, but a real, currently-broken violation of the
+   mobile rule, found by actually measuring `document.documentElement.scrollWidth` rather than
+   eyeballing a screenshot. `Brand`'s wordmark ("Salary OS" / "ACME") never hid on mobile, and
+   combined with the fixed-width currency toggle, the topbar's right cluster had nowhere to go.
+   Fixed by hiding the wordmark below 768px (the same breakpoint the sidebar/Sheet nav switch
+   uses everywhere else) — the name is still one tap away in the Sheet's own header.
+6. Overview's "Awaiting approval" preview table had no `overflow-x-auto` wrapper (every other
+   table in the app does), so it could force the page wider than its container on a narrow
+   screen — fixed to match the established pattern, moot after #5 but correct on its own.
+
+New Playwright QA tooling (`salary-web/scripts/`, wired into `package.json`): `verify-routes.mjs`
+(every nav-reachable route × all four roles, checks for a client crash or a role-gated route
+that doesn't degrade gracefully — this is what would have caught issue #1 and #2 before ship),
+`verify-sidebar-states.mjs` (authenticated collapse/expand/hover-peek/reload-persistence, extends
+P3.3's `verify-shell.mjs` which runs unauthenticated and never reaches the sidebar), and
+`verify-mobile-nav.mjs` (authenticated 375px scroll-width + Sheet-nav check — same reason
+`verify-shell.mjs`'s existing 375px check never caught #5, it never logs in). Needs four seeded
+QA users, one per role (`qa.manager@acme.test` etc., `Password123!`) — the throwaway dev DB only
+had HR_ADMIN and HR_MANAGER accounts before this pass.
+
+Observed: backend `./mvnw clean verify` → `128/128` (unchanged test count — only `FxRateService`
+changed, covered by the existing `FxRateAdminTest`). Frontend `npm run verify` (tokens + contrast
++ lint + typecheck + test + build) → clean. `verify:routes` → 0 problems across all four roles.
+`verify:sidebar` → 240px/60px/240px-hover/13-items-both-states, all correct. `verify:mobile-nav` →
+`375px === 375px` on both a page with the fixed table and one without, sheet nav fully functional
+and actually navigates. Live re-verified the exact original crash (`/employees/{id}` for an
+above-band employee) and the full propose-change → live impact preview flow end to end — both
+clean, zero console errors, zero page errors.
+
 After completion of complete P8 stop executing next P9 task and do the local setup of this service and give me access URL for progress and feature check also here you can check and verify the current implementation you did so farthat does all features are working as expected and is UI is looking good and stable.
 ## P9 — Seed, hardening, acceptance
 

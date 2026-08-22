@@ -17,7 +17,10 @@
     "verify:topbar": "node scripts/verify-topbar.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify:components": "node scripts/verify-components.mjs"
+    "verify:components": "node scripts/verify-components.mjs",
+    "verify:routes": "node scripts/verify-routes.mjs",
+    "verify:sidebar": "node scripts/verify-sidebar-states.mjs",
+    "verify:mobile-nav": "node scripts/verify-mobile-nav.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.9.1",

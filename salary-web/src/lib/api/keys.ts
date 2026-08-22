@@ -11,6 +11,7 @@ export const referenceKeys = {
   departments: () => ["reference", "departments"] as const,
   locations: () => ["reference", "locations"] as const,
   jobLevels: () => ["reference", "jobLevels"] as const,
+  jobFamilies: () => ["reference", "jobFamilies"] as const,
   countries: () => ["reference", "countries"] as const,
 };
 
@@ -28,6 +29,10 @@ export const bandKeys = {
 export const changeKeys = {
   impactPreview: (params: Record<string, string | undefined>) => ["changes", "impactPreview", params] as const,
   list: (status: string) => ["changes", "list", status] as const,
+};
+
+export const userKeys = {
+  list: () => ["users", "list"] as const,
 };
 
 export const auditKeys = {

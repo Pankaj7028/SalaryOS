@@ -182,16 +182,16 @@ export function ProposeChangeDialog({
                     <span className="text-muted-foreground">→</span>
                     <Money value={preview.data.proposedBase} size="figure" />
                   </div>
-                  <Delta amount={preview.data.deltaAmount} percent={preview.data.deltaPercent * 100} size="figure-sm" />
+                  <Delta amount={preview.data.deltaAmount} percent={Number(preview.data.deltaPercent) * 100} size="figure-sm" />
                 </div>
 
                 <div className="flex gap-6">
                   <div className="flex flex-col gap-0.5">
                     <span className="type-label text-muted-foreground">Compa-ratio</span>
                     <span className="figure-sm">
-                      {preview.data.currentCompaRatio != null ? formatCompaRatio(preview.data.currentCompaRatio) : "—"}
+                      {preview.data.currentCompaRatio != null ? formatCompaRatio(Number(preview.data.currentCompaRatio)) : "—"}
                       {" → "}
-                      {preview.data.proposedCompaRatio != null ? formatCompaRatio(preview.data.proposedCompaRatio) : "—"}
+                      {preview.data.proposedCompaRatio != null ? formatCompaRatio(Number(preview.data.proposedCompaRatio)) : "—"}
                     </span>
                   </div>
                   <div className="flex flex-col gap-0.5">
@@ -209,8 +209,8 @@ export function ProposeChangeDialog({
                       band={preview.data.band}
                       position={{
                         status: preview.data.currentBandStatus,
-                        percentThroughRange: preview.data.currentRangePenetration ?? 0,
-                        compaRatio: preview.data.currentCompaRatio ?? 0,
+                        percentThroughRange: Number(preview.data.currentRangePenetration ?? 0),
+                        compaRatio: Number(preview.data.currentCompaRatio ?? 0),
                       }}
                     />
                   </div>
@@ -221,8 +221,8 @@ export function ProposeChangeDialog({
                       band={preview.data.band}
                       position={{
                         status: preview.data.proposedBandStatus,
-                        percentThroughRange: preview.data.proposedRangePenetration ?? 0,
-                        compaRatio: preview.data.proposedCompaRatio ?? 0,
+                        percentThroughRange: Number(preview.data.proposedRangePenetration ?? 0),
+                        compaRatio: Number(preview.data.proposedCompaRatio ?? 0),
                       }}
                     />
                   </div>

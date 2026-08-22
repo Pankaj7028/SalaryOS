@@ -36,7 +36,7 @@ export type Change = {
   currentBase: Money;
   newBase: Money;
   deltaAmount: Money;
-  deltaPercent: number;
+  deltaPercent: string;
   changeReason: string;
   performanceRating: string | null;
   note: string | null;
@@ -60,11 +60,11 @@ export type ChangeImpactPreview = {
   currentBase: Money;
   proposedBase: Money;
   deltaAmount: Money;
-  deltaPercent: number;
-  currentCompaRatio: number | null;
-  proposedCompaRatio: number | null;
-  currentRangePenetration: number | null;
-  proposedRangePenetration: number | null;
+  deltaPercent: string;
+  currentCompaRatio: string | null;
+  proposedCompaRatio: string | null;
+  currentRangePenetration: string | null;
+  proposedRangePenetration: string | null;
   currentBandStatus: BandStatus;
   proposedBandStatus: BandStatus;
   band: Band | null;

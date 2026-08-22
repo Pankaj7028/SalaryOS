@@ -96,7 +96,7 @@ export function ChangesTable({
                   <CurrentProposedCell change={change} />
                 </TableCell>
                 <TableCell>
-                  <Delta amount={change.deltaAmount} percent={change.deltaPercent * 100} size="figure-sm" />
+                  <Delta amount={change.deltaAmount} percent={Number(change.deltaPercent) * 100} size="figure-sm" />
                 </TableCell>
                 <TableCell>
                   <span className="figure-sm">{change.effectiveDate}</span>
@@ -127,7 +127,7 @@ export function ChangesTable({
             </div>
             <CurrentProposedCell change={change} />
             <div className="flex items-center justify-between gap-3">
-              <Delta amount={change.deltaAmount} percent={change.deltaPercent * 100} size="figure-sm" />
+              <Delta amount={change.deltaAmount} percent={Number(change.deltaPercent) * 100} size="figure-sm" />
               <span className="type-caption text-muted-foreground">
                 {CHANGE_REASON_LABEL[change.changeReason] ?? change.changeReason} · {change.proposedByName ?? "—"}
               </span>

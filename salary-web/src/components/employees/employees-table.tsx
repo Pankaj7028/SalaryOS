@@ -114,7 +114,7 @@ export function EmployeesTable({
       header: "Compa-ratio",
       cell: ({ row }) => (
         <span className="figure-sm">
-          {row.original.compaRatio != null ? formatCompaRatio(row.original.compaRatio) : "—"}
+          {row.original.compaRatio != null ? formatCompaRatio(Number(row.original.compaRatio)) : "—"}
         </span>
       ),
     },
@@ -133,8 +133,8 @@ export function EmployeesTable({
             band={employee.band}
             position={{
               status: employee.bandStatus ?? "NO_BAND",
-              percentThroughRange: employee.rangePenetration ?? 0,
-              compaRatio: employee.compaRatio ?? 0,
+              percentThroughRange: Number(employee.rangePenetration ?? 0),
+              compaRatio: Number(employee.compaRatio ?? 0),
             }}
           />
         );

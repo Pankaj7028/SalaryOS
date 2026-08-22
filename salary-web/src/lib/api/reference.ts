@@ -8,6 +8,7 @@ import { apiFetch } from "./client";
 export type Department = { id: string; name: string; code: string; parentId: string | null };
 export type Location = { id: string; countryCode: string; city: string; name: string; isActive: boolean };
 export type JobLevel = { id: string; jobFamilyId: string; levelCode: string; title: string; sortOrder: number };
+export type JobFamily = { id: string; name: string; code: string };
 export type Country = { code: string; name: string; defaultCurrency: string };
 
 export async function fetchDepartments(): Promise<Department[]> {
@@ -23,6 +24,11 @@ export async function fetchLocations(): Promise<Location[]> {
 export async function fetchJobLevels(): Promise<JobLevel[]> {
   const response = await apiFetch("/api/reference/job-levels");
   return (await response.json()) as JobLevel[];
+}
+
+export async function fetchJobFamilies(): Promise<JobFamily[]> {
+  const response = await apiFetch("/api/reference/job-families");
+  return (await response.json()) as JobFamily[];
 }
 
 export async function fetchCountries(): Promise<Country[]> {

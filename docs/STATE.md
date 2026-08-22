@@ -13,8 +13,8 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 
 | | |
 |---|---|
-| **Phase** | **P8 complete.** Stopped per the standing instruction in `BuildPlan.md` (below P8.4) — local setup done, awaiting the user's review before P9. |
-| **Last completed** | `P8.4` Employee CSV import with dry-run diff — `[x]`, 128/128 backend tests. |
+| **Phase** | **P8 complete + a post-P8 QA pass** (user found 404ing nav tabs; full done-note in `BuildPlan.md`). Awaiting the user's review before P9. |
+| **Last completed** | Post-P8 QA pass — 4 missing screens built, a real `.toFixed()` crash on Employees/employee-detail fixed, plus a retry-storm, an FX-rate gap, and a 375px topbar overflow. `128/128` backend, `verify:routes`/`verify:sidebar`/`verify:mobile-nav` all clean. |
 | **Next step** | `P9.1` — `SeedRunner` and generators, once the user says go. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
@@ -212,6 +212,21 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   Chrome extension's `resize_window` changed the OS window's `outerWidth` but left `innerWidth`
   (what CSS media queries read) stuck at the real display width; if you hit the same thing, try a
   fresh tab/window before concluding the CSS itself is broken.
+- **A backend serialisation-format change (e.g. P8.2's `JacksonConfig` BigDecimal-as-string fix)
+  is invisible to `npm run typecheck` at every frontend call site that predates it** — TypeScript
+  trusts the type annotation, not the network. Found post-P8: `employees.ts`/`changes.ts` (P4/P6)
+  still typed `compaRatio`/`deltaPercent`/etc. `number` after that fix shipped, and the resulting
+  `string.toFixed is not a function` crashed the Employees list and every employee detail page —
+  clean `build`/`lint`/`typecheck` the whole time. **Whenever a backend response shape changes,
+  grep the frontend for every `lib/api/*.ts` type touching that field, not just the screen you were
+  testing when you made the change** — a passing build proves the types are internally consistent,
+  never that they still match the server.
+- **`verify:routes`/`verify:sidebar`/`verify:mobile-nav`** (new, `salary-web/scripts/`) log in as
+  four seeded per-role QA users before touching anything — none of the existing `verify:shell`/
+  `verify:topbar` scripts authenticate, so they silently never reach the app shell at all if run
+  as-is against a fresh browser context. Needs `qa.manager@acme.test`/`qa.analyst@acme.test`/
+  `qa.auditor@acme.test` seeded (`admin@acme.test` already exists) — all `{argon2}` for
+  `Password123!`, see the jshell recipe above.
 
 ---
 
@@ -219,4 +234,6 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
 
 `npm run verify` (tokens + contrast + lint + typecheck + tests + build) closes a UI step. Browser-
 driven checks need `next start` on :3100 — `verify:visual` `verify:shell` `verify:topbar`
-`verify:components`. Backend: `./mvnw clean verify` (Testcontainers, needs the Docker env vars above).
+`verify:components` (unauthenticated) and `verify:routes` `verify:sidebar` `verify:mobile-nav`
+(authenticated, need the four QA users above). Backend: `./mvnw clean verify` (Testcontainers,
+needs the Docker env vars above).

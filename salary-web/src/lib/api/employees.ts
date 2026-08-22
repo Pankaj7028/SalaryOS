@@ -23,8 +23,8 @@ export type EmployeeSummary = {
   terminationDate: string | null;
   bandMismatched: boolean;
   currentBasePay: Money | null;
-  compaRatio: number | null;
-  rangePenetration: number | null;
+  compaRatio: string | null;
+  rangePenetration: string | null;
   bandStatus: BandStatus | null;
   band: Band | null;
 };
@@ -73,8 +73,8 @@ export type EmployeeDetail = {
   terminationDate: string | null;
   bandMismatched: boolean;
   currentBasePay: Money | null;
-  compaRatio: number | null;
-  rangePenetration: number | null;
+  compaRatio: string | null;
+  rangePenetration: string | null;
   bandStatus: BandStatus | null;
   band: Band | null;
   components: CompensationComponent[];
@@ -104,8 +104,8 @@ export type CompensationRecord = {
   annualBaseAmount: string;
   normalizedAnnualBase: Money;
   bandId: string | null;
-  compaRatio: number | null;
-  rangePenetration: number | null;
+  compaRatio: string | null;
+  rangePenetration: string | null;
   changeReason: string;
   changeId: string | null;
   supersededBy: string | null;

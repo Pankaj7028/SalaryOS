@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { referenceKeys } from "@/lib/api/keys";
-import { fetchCountries, fetchDepartments, fetchJobLevels, fetchLocations } from "@/lib/api/reference";
+import { fetchCountries, fetchDepartments, fetchJobFamilies, fetchJobLevels, fetchLocations } from "@/lib/api/reference";
 
 /** Reference data changes rarely (an HR Admin edits it, not day to day) — a long staleTime is correct here. */
 const REFERENCE_STALE_TIME = 5 * 60_000;
@@ -27,6 +27,14 @@ export function useJobLevels() {
   return useQuery({
     queryKey: referenceKeys.jobLevels(),
     queryFn: fetchJobLevels,
+    staleTime: REFERENCE_STALE_TIME,
+  });
+}
+
+export function useJobFamilies() {
+  return useQuery({
+    queryKey: referenceKeys.jobFamilies(),
+    queryFn: fetchJobFamilies,
     staleTime: REFERENCE_STALE_TIME,
   });
 }

@@ -33,6 +33,10 @@ public class FxRateService {
 
 	/** How far back "missing" looks — a year of history plus the current month. */
 	private static final int TRAILING_MONTHS = 13;
+	/** How far ahead "missing" looks — a proposal is routinely dated a cycle or two out
+	 * (P8's QA pass: proposing a change for next month 422'd on a genuinely missing rate that
+	 * this screen never surfaced, because it only looked backward). */
+	private static final int LOOKAHEAD_MONTHS = 3;
 
 	private final FxRateRepository fxRateRepository;
 	private final CountryRepository countryRepository;
@@ -58,12 +62,19 @@ public class FxRateService {
 				.toList();
 	}
 
-	/** FR-6.4/P8.3 Verify: every (currency, month) in the trailing window with no pinned rate yet. */
+	/**
+	 * FR-6.4/P8.3 Verify: every (currency, month) with no pinned rate yet, trailing AND leading —
+	 * {@code EffectiveDating.findRate} looks up a real row for EVERY currency including the base
+	 * currency itself (a USD-paid employee's record still pins a USD→USD rate, CLAUDE.md §6.4's
+	 * "every comp record" is literal), and a proposal is routinely dated a month or two ahead, so
+	 * both the base currency and the forward months matter here, not only "foreign currency,
+	 * trailing history."
+	 */
 	public List<MissingFxRateMonth> missingMonths() {
 		Set<String> currencies = countryRepository.findAll().stream()
 				.map(Country::getDefaultCurrency)
-				.filter(currency -> !currency.equals(baseCurrency))
 				.collect(Collectors.toCollection(TreeSet::new));
+		currencies.add(baseCurrency);
 
 		Set<String> existing = fxRateRepository.findAll().stream()
 				.filter(rate -> rate.getQuoteCurrency().equals(baseCurrency))
@@ -73,7 +84,7 @@ public class FxRateService {
 		YearMonth current = YearMonth.now(clock);
 		List<MissingFxRateMonth> missing = new ArrayList<>();
 		for (String currency : currencies) {
-			for (int i = 0; i < TRAILING_MONTHS; i++) {
+			for (int i = -LOOKAHEAD_MONTHS; i < TRAILING_MONTHS; i++) {
 				LocalDate monthStart = current.minusMonths(i).atDay(1);
 				if (!existing.contains(currency + "|" + monthStart)) {
 					missing.add(new MissingFxRateMonth(currency, baseCurrency, monthStart));
