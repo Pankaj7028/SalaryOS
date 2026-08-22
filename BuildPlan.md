@@ -1801,8 +1801,34 @@ afterward.
   This session's demonstration mutated the local dev database (one new change proposed, approved,
   and applied) — re-seed (`truncate` + `spring-boot:run -Dspring-boot.run.profiles=local,seed`) if
   a pristine P9.1 snapshot is needed for a demo.
-- [ ] **P9.7** README: run instructions, seeded credentials, the seven questions and where each is
+- [x] **P9.7** README: run instructions, seeded credentials, the seven questions and where each is
   answered. *Verify:* a clean clone reaches a signed-in seeded app using only the README.
+
+  Rewrote `README.md` (was a P9.7 placeholder): Docker Postgres setup (Neon isn't provisioned —
+  `application-local.yml.example` is a different, Neon-shaped template not usable yet, so the
+  README documents the actually-working local recipe instead), the exact `application-local.yml`
+  block to paste, seed/reseed commands, `.env.local` + `npm run dev -- -p 3100` for the frontend,
+  a table of the six seeded accounts, and a table mapping each of the seven questions to its
+  screen. Also notes the P9.6 acceptance-criteria status (9/12 pass, 3 documented gaps) so a
+  reader lands on that context immediately rather than discovering it in `BuildPlan.md`.
+
+  Caught one real bug in the README's own first draft by actually testing it: the local YAML
+  block omitted `spring.autoconfigure.exclude: []`, which overrides `application.yml`'s P0.2 stub
+  that disables persistence entirely — without it the app "starts cleanly" with Flyway silently
+  never running, exactly the failure mode `application.yml`'s own comment warns about. Fixed
+  before verifying.
+
+  **Verify, done for real, not assumed:** `docker rm -f` the existing container, recreated it from
+  scratch with the README's exact `docker run` command, wrote `application-local.yml` from the
+  README's exact snippet, ran `./mvnw spring-boot:run -Dspring-boot.run.profiles=local,seed`
+  against the empty database. Console credentials matched the README's table byte-for-byte
+  (`admin@acme.test` / `harbor-orbit-4853`, etc. — confirms P9.2's determinism claim extends to
+  what a reader actually copies), and seed counts matched P9.1's own numbers exactly (`49688`
+  records, `14288` components, `noBand=33`). Then `npm run dev -- -p 3100` (the README's exact
+  frontend command, not the `next start` production build used for P9.4/P9.5's checks), logged in
+  via `curl` with the documented credentials through the dev server on `:3100`, and confirmed the
+  authenticated dashboard actually rendered ("Ada Admin" in the page body) rather than a sign-in
+  redirect.
 
 ---
 
@@ -1810,9 +1836,9 @@ afterward.
 
 | | |
 |---|---|
-| **Last completed** | `P9.6` Acceptance-criteria walkthrough — done, `[x]`, all 12 demonstrated live against seeded data; **9 pass, 3 have real documented gaps** (no band-status filter, no compa-ratio sort, no `fxRateMonth` field on analytics responses — see the criterion notes for #2 and #8) (2026-08-22). |
-| **Current step** | `P9.7` — README (run instructions, seeded credentials, the seven questions and where each is answered). |
-| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
+| **Last completed** | `P9.7` README rewrite — done, `[x]`, verified for real against a freshly recreated Postgres container end to end (seed → login → authenticated dashboard render) (2026-08-22). |
+| **Current step** | **None — every `BuildPlan.md` step is now `[x]`.** Not the same as "the build is done" per `Technical-Requirements.md §6`'s own bar: P9.6 found 3 real acceptance-criteria gaps (employee-list band-status filter + compa-ratio sort, `fxRateMonth` on analytics responses) that are real feature/design work, not verification failures — see the P9.6 done-note and `docs/STATE.md` for the open decision. |
+| **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._
 

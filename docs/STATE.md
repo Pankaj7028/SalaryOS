@@ -13,17 +13,17 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 
 | | |
 |---|---|
-| **Phase** | **P9 (seed, hardening, acceptance), P9.1–P9.6 done.** Full done-notes in `BuildPlan.md`. |
-| **Last completed** | `P9.6` — all 12 acceptance criteria demonstrated live against seeded data. **9 pass, 3 have real documented gaps**: no band-status filter or compa-ratio sort on the employee list (criterion #2 — the P4.3 gap noted below was never closed), and no `fxRateMonth` field on analytics responses (criterion #8 — a *deliberate, reasoned* omission per `PayrollCostResponse`'s own javadoc, not an oversight, but it conflicts with the criterion's literal wording). See `BuildPlan.md`'s P9.6 note for full detail per criterion. |
-| **Next step** | `P9.7` — README. |
-| **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). Open product decision: fix the 3 P9.6 gaps (real feature work — new filter dimension, keyset-stable secondary sort, and an FX-month design call) or accept them as documented limitations before calling the build "done" per `Technical-Requirements.md §6`'s own bar. |
+| **Phase** | **Every `BuildPlan.md` step is `[x]`.** Not the same as "done" per `Technical-Requirements.md §6` — see below. |
+| **Last completed** | `P9.7` — README rewrite, verified end-to-end against a freshly recreated Postgres container (seed → login → authenticated dashboard render), not just written. |
+| **Next step** | None queued. Open product decision below is the natural next work if picked up. |
+| **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far — everything runs against local Postgres). **Open product decision (P9.6):** 3 of 12 acceptance criteria have real gaps — no band-status filter or compa-ratio sort on the employee list (criterion #2 — the P4.3 gap noted below was never closed), and no `fxRateMonth` field on analytics responses (criterion #8 — a *deliberate, reasoned* omission per `PayrollCostResponse`'s own javadoc, not an oversight, but it conflicts with the criterion's literal wording). Fix them (real feature work) or accept as documented limitations — see `BuildPlan.md`'s P9.6 note for full detail per criterion. |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
 Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6` (all) ·
-`P7` (all) · `P8` (all) · `P9.1`–`P9.6`.
-Blocked: `P0.3`. Remaining: `P9.7`.
+`P7` (all) · `P8` (all) · `P9` (all).
+Blocked: `P0.3`.
 
 ---
 
