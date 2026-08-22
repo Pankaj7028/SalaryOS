@@ -30,6 +30,14 @@ export const changeKeys = {
   list: (status: string) => ["changes", "list", status] as const,
 };
 
+export const auditKeys = {
+  search: (filters: Record<string, string | undefined>) => ["audit", "search", filters] as const,
+};
+
+export const fxRateKeys = {
+  admin: () => ["fxRates", "admin"] as const,
+};
+
 export const analyticsKeys = {
   payrollCost: () => ["analytics", "payrollCost"] as const,
   headcount: () => ["analytics", "headcount"] as const,

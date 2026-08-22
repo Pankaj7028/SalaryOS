@@ -122,6 +122,7 @@ class RolePermissionMatrixTest {
 		}
 
 		map.put("AuditController#search", ADMIN_AND_AUDITOR);
+		map.put("AuditController#export", ADMIN_AND_AUDITOR);
 		map.put("ProjectionAdminController#rebuild", HR_ADMIN_ONLY);
 
 		map.put("FxRateController#list", VIEW_PAY);

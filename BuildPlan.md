@@ -1327,8 +1327,59 @@ verified.
   > run uncontested after the other session stopped (1 new test in `AuditImmutabilityTest`, 124
   > pre-existing). Live-verified against the throwaway dev DB: a real `GET /employees/{id}` produced
   > a `READ_DETAIL` row with the correct actor role and entity id, visible via direct SQL.
-- [ ] **P8.3** Audit log screen with filters and export; FX rate admin by month.
+- [x] **P8.3** Audit log screen with filters and export; FX rate admin by month.
   *Verify:* a missing rate month is visible and addable.
+  > **Done (2026-08-22):** Backend: `AuditController#search`/`#export` (FR-7.4) — filters by actor,
+  > entity type, action, and date range via a `Specification<AuditEvent>` (same pattern
+  > `ChangeService.list` already used), newest first, actor identity resolved in one batch
+  > `UserRepository.findAllById` rather than N+1. CSV export reuses the exact same filter, same
+  > `text/csv` attachment convention as `EmployeeController#export`. `FxRateController#list`/`#add`
+  > went from `501` stubs to real: `FxRateService.missingMonths()` computes, for every country's
+  > `defaultCurrency` other than `app.base-currency`, which of the trailing 13 months has no pinned
+  > rate yet — that's the "missing" list the Verify clause asks for. `#add` normalises to the first
+  > of the month and 409s (`FxRateAlreadyExistsException`) rather than silently overwriting a rate a
+  > past `compensation_records` row may already reference (CLAUDE.md §6.4).
+  >
+  > **A real RBAC conflict, caught before it shipped:** the obvious UI for an "actor" filter is a
+  > dropdown backed by `GET /api/admin/users` — but that endpoint is `HR_ADMIN`-only (P8.1), while
+  > "read the audit log" is `HR_ADMIN` **and** `AUDITOR` (CLAUDE.md §7). Building the actor filter
+  > that way would 403 for an Auditor doing exactly what FR-7.4 asks. Fixed by not adding that
+  > endpoint dependency at all: the actor filter is driven by clicking an actor's email in a row
+  > (audit rows already carry the identity) plus the raw `actorUserId` staying in the URL — both
+  > roles can use it, no new endpoint, no new permission surface.
+  >
+  > Frontend: `/admin/audit` (filter state in `searchParams` per CLAUDE.md §9 — entity type, action,
+  > from/to date, actor id + a display label so a shared link still shows a name) and
+  > `/admin/fx-rates` (pinned-rates table + a "missing months" chip list, each chip opening
+  > `AddFxRateDialog` prefilled with that currency/month; add actions gated by a new
+  > `canManageFxRates` role helper in `roles.ts`, mirroring `canApproveChanges`'s "visible tab, absent
+  > action" convention rather than hiding the whole screen). Added `/admin/fx-rates` to
+  > `AREA_ACCESS`/`NAV_VISIBILITY`/`NAV_GROUPS` — `roles.test.ts`'s "every declared area appears in
+  > the sidebar" check enforces this pairing, not a choice.
+  >
+  > Rate values are never rendered via `<Money>` — an FX rate is a ratio, not a currency amount
+  > (CLAUDE.md §6.2's "money never travels without currency" is about a different invariant; a bare
+  > `.figure` span is correct here, `<Money>` would be wrong).
+  >
+  > New backend tests: `AuditSearchTest` (real writes via `AuditService.recordWrite`, then filters by
+  > actor/entity/action/date-range and checks the CSV bytes match) — calling `AuditController#export`
+  > directly on the bean (not through MockMvc, matching this codebase's service-level test
+  > convention) needed a manually-populated `SecurityContextHolder` for `@PreAuthorize` to evaluate,
+  > cleared in `@AfterEach`. `FxRateAdminTest` (a currency+month starts in "missing", `add()` moves it
+  > to the rate list, a second identical `add()` 409s) — used a throwaway `ZZQ` currency/country so
+  > the assertion is exact regardless of what other test classes' fixtures have pinned.
+  > `RolePermissionMatrixTest` gained `AuditController#export`'s entry (the pre-existing `#search`/
+  > `FxRateController#list`/`#add` entries were already there, left by the terminated concurrent
+  > session ahead of this step — confirmed correct, not re-derived).
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 127, Failures: 0, Errors: 0`, `BUILD SUCCESS` (125
+  > pre-existing + `AuditSearchTest` + `FxRateAdminTest`). Live-verified against the throwaway dev
+  > DB: restarted both servers on the new code, logged in as the seeded HR Admin, confirmed
+  > `GET /admin/fx-rates` correctly listed `EUR`/`GBP` as missing for 13 real months, `POST` added
+  > one and it moved out of "missing", the write appeared in `GET /admin/audit`, and
+  > `GET /admin/audit/export` produced the matching CSV row. Both `/admin/audit` and `/admin/fx-rates`
+  > render server-side (curled with a real session cookie, `200` with the expected heading in the
+  > HTML) against a rebuilt `next start`.
 - [ ] **P8.4** Employee CSV import with dry-run diff.
   *Verify:* the dry run reports counts and writes nothing.
 After completion of complete P8 stop executing next P9 task and do the local setup of this service and give me access URL for progress and feature check also here you can check and verify the current implementation you did so farthat does all features are working as expected and is UI is looking good and stable.

@@ -19,6 +19,7 @@ import com.acme.salaryos.compensation.effective.BackdatedBeforeOpenPeriodExcepti
 import com.acme.salaryos.compensation.effective.CorrectionOutsideOriginalPeriodException;
 import com.acme.salaryos.compensation.effective.MissingCorrectionNoteException;
 import com.acme.salaryos.compensation.effective.MissingFxRateException;
+import com.acme.salaryos.fx.service.FxRateAlreadyExistsException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -69,6 +70,11 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(MissingFxRateException.class)
 	public ProblemDetail handleMissingFxRate(MissingFxRateException exception) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage());
+	}
+
+	@ExceptionHandler(FxRateAlreadyExistsException.class)
+	public ProblemDetail handleFxRateAlreadyExists(FxRateAlreadyExistsException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
 	}
 
 	@ExceptionHandler(MissingCorrectionNoteException.class)

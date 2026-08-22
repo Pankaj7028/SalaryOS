@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Building2,
   ClipboardList,
+  Coins,
   FileBarChart,
   LayoutDashboard,
   Layers3,
@@ -61,6 +62,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "Users", href: "/admin/users", icon: UsersRound },
       { label: "Import", href: "/admin/import", icon: Upload },
+      { label: "FX rates", href: "/admin/fx-rates", icon: Coins },
       { label: "Audit log", href: "/admin/audit", icon: ScrollText },
     ],
   },

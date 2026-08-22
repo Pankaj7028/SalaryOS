@@ -44,6 +44,10 @@ export const AREA_ACCESS = {
   // "Read the audit log" — HR_ADMIN and AUDITOR. Note HR_MANAGER is absent, which
   // is the point of having no role hierarchy.
   "/admin/audit": ["HR_ADMIN", "AUDITOR"],
+  // FX rates aren't a separate row in CLAUDE.md §7 — mapped the same way the backend
+  // maps them (FxRateController's own comment): normalisation reference data, readable
+  // by anyone who sees pay data, managed by HR Admin/HR Manager (`canManageFxRates` below).
+  "/admin/fx-rates": ["HR_ADMIN", "HR_MANAGER", "COMP_ANALYST", "AUDITOR"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Area = keyof typeof AREA_ACCESS;
@@ -67,6 +71,7 @@ export const NAV_VISIBILITY = {
   "/admin/users": ["HR_ADMIN"],
   "/admin/import": ["HR_ADMIN"],
   "/admin/audit": ["HR_ADMIN", "AUDITOR"],
+  "/admin/fx-rates": ["HR_ADMIN", "HR_MANAGER", "COMP_ANALYST", "AUDITOR"],
 } as const satisfies Record<Area, readonly Role[]>;
 
 export function canAccess(role: Role, area: Area): boolean {
@@ -91,4 +96,12 @@ const CHANGE_APPROVER_ROLES: readonly Role[] = ["HR_ADMIN", "HR_MANAGER"];
 
 export function canApproveChanges(role: Role): boolean {
   return CHANGE_APPROVER_ROLES.includes(role);
+}
+
+/** "Manage salary bands & levels"-equivalent for FX rates (CLAUDE.md §7) — same two roles,
+ * same reasoning as `FxRateController#add`'s own `@PreAuthorize`. */
+const FX_RATE_MANAGER_ROLES: readonly Role[] = ["HR_ADMIN", "HR_MANAGER"];
+
+export function canManageFxRates(role: Role): boolean {
+  return FX_RATE_MANAGER_ROLES.includes(role);
 }

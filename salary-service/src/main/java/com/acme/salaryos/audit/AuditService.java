@@ -1,6 +1,10 @@
 package com.acme.salaryos.audit;
 
+import com.acme.salaryos.audit.dto.AuditEventResponse;
+import com.acme.salaryos.auth.domain.User;
 import com.acme.salaryos.auth.repository.UserRepository;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -8,8 +12,12 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * FR-7.1 / FR-7.2: every write and every read of individual pay data records actor, action,
@@ -72,6 +80,34 @@ public class AuditService {
 	/** FR-7.2: an individual-record read records which one. */
 	public void recordDetailRead(UUID actorUserId, String entityType, UUID entityId) {
 		save(actorUserId, "READ_DETAIL", entityType, entityId, null, null);
+	}
+
+	/** FR-7.4: search by actor, entity, action, and date range — newest first, actor identity
+	 * resolved in one batch lookup rather than N+1. Every filter is optional; no filter at all
+	 * returns the whole (append-only, so bounded-growth) table, newest first. */
+	public List<AuditEventResponse> search(UUID actorUserId, String entityType, String action, Instant from, Instant to) {
+		Specification<AuditEvent> spec = Specification.<AuditEvent>unrestricted()
+				.and(actorUserId == null ? Specification.unrestricted() : (root, q, cb) -> cb.equal(root.get("actorUserId"), actorUserId))
+				.and(entityType == null ? Specification.unrestricted() : (root, q, cb) -> cb.equal(root.get("entityType"), entityType))
+				.and(action == null ? Specification.unrestricted() : (root, q, cb) -> cb.equal(root.get("action"), action))
+				.and(from == null ? Specification.unrestricted() : (root, q, cb) -> cb.greaterThanOrEqualTo(root.get("occurredAt"), from))
+				.and(to == null ? Specification.unrestricted() : (root, q, cb) -> cb.lessThanOrEqualTo(root.get("occurredAt"), to));
+
+		List<AuditEvent> events = auditEventRepository.findAll(spec, Sort.by(Sort.Direction.DESC, "occurredAt"));
+		Map<UUID, User> actors = userRepository.findAllById(events.stream()
+						.map(AuditEvent::getActorUserId).filter(Objects::nonNull).distinct().toList())
+				.stream()
+				.collect(Collectors.toMap(User::getId, u -> u));
+		return events.stream().map(event -> toResponse(event, actors)).toList();
+	}
+
+	private AuditEventResponse toResponse(AuditEvent event, Map<UUID, User> actors) {
+		User actor = actors.get(event.getActorUserId());
+		return new AuditEventResponse(
+				event.getId(), event.getOccurredAt(), event.getActorUserId(),
+				actor == null ? null : actor.getEmail(), actor == null ? null : actor.getFullName(),
+				event.getActorRole(), event.getAction(), event.getEntityType(), event.getEntityId(),
+				event.getBeforeJson(), event.getAfterJson(), event.getIp() == null ? null : event.getIp().getHostAddress());
 	}
 
 	private void save(UUID actorUserId, String action, String entityType, UUID entityId, String beforeJson, String afterJson) {
