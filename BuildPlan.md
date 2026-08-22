@@ -1631,8 +1631,23 @@ afterward.
   two `CompensationEntitiesRoundTripTest` cases) the first time the full suite ran after adding it.
   Fixed with an `@AfterEach` that truncates the same tables. Full suite after the fix:
   `./mvnw clean verify` → `Tests run: 130, Failures: 0, Errors: 0`, `BUILD SUCCESS`.
-- [ ] **P9.3** `DemographicsIsolationTest` across every DTO package outside `analytics`.
+- [x] **P9.3** `DemographicsIsolationTest` across every DTO package outside `analytics`.
   *Verify:* it fails when you add a `gender` field to an employee DTO, and passes when removed.
+
+  Every DTO in this codebase is a Java `record`, so the test scans `record Name(...)` headers
+  directly out of `src/main/java` (balanced-paren parameter list, top-level-comma split — handles
+  nested records and generic types like `List<Failure>`) rather than reflecting over compiled
+  classes; same source-scanning style as `NativeQuerySchemaQualificationTest`. Flags an exact
+  (not substring) match against `gender/sex/ethnicity/race/age/dateOfBirth/dob/...` — exact match
+  specifically so "age" doesn't false-positive on unrelated names like `wage` or `pageSize`.
+  `analytics` is exempt per the step's own text: its DTOs (`PayGapGroupMedian` etc.) already carry
+  a demographic value under a generic `group` label for a ≥5-person cohort, never a named field
+  per person.
+
+  Verify, observed directly: added a `String gender` component to `EmployeeSummaryResponse` →
+  `Tests run: 1, Failures: 1` citing exactly that file and field; removed it → `Tests run: 1,
+  Failures: 0` again. Full suite after: `./mvnw clean verify` → `Tests run: 131, Failures: 0,
+  Errors: 0`, `BUILD SUCCESS`.
 - [ ] **P9.4** Performance pass against NFR-1…4. *Verify:* record observed p95 for the list, detail,
   and each analytics endpoint. Add indexes only where a measurement justifies it.
 - [ ] **P9.5** Accessibility and responsive pass (`salary-management-ui.md §10`, §12 checklist).
@@ -1648,8 +1663,8 @@ afterward.
 
 | | |
 |---|---|
-| **Last completed** | `P9.2` Reproducibility test — done, `[x]`, `SeedReproducibilityTest` seeds twice against a real Testcontainers Postgres and asserts identical totals/medians/anomalies; full suite `130/130` (2026-08-22). |
-| **Current step** | `P9.3` — `DemographicsIsolationTest` across every DTO package outside `analytics`. |
+| **Last completed** | `P9.3` `DemographicsIsolationTest` — done, `[x]`, source-scans every non-`analytics` DTO record header; verified fail-on-add/pass-on-remove; full suite `131/131` (2026-08-22). |
+| **Current step** | `P9.4` — performance pass against NFR-1…4 (list/detail/analytics endpoint p95, against the real 10k-employee seed). |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._
