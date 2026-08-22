@@ -89,7 +89,7 @@ class RolePermissionMatrixTest {
 		for (String method : List.of("list", "get", "compensationHistory", "compensationAsAt", "peers", "export")) {
 			map.put("EmployeeController#" + method, VIEW_PAY);
 		}
-		for (String method : List.of("create", "update", "terminate")) {
+		for (String method : List.of("create", "update", "terminate", "setInitialCompensation")) {
 			map.put("EmployeeController#" + method, ADMIN_AND_MANAGER);
 		}
 		map.put("EmployeeController#importCsv", HR_ADMIN_ONLY);

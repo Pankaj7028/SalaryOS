@@ -1503,6 +1503,71 @@ and actually navigates. Live re-verified the exact original crash (`/employees/{
 above-band employee) and the full propose-change → live impact preview flow end to end — both
 clean, zero console errors, zero page errors.
 
+### Add-employee-via-UI feature + a critical CSRF bug it uncovered (2026-08-22)
+
+User ask: "add a feature to add employee in the application only through UI." There was none —
+`POST /api/employees` (create) had existed since P4.2, but no screen ever called it, and there
+was no way to give a new hire their first paycheck either: `ChangeService.propose` requires an
+*existing* `employee_current_comp` row, so "Propose change" was structurally unusable for anyone
+with zero pay history. The `INITIAL` reason code had been reserved for exactly this in V11's
+vocabulary since P1, and `PROPOSABLE_CHANGE_REASONS` already excluded it with a comment saying so
+— the design anticipated this gap; nothing had filled it in yet.
+
+**Backend**, new capability: `POST /api/employees/{id}/initial-compensation` (`EmployeeService
+.setInitialCompensation`, ADMIN_AND_MANAGER — same as `create`). Calls `EffectiveDating.apply`
+directly with `changeReason=INITIAL`, `effectiveFrom=` the employee's hire date — deliberately
+NOT the propose/approve/apply lifecycle, since there's nothing to approve against; this establishes
+the very thing every later change would be a change *from*. Refused (409,
+`EmployeeAlreadyHasCompensationException`) once `compensation_records` has ANY row for that
+employee, open or closed — added `CompensationRecordRepository.existsByEmployeeId` for the guard.
+`EmployeeService` now depends on `EffectiveDating` (a new, non-circular edge — `ChangeService`
+already depended on both).
+
+**Frontend**: `/employees`' "New employee" button (identity/org fields only — no pay, matching
+CLAUDE.md §6.3's insert-only ledger). On success, navigates straight to the new person's detail
+page, where `CurrentPayPanel`'s existing "no compensation record" empty state gained a real "Set
+starting salary" action — the SAME mechanism a CSV-imported employee with no pay yet already
+needed (P8.4's import creates employees exactly the same way, with the exact same gap), so there
+is one path for "give this person their first paycheck," not two. No manager-picker in the create
+form — that needs a person-search combobox this pass didn't build (there's no edit-employee screen
+yet either, so this matches that same, already-existing scope trim).
+
+**A critical, previously-undiscovered bug, found only because this was tested as a real multi-step
+browser session** (sign in → browse → submit a form several navigations later — how an actual
+person uses the app, unlike almost every verification in this project so far, which drove
+mutations directly via `curl` or as the very first request in a fresh session): **any plain
+authenticated GET request deleted the `sos_csrf` cookie**, breaking every mutation attempted
+afterward with a 403 "Access denied" indistinguishable from an RBAC failure. Root cause: Spring
+Security 7's `CsrfFilter` was calling `saveToken(null, ...)` on the cookie repository on a bare
+GET even when the request already carried a valid token, and `CookieCsrfTokenRepository` turns a
+null save into an explicit `Max-Age=0` deletion. Fixed with `NonDeletingCsrfTokenRepository` (new,
+`config/`) — a thin wrapper around the real cookie repository that no-ops a null save, since this
+app's CSRF cookie lifecycle is already owned explicitly by `AuthController#login` and nothing
+legitimate ever needs the filter chain to clear it implicitly. `loadToken`/`generateToken` are
+untouched. Full reasoning and repro history in the class's own javadoc.
+
+This is almost certainly why **every previous "propose a change," "create a band," "add an FX
+rate," "create a user" verification in this project's history worked when tested, yet the very
+first genuine multi-page browser session hit it immediately** — every prior verification either
+called the API directly or mutated as the first request of a session. This bug would have blocked
+every real HR Manager's very first save of their session, on literally every mutating screen in
+the product. Worth internalizing for `P9.5`/`P9.6`: any acceptance-criteria walkthrough MUST be a
+continuous multi-page session, never a fresh session per check.
+
+New backend test: `EmployeeLifecycleTest#settingInitialCompensationEstablishesTheFirstPayPeriod
+AndCannotBeDoneTwice` (seeds an FX rate, sets initial comp via the real HTTP endpoint, asserts the
+ledger row and `change_reason=INITIAL`, asserts a second call 409s). `RolePermissionMatrixTest`
+gained the new endpoint's entry.
+
+Observed: backend `./mvnw clean verify` → `129/129` (unchanged besides the one new test — the CSRF
+fix touches only the security filter chain, no domain logic, and `AuthControllerIntegrationTest`
+stayed green through it). Frontend `npm run verify` clean; `verify:routes` clean across all four
+roles. Live end-to-end via a real Playwright browser session (not curl): created "Taylor Nguyen"
+through the dialog, landed on their detail page, set a $95,000 starting salary, watched Current
+Pay, Pay History, and the now-enabled "Propose change" button all update correctly with zero page
+errors — the exact sequence that would have 403'd before the CSRF fix. Test data cleaned up
+afterward.
+
 After completion of complete P8 stop executing next P9 task and do the local setup of this service and give me access URL for progress and feature check also here you can check and verify the current implementation you did so farthat does all features are working as expected and is UI is looking good and stable.
 ## P9 — Seed, hardening, acceptance
 

@@ -14,6 +14,10 @@ public interface CompensationRecordRepository extends JpaRepository<Compensation
 
 	Optional<CompensationRecord> findByEmployeeIdAndEffectiveToIsNull(UUID employeeId);
 
+	/** Whether this employee has ANY ledger row, open or closed — the guard for "set initial
+	 * compensation," which is only valid before their first-ever record exists. */
+	boolean existsByEmployeeId(UUID employeeId);
+
 	/** Every employee's currently-open period at once — at most one per employee (comp_no_overlap makes two impossible). Used to rebuild the whole {@code employee_current_comp} projection from the ledger. */
 	List<CompensationRecord> findByEffectiveToIsNull();
 

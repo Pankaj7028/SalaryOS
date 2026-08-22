@@ -14,6 +14,8 @@ import com.acme.salaryos.compensation.projection.EmployeeCurrentCompProjector;
 import com.acme.salaryos.compensation.repository.CompensationComponentRepository;
 import com.acme.salaryos.compensation.repository.CompensationRecordRepository;
 import com.acme.salaryos.compensation.repository.EmployeeCurrentCompRepository;
+import com.acme.salaryos.compensation.effective.ApplyCommand;
+import com.acme.salaryos.compensation.effective.EffectiveDating;
 import com.acme.salaryos.employee.domain.Employee;
 import com.acme.salaryos.employee.dto.BandBoundaries;
 import com.acme.salaryos.employee.dto.CompensationComponentResponse;
@@ -24,6 +26,7 @@ import com.acme.salaryos.employee.dto.EmployeeImportResult;
 import com.acme.salaryos.employee.dto.EmployeeImportRowResult;
 import com.acme.salaryos.employee.dto.EmployeeSummaryResponse;
 import com.acme.salaryos.employee.dto.EmployeeUpdateRequest;
+import com.acme.salaryos.employee.dto.InitialCompensationRequest;
 import com.acme.salaryos.employee.dto.PeerComparisonResponse;
 import com.acme.salaryos.employee.dto.PeerImpactPreview;
 import com.acme.salaryos.employee.repository.EmployeeRepository;
@@ -77,6 +80,7 @@ public class EmployeeService {
 	private final EmployeeCurrentCompProjector projector;
 	private final CursorCodec cursorCodec;
 	private final AuditService auditService;
+	private final EffectiveDating effectiveDating;
 
 	private static final Set<String> VALID_EMPLOYMENT_TYPES = Set.of("FULL_TIME", "PART_TIME", "CONTRACT");
 
@@ -92,7 +96,8 @@ public class EmployeeService {
 			JobLevelRepository jobLevelRepository,
 			EmployeeCurrentCompProjector projector,
 			CursorCodec cursorCodec,
-			AuditService auditService) {
+			AuditService auditService,
+			EffectiveDating effectiveDating) {
 		this.employeeRepository = employeeRepository;
 		this.employeeCurrentCompRepository = employeeCurrentCompRepository;
 		this.compensationRecordRepository = compensationRecordRepository;
@@ -105,6 +110,7 @@ public class EmployeeService {
 		this.projector = projector;
 		this.cursorCodec = cursorCodec;
 		this.auditService = auditService;
+		this.effectiveDating = effectiveDating;
 	}
 
 	public KeysetPage<EmployeeSummaryResponse> list(
@@ -334,6 +340,29 @@ public class EmployeeService {
 		employeeRepository.save(employee);
 		auditService.recordWrite(currentUserId, "CREATE_EMPLOYEE", "EMPLOYEE", employee.getId(), null, employee);
 		return toDetail(employee, null, null, List.of());
+	}
+
+	/**
+	 * A new hire's first-ever pay period — {@code change_reason = INITIAL}, effective on their
+	 * hire date, always annual (same convention {@code ProposeChangeRequest} uses). Deliberately
+	 * NOT the propose/approve/apply lifecycle: there is nothing to approve against, this establishes
+	 * the very thing every later change would be a change FROM. Refused once the employee already
+	 * has any ledger row, open or closed — after that, every change goes through {@code
+	 * ChangeService.propose}, which is exactly where "propose a raise" already lives.
+	 */
+	@Transactional
+	public EmployeeDetailResponse setInitialCompensation(UUID id, InitialCompensationRequest request, UUID currentUserId) {
+		Employee employee = employeeRepository.findById(id).orElseThrow(NoSuchElementException::new);
+		if (compensationRecordRepository.existsByEmployeeId(id)) {
+			throw new EmployeeAlreadyHasCompensationException();
+		}
+
+		effectiveDating.apply(new ApplyCommand(
+				id, employee.getHireDate(), request.amount(), request.currency(), "ANNUAL",
+				"INITIAL", null, currentUserId));
+
+		EmployeeCurrentComp comp = employeeCurrentCompRepository.findById(id).orElse(null);
+		return toDetail(employee, comp, findBand(comp), fetchComponents(comp));
 	}
 
 	/**

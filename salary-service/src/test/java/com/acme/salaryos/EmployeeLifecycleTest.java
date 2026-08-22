@@ -185,6 +185,40 @@ class EmployeeLifecycleTest {
 				.andExpect(jsonPath("$.status").value("TERMINATED"));
 	}
 
+	@Test
+	void settingInitialCompensationEstablishesTheFirstPayPeriodAndCannotBeDoneTwice() throws Exception {
+		Fixtures fx = seedFixtures("INITCOMP");
+		UUID employeeId = createEmployee(fx, "E-LIFECYCLE-5");
+
+		fxRateRepository.save(FxRate.builder()
+				.rateMonth(LocalDate.of(2023, 1, 1)).baseCurrency("USD").quoteCurrency("USD").rate(BigDecimal.ONE)
+				.build());
+
+		String body = "{\"amount\":\"120000.00\",\"currency\":\"USD\"}";
+
+		mockMvc.perform(post("/api/employees/" + employeeId + "/initial-compensation")
+						.with(authAs(fx.userId))
+						.cookie(new jakarta.servlet.http.Cookie("sos_csrf", "test-csrf-token")).header("X-CSRF-Token", "test-csrf-token")
+						.contentType("application/json").content(body))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.currentBasePay.amount").value("120000.00"))
+				.andExpect(jsonPath("$.currentBasePay.currency").value("USD"));
+
+		List<CompensationRecord> records = compensationRecordRepository.findByEmployeeIdOrderByEffectiveFromDesc(employeeId);
+		assertThat(records).hasSize(1);
+		assertThat(records.get(0).getChangeReason()).isEqualTo("INITIAL");
+		// createEmployee hardcodes hireDate 2023-01-01 -- pay starts the day they're hired, not
+		// some separately-chosen date.
+		assertThat(records.get(0).getEffectiveFrom()).isEqualTo(LocalDate.of(2023, 1, 1));
+
+		// From here on, every change is a proposal -- setting "initial" pay a second time is refused.
+		mockMvc.perform(post("/api/employees/" + employeeId + "/initial-compensation")
+						.with(authAs(fx.userId))
+						.cookie(new jakarta.servlet.http.Cookie("sos_csrf", "test-csrf-token")).header("X-CSRF-Token", "test-csrf-token")
+						.contentType("application/json").content(body))
+				.andExpect(status().isConflict());
+	}
+
 	private UUID createEmployee(Fixtures fx, String employeeNumber) throws Exception {
 		String body = objectMapper.writeValueAsString(new java.util.LinkedHashMap<>() {{
 			put("employeeNumber", employeeNumber);

@@ -81,6 +81,28 @@ export type EmployeeDetail = {
 };
 
 /** FR-6.6. `suppressed` is true, and every figure null, when the cohort has fewer than 5 members. */
+export type CreateEmployeeInput = {
+  employeeNumber: string;
+  firstName: string;
+  lastName: string;
+  workEmail: string;
+  departmentId: string;
+  locationId: string;
+  jobFamilyId: string;
+  jobLevelId: string;
+  managerId?: string;
+  hireDate: string;
+  employmentType: string;
+  fte: string;
+};
+
+/** A new hire's first-ever pay period (FR-2.5's companion) — always annual, same convention
+ * `ProposeChangeInput` uses. Only valid before the employee has any comp history at all. */
+export type InitialCompensationInput = {
+  amount: string;
+  currency: string;
+};
+
 export type PeerComparison = {
   cohortSize: number;
   suppressed: boolean;
@@ -134,6 +156,19 @@ export async function fetchEmployees(params: EmployeeListParams): Promise<Employ
 
 export async function fetchEmployee(id: string): Promise<EmployeeDetail> {
   const response = await apiFetch(`/api/employees/${id}`);
+  return (await response.json()) as EmployeeDetail;
+}
+
+export async function createEmployee(input: CreateEmployeeInput): Promise<EmployeeDetail> {
+  const response = await apiFetch("/api/employees", { method: "POST", body: JSON.stringify(input) });
+  return (await response.json()) as EmployeeDetail;
+}
+
+export async function setInitialCompensation(id: string, input: InitialCompensationInput): Promise<EmployeeDetail> {
+  const response = await apiFetch(`/api/employees/${id}/initial-compensation`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
   return (await response.json()) as EmployeeDetail;
 }
 

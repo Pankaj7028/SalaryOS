@@ -19,6 +19,7 @@ import com.acme.salaryos.compensation.effective.BackdatedBeforeOpenPeriodExcepti
 import com.acme.salaryos.compensation.effective.CorrectionOutsideOriginalPeriodException;
 import com.acme.salaryos.compensation.effective.MissingCorrectionNoteException;
 import com.acme.salaryos.compensation.effective.MissingFxRateException;
+import com.acme.salaryos.employee.service.EmployeeAlreadyHasCompensationException;
 import com.acme.salaryos.fx.service.FxRateAlreadyExistsException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -85,6 +86,11 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(CorrectionOutsideOriginalPeriodException.class)
 	public ProblemDetail handleCorrectionOutsideOriginalPeriod(CorrectionOutsideOriginalPeriodException exception) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+	}
+
+	@ExceptionHandler(EmployeeAlreadyHasCompensationException.class)
+	public ProblemDetail handleEmployeeAlreadyHasCompensation(EmployeeAlreadyHasCompensationException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
 	}
 
 	@ExceptionHandler(BandAlreadyExistsException.class)

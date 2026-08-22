@@ -1,6 +1,7 @@
 import { Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
 import { Money } from "@/components/comp/money";
 import { BandBar } from "@/components/comp/band-bar";
 import { EmptyState } from "@/components/feedback/states";
@@ -39,7 +40,16 @@ function Figure({
   );
 }
 
-export function CurrentPayPanel({ employee }: { employee: EmployeeDetail }) {
+export function CurrentPayPanel({
+  employee,
+  onSetInitialCompensation,
+}: {
+  employee: EmployeeDetail;
+  /** Absent hides the action — `EmployeeDetailScreen` only passes it when the signed-in role can
+   * manage employees (`canManageEmployees`), matching the same gate `EmployeeController#
+   * setInitialCompensation` enforces server-side. */
+  onSetInitialCompensation?: () => void;
+}) {
   if (!employee.currentBasePay) {
     return (
       <Card>
@@ -49,7 +59,12 @@ export function CurrentPayPanel({ employee }: { employee: EmployeeDetail }) {
         <CardContent>
           <EmptyState
             title="No compensation record"
-            detail="This employee has no comp record yet — propose an initial-hire change to set one."
+            detail="This employee has no pay on record yet — set their starting salary to begin the ledger."
+            action={
+              onSetInitialCompensation ? (
+                <Button size="sm" onClick={onSetInitialCompensation}>Set starting salary</Button>
+              ) : undefined
+            }
           />
         </CardContent>
       </Card>

@@ -6,6 +6,7 @@ import com.acme.salaryos.employee.dto.EmployeeCreateRequest;
 import com.acme.salaryos.employee.dto.EmployeeDetailResponse;
 import com.acme.salaryos.employee.dto.EmployeeImportResult;
 import com.acme.salaryos.employee.dto.EmployeeSummaryResponse;
+import com.acme.salaryos.employee.dto.InitialCompensationRequest;
 import com.acme.salaryos.employee.dto.EmployeeTerminateRequest;
 import com.acme.salaryos.employee.dto.EmployeeUpdateRequest;
 import com.acme.salaryos.employee.dto.PeerComparisonResponse;
@@ -167,6 +168,15 @@ public class EmployeeController {
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER')")
 	public EmployeeDetailResponse create(@Valid @RequestBody EmployeeCreateRequest request, @AuthenticationPrincipal UUID currentUserId) {
 		return employeeService.create(request, currentUserId);
+	}
+
+	/** A new hire's first-ever pay period — not a proposed change, nothing to approve against.
+	 * Same capability as {@link #create}: HR Admin, HR Manager. */
+	@PostMapping("/{id}/initial-compensation")
+	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER')")
+	public EmployeeDetailResponse setInitialCompensation(
+			@PathVariable UUID id, @Valid @RequestBody InitialCompensationRequest request, @AuthenticationPrincipal UUID currentUserId) {
+		return employeeService.setInitialCompensation(id, request, currentUserId);
 	}
 
 	/** P8.4 / "Import / bulk upload": HR Admin only. {@code ?dryRun=true} returns the diff without writing. */

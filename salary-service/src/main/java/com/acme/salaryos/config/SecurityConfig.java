@@ -71,7 +71,12 @@ public class SecurityConfig {
 		return http
 				.cors(cors -> cors.configurationSource(corsConfigurationSource))
 				.csrf(csrf -> csrf
-						.csrfTokenRepository(csrfTokenRepository)
+						// Wrapped, not the raw bean: see NonDeletingCsrfTokenRepository's own javadoc
+						// — Spring Security 7's CsrfFilter calls saveToken(null, ...) on a plain GET
+						// even when the request already carried a valid token, and the cookie
+						// repository turns a null save into an explicit deletion. AuthController
+						// still gets the unwrapped bean directly for issuing the cookie at login.
+						.csrfTokenRepository(new NonDeletingCsrfTokenRepository(csrfTokenRepository))
 						// Plain (non-XOR'd) handler: sos_csrf holds the raw token, and the client
 						// echoes that exact value back in X-CSRF-Token — the classic double-submit
 						// pattern (CLAUDE.md §4.1). The default XorCsrfTokenRequestAttributeHandler

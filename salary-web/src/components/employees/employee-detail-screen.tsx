@@ -7,10 +7,13 @@ import { ErrorState, TableSkeleton } from "@/components/feedback/states";
 import { CurrentPayPanel } from "@/components/employees/current-pay-panel";
 import { PayHistoryPanel } from "@/components/employees/pay-history-panel";
 import { PeersPanel } from "@/components/employees/peers-panel";
+import { SetInitialCompensationDialog } from "@/components/employees/set-initial-compensation-dialog";
 import { ProposeChangeDialog } from "@/components/changes/propose-change-dialog";
 import { ApiError } from "@/lib/api/client";
 import { useEmployee } from "@/lib/api/employees-queries";
-import { useDepartments, useJobLevels, useLocations } from "@/lib/api/reference-queries";
+import { useCountries, useDepartments, useJobLevels, useLocations } from "@/lib/api/reference-queries";
+import { useSession } from "@/lib/auth/auth-queries";
+import { canManageEmployees } from "@/lib/auth/roles";
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Active",
@@ -25,7 +28,10 @@ export function EmployeeDetailScreen({ id }: { id: string }) {
   const departments = useDepartments();
   const locations = useLocations();
   const jobLevels = useJobLevels();
+  const countries = useCountries();
+  const session = useSession();
   const [proposing, setProposing] = useState(false);
+  const [settingInitialComp, setSettingInitialComp] = useState(false);
 
   if (employee.isLoading) {
     return <TableSkeleton columns={["300px"]} rows={6} rowHeight={32} />;
@@ -47,9 +53,12 @@ export function EmployeeDetailScreen({ id }: { id: string }) {
 
   const person = employee.data;
   const departmentName = departments.data?.find((d) => d.id === person.departmentId)?.name ?? "—";
-  const locationName = locations.data?.find((l) => l.id === person.locationId)?.name ?? "—";
+  const employeeLocation = locations.data?.find((l) => l.id === person.locationId);
+  const locationName = employeeLocation?.name ?? "—";
   const jobLevelTitle = jobLevels.data?.find((l) => l.id === person.jobLevelId)?.title ?? "—";
   const managerName = manager.data ? `${manager.data.firstName} ${manager.data.lastName}` : null;
+  const defaultCurrency = countries.data?.find((c) => c.code === employeeLocation?.countryCode)?.defaultCurrency ?? "USD";
+  const canManage = session.data ? canManageEmployees(session.data.role) : false;
 
   return (
     <div className="space-y-6">
@@ -82,7 +91,10 @@ export function EmployeeDetailScreen({ id }: { id: string }) {
       </header>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <CurrentPayPanel employee={person} />
+        <CurrentPayPanel
+          employee={person}
+          onSetInitialCompensation={canManage ? () => setSettingInitialComp(true) : undefined}
+        />
         <PeersPanel employeeId={person.id} />
         <div className="lg:col-span-2">
           <PayHistoryPanel employeeId={person.id} />
@@ -91,6 +103,14 @@ export function EmployeeDetailScreen({ id }: { id: string }) {
 
       {proposing ? (
         <ProposeChangeDialog open={proposing} onOpenChange={setProposing} employee={person} />
+      ) : null}
+      {settingInitialComp ? (
+        <SetInitialCompensationDialog
+          open
+          onOpenChange={setSettingInitialComp}
+          employeeId={person.id}
+          defaultCurrency={defaultCurrency}
+        />
       ) : null}
     </div>
   );

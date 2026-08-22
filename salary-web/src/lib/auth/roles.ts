@@ -105,3 +105,11 @@ const FX_RATE_MANAGER_ROLES: readonly Role[] = ["HR_ADMIN", "HR_MANAGER"];
 export function canManageFxRates(role: Role): boolean {
   return FX_RATE_MANAGER_ROLES.includes(role);
 }
+
+/** "Create / edit employee record" (CLAUDE.md §7) — same two roles `EmployeeController#create`/
+ * `#update`/`#setInitialCompensation` all require. */
+const EMPLOYEE_MANAGER_ROLES: readonly Role[] = ["HR_ADMIN", "HR_MANAGER"];
+
+export function canManageEmployees(role: Role): boolean {
+  return EMPLOYEE_MANAGER_ROLES.includes(role);
+}

@@ -10,7 +10,10 @@ import { employeesExportUrl } from "@/lib/api/employees";
 import { useEmployees } from "@/lib/api/employees-queries";
 import { useCountries, useDepartments, useJobLevels, useLocations } from "@/lib/api/reference-queries";
 import { EmployeesTable } from "@/components/employees/employees-table";
+import { CreateEmployeeDialog } from "@/components/employees/create-employee-dialog";
 import { ErrorState } from "@/components/feedback/states";
+import { useSession } from "@/lib/auth/auth-queries";
+import { canManageEmployees } from "@/lib/auth/roles";
 
 /**
  * `/employees` (ui doc §8.2). Filter, sort, and page state all live in
@@ -97,6 +100,9 @@ export function EmployeesScreen() {
   );
 
   const exportUrl = employeesExportUrl({ q, departmentId, locationId, countryCode, jobLevelId, status });
+  const session = useSession();
+  const canManage = session.data ? canManageEmployees(session.data.role) : false;
+  const [creating, setCreating] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -107,9 +113,14 @@ export function EmployeesScreen() {
             {employees.data ? `${employees.data.items.length} shown, this filter` : "Loading…"}
           </p>
         </div>
-        <Button size="sm" variant="outline" asChild>
-          <a href={exportUrl}>Export CSV</a>
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" asChild>
+            <a href={exportUrl}>Export CSV</a>
+          </Button>
+          {canManage ? (
+            <Button size="sm" onClick={() => setCreating(true)}>New employee</Button>
+          ) : null}
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -221,6 +232,8 @@ export function EmployeesScreen() {
           Next
         </Button>
       </div>
+
+      {canManage ? <CreateEmployeeDialog open={creating} onOpenChange={setCreating} /> : null}
     </div>
   );
 }

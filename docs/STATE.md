@@ -13,8 +13,8 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 
 | | |
 |---|---|
-| **Phase** | **P8 complete + a post-P8 QA pass** (user found 404ing nav tabs; full done-note in `BuildPlan.md`). Awaiting the user's review before P9. |
-| **Last completed** | Post-P8 QA pass — 4 missing screens built, a real `.toFixed()` crash on Employees/employee-detail fixed, plus a retry-storm, an FX-rate gap, and a 375px topbar overflow. `128/128` backend, `verify:routes`/`verify:sidebar`/`verify:mobile-nav` all clean. |
+| **Phase** | **P8 complete + two post-P8 passes** (nav/QA fixes, then an add-employee-via-UI feature that surfaced a critical CSRF bug). Full done-notes in `BuildPlan.md`. Awaiting the user's review before P9. |
+| **Last completed** | Add-employee-via-UI + `POST /employees/{id}/initial-compensation` + a `NonDeletingCsrfTokenRepository` fix for a bug that broke every mutation after the first page navigation of a session. `129/129` backend, `verify:routes`/`verify:sidebar`/`verify:mobile-nav` all clean. |
 | **Next step** | `P9.1` — `SeedRunner` and generators, once the user says go. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
@@ -147,6 +147,13 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   *broader* role must also use (the audit log's actor filter, `HR_ADMIN` + `AUDITOR`) — it 403s for
   the narrower-permission role. Check the RBAC table for both endpoints before wiring one screen's
   filter to another endpoint's data.
+- **A new hire's first-ever pay period is NOT a proposed change (2026-08-22, `POST /employees/{id}
+  /initial-compensation`).** `ChangeService.propose` requires an existing `employee_current_comp`
+  row — it always has, since `currentBaseAmount` on a `CompensationChange` has to come from
+  somewhere. `EmployeeService.setInitialCompensation` calls `EffectiveDating.apply` directly
+  (`changeReason=INITIAL`, `effectiveFrom=` hire date), refused once any ledger row already
+  exists. If a future step needs "give someone pay for the first time," this is the method —
+  don't route it through `ChangeService.propose`, it structurally can't accept it.
 
 ---
 
@@ -227,6 +234,17 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   as-is against a fresh browser context. Needs `qa.manager@acme.test`/`qa.analyst@acme.test`/
   `qa.auditor@acme.test` seeded (`admin@acme.test` already exists) — all `{argon2}` for
   `Password123!`, see the jshell recipe above.
+- **`SecurityConfig`'s CSRF wiring needed `NonDeletingCsrfTokenRepository` (new, `config/`,
+  2026-08-22) — Spring Security 7's `CsrfFilter` deletes the `sos_csrf` cookie on a bare
+  authenticated GET, even when the request already carried a valid token.** `curl`-driven testing
+  never caught this because each `curl` call is its own fresh cookie jar snapshot with no
+  intervening GET; a real multi-page browser session (sign in → browse → submit) hits it on the
+  very first save of the session, every time. If a mutating endpoint 403s with "Access denied" in
+  a real browser but works fine via `curl` with the same account, check whether a GET happened
+  first in that browser session before assuming it's an RBAC bug — it almost certainly isn't.
+  **Any future full end-to-end acceptance walkthrough (P9.5/P9.6) MUST be one continuous browser
+  session across multiple pages, never a fresh session per check** — this class of bug is
+  invisible to the latter.
 
 ---
 
