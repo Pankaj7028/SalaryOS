@@ -20,6 +20,8 @@ import com.acme.salaryos.employee.dto.CompensationComponentResponse;
 import com.acme.salaryos.employee.dto.CompensationRecordResponse;
 import com.acme.salaryos.employee.dto.EmployeeCreateRequest;
 import com.acme.salaryos.employee.dto.EmployeeDetailResponse;
+import com.acme.salaryos.employee.dto.EmployeeImportResult;
+import com.acme.salaryos.employee.dto.EmployeeImportRowResult;
 import com.acme.salaryos.employee.dto.EmployeeSummaryResponse;
 import com.acme.salaryos.employee.dto.EmployeeUpdateRequest;
 import com.acme.salaryos.employee.dto.PeerComparisonResponse;
@@ -27,6 +29,9 @@ import com.acme.salaryos.employee.dto.PeerImpactPreview;
 import com.acme.salaryos.employee.repository.EmployeeRepository;
 import com.acme.salaryos.employee.spec.EmployeeSpecifications;
 import com.acme.salaryos.reference.domain.Location;
+import com.acme.salaryos.reference.repository.DepartmentRepository;
+import com.acme.salaryos.reference.repository.JobFamilyRepository;
+import com.acme.salaryos.reference.repository.JobLevelRepository;
 import com.acme.salaryos.reference.repository.LocationRepository;
 import org.springframework.data.domain.KeysetScrollPosition;
 import org.springframework.data.domain.ScrollPosition;
@@ -35,13 +40,20 @@ import org.springframework.data.domain.Window;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -59,9 +71,14 @@ public class EmployeeService {
 	private final CompensationComponentRepository compensationComponentRepository;
 	private final SalaryBandRepository salaryBandRepository;
 	private final LocationRepository locationRepository;
+	private final DepartmentRepository departmentRepository;
+	private final JobFamilyRepository jobFamilyRepository;
+	private final JobLevelRepository jobLevelRepository;
 	private final EmployeeCurrentCompProjector projector;
 	private final CursorCodec cursorCodec;
 	private final AuditService auditService;
+
+	private static final Set<String> VALID_EMPLOYMENT_TYPES = Set.of("FULL_TIME", "PART_TIME", "CONTRACT");
 
 	public EmployeeService(
 			EmployeeRepository employeeRepository,
@@ -70,6 +87,9 @@ public class EmployeeService {
 			CompensationComponentRepository compensationComponentRepository,
 			SalaryBandRepository salaryBandRepository,
 			LocationRepository locationRepository,
+			DepartmentRepository departmentRepository,
+			JobFamilyRepository jobFamilyRepository,
+			JobLevelRepository jobLevelRepository,
 			EmployeeCurrentCompProjector projector,
 			CursorCodec cursorCodec,
 			AuditService auditService) {
@@ -79,6 +99,9 @@ public class EmployeeService {
 		this.compensationComponentRepository = compensationComponentRepository;
 		this.salaryBandRepository = salaryBandRepository;
 		this.locationRepository = locationRepository;
+		this.departmentRepository = departmentRepository;
+		this.jobFamilyRepository = jobFamilyRepository;
+		this.jobLevelRepository = jobLevelRepository;
 		this.projector = projector;
 		this.cursorCodec = cursorCodec;
 		this.auditService = auditService;
@@ -311,6 +334,135 @@ public class EmployeeService {
 		employeeRepository.save(employee);
 		auditService.recordWrite(currentUserId, "CREATE_EMPLOYEE", "EMPLOYEE", employee.getId(), null, employee);
 		return toDetail(employee, null, null, List.of());
+	}
+
+	/**
+	 * P8.4: {@code dryRun} produces the same diff without writing anything (same contract as
+	 * {@code BandService.importCsv}, P5.3). Rows are 1-indexed from the first data row (row 1 is
+	 * the header: {@code employeeNumber,firstName,lastName,workEmail,departmentId,locationId,
+	 * jobFamilyId,jobLevelId,managerId,hireDate,employmentType,fte} — {@code managerId} may be
+	 * blank). An existing {@code employeeNumber} updates that employee's profile (never their pay —
+	 * {@link Employee#updateProfile} is the same method the single-employee edit endpoint calls, so
+	 * a level/location change here also sets {@code bandMismatched} exactly as it would there); a
+	 * new one creates.
+	 */
+	@Transactional
+	public EmployeeImportResult importCsv(MultipartFile file, boolean dryRun, UUID createdBy) {
+		List<EmployeeImportRowResult> rows = new ArrayList<>();
+		int created = 0;
+		int updated = 0;
+		int errors = 0;
+
+		try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+			reader.readLine(); // header
+			int rowNumber = 1;
+			String line;
+			while ((line = reader.readLine()) != null) {
+				rowNumber++;
+				if (line.isBlank()) {
+					continue;
+				}
+				EmployeeImportRowResult result = importRow(rowNumber, line, dryRun, createdBy);
+				rows.add(result);
+				switch (result.action()) {
+					case "CREATE" -> created++;
+					case "UPDATE" -> updated++;
+					default -> errors++;
+				}
+			}
+		}
+		catch (IOException e) {
+			throw new IllegalArgumentException("Could not read the uploaded CSV file.", e);
+		}
+
+		int rowsApplied = dryRun ? 0 : created + updated;
+		return new EmployeeImportResult(dryRun, rows.size(), created, updated, errors, rowsApplied, rows);
+	}
+
+	private EmployeeImportRowResult importRow(int rowNumber, String line, boolean dryRun, UUID createdBy) {
+		String[] fields = line.split(",", -1);
+		if (fields.length < 11) {
+			return errorRow(rowNumber, line, "Expected 11 or 12 columns, found " + fields.length + ".");
+		}
+
+		String employeeNumber = fields[0].trim();
+		String firstName = fields[1].trim();
+		String lastName = fields[2].trim();
+		String workEmail = fields[3].trim();
+		UUID departmentId;
+		UUID locationId;
+		UUID jobFamilyId;
+		UUID jobLevelId;
+		UUID managerId;
+		LocalDate hireDate;
+		String employmentType = fields[10].trim();
+		BigDecimal fte;
+		try {
+			departmentId = UUID.fromString(fields[4].trim());
+			locationId = UUID.fromString(fields[5].trim());
+			jobFamilyId = UUID.fromString(fields[6].trim());
+			jobLevelId = UUID.fromString(fields[7].trim());
+			managerId = fields[8].isBlank() ? null : UUID.fromString(fields[8].trim());
+			hireDate = LocalDate.parse(fields[9].trim());
+			fte = new BigDecimal(fields.length > 11 ? fields[11].trim() : "1.00");
+		}
+		catch (RuntimeException malformed) {
+			return errorRow(rowNumber, line, "Could not parse row: " + malformed.getMessage());
+		}
+
+		if (employeeNumber.isBlank() || firstName.isBlank() || lastName.isBlank() || workEmail.isBlank()) {
+			return errorRow(rowNumber, line, "employeeNumber, firstName, lastName, and workEmail are required.");
+		}
+		if (!VALID_EMPLOYMENT_TYPES.contains(employmentType)) {
+			return errorRow(rowNumber, line, "employmentType must be one of " + VALID_EMPLOYMENT_TYPES + ".");
+		}
+		if (fte.compareTo(new BigDecimal("0.01")) < 0 || fte.compareTo(BigDecimal.ONE) > 0) {
+			return errorRow(rowNumber, line, "fte must be between 0.01 and 1.00.");
+		}
+		if (!departmentRepository.existsById(departmentId)) {
+			return errorRow(rowNumber, line, "No department " + departmentId + ".");
+		}
+		if (!locationRepository.existsById(locationId)) {
+			return errorRow(rowNumber, line, "No location " + locationId + ".");
+		}
+		if (!jobFamilyRepository.existsById(jobFamilyId)) {
+			return errorRow(rowNumber, line, "No job family " + jobFamilyId + ".");
+		}
+		if (!jobLevelRepository.existsById(jobLevelId)) {
+			return errorRow(rowNumber, line, "No job level " + jobLevelId + ".");
+		}
+		if (managerId != null && !employeeRepository.existsById(managerId)) {
+			return errorRow(rowNumber, line, "No employee " + managerId + " to serve as manager.");
+		}
+
+		Optional<Employee> existing = employeeRepository.findByEmployeeNumber(employeeNumber);
+		if (existing.isEmpty()) {
+			if (!dryRun) {
+				Employee employee = Employee.builder()
+						.employeeNumber(employeeNumber).firstName(firstName).lastName(lastName).workEmail(workEmail)
+						.departmentId(departmentId).locationId(locationId).jobFamilyId(jobFamilyId).jobLevelId(jobLevelId)
+						.managerId(managerId).hireDate(hireDate).employmentType(employmentType).fte(fte)
+						.build();
+				employeeRepository.save(employee);
+				auditService.recordWrite(createdBy, "CREATE_EMPLOYEE", "EMPLOYEE", employee.getId(), null, employee);
+			}
+			return new EmployeeImportRowResult(rowNumber, "CREATE", employeeNumber, firstName, lastName, null);
+		}
+
+		if (!dryRun) {
+			Employee employee = existing.get();
+			String beforeJson = auditService.snapshot(employee);
+			employee.updateProfile(firstName, lastName, workEmail, departmentId, locationId, jobFamilyId, jobLevelId, managerId, employmentType, fte);
+			employeeRepository.save(employee);
+			auditService.recordWriteFromJson(createdBy, "UPDATE_EMPLOYEE", "EMPLOYEE", employee.getId(), beforeJson, auditService.snapshot(employee));
+		}
+		return new EmployeeImportRowResult(rowNumber, "UPDATE", employeeNumber, firstName, lastName, null);
+	}
+
+	private EmployeeImportRowResult errorRow(int rowNumber, String rawLine, String message) {
+		String[] fields = rawLine.split(",", -1);
+		String employeeNumber = fields.length > 0 ? fields[0].trim() : null;
+		return new EmployeeImportRowResult(rowNumber, "ERROR", employeeNumber, null, null, message);
 	}
 
 	/** FR-2.5: editing job level or location never touches pay — see {@link Employee#updateProfile}. */

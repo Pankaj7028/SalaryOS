@@ -13,17 +13,17 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 
 | | |
 |---|---|
-| **Phase** | P8 (Admin, audit, import) in progress |
-| **Last completed** | `P8.2` Audit write/read wiring + `AuditImmutabilityTest` — `[x]`, 125/125 backend tests. |
-| **Next step** | `P8.3` — Audit log screen with filters and export; FX rate admin by month. |
+| **Phase** | **P8 complete.** Stopped per the standing instruction in `BuildPlan.md` (below P8.4) — local setup done, awaiting the user's review before P9. |
+| **Last completed** | `P8.4` Employee CSV import with dry-run diff — `[x]`, 128/128 backend tests. |
+| **Next step** | `P9.1` — `SeedRunner` and generators, once the user says go. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
 Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6` (all) ·
-`P7` (all) · `P8.1`–`P8.2`.
-Blocked: `P0.3`. Untouched: `P8.3`–`P9`.
+`P7` (all) · `P8` (all).
+Blocked: `P0.3`. Untouched: `P9`.
 
 ---
 
@@ -138,6 +138,15 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   confirmed live: `curl`-verified `currentBasePay.amount` went from a bare `105000.0` float to the
   precise string `"105000.00"`. The frontend's own types already assumed a string, so nothing there
   needed to change; this fixes the backend to actually match what it always claimed to send.
+- **`apiFetch` (P8.4) now skips its default `Content-Type: application/json` when the body is a
+  `FormData`** — a CSV upload's own multipart boundary header can only be set by the browser when no
+  `Content-Type` is already present. Any future file upload goes through the same seam and gets this
+  for free; don't special-case it per feature.
+- **RBAC read-vs-manage split can trap a UI filter (P8.3):** an admin-only list endpoint
+  (`GET /api/admin/users`, `HR_ADMIN` only) is the wrong data source for a filter on a screen a
+  *broader* role must also use (the audit log's actor filter, `HR_ADMIN` + `AUDITOR`) — it 403s for
+  the narrower-permission role. Check the RBAC table for both endpoints before wiring one screen's
+  filter to another endpoint's data.
 
 ---
 

@@ -56,7 +56,9 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
       headers.set("X-CSRF-Token", csrfToken);
     }
   }
-  if (init.body !== undefined && !headers.has("Content-Type")) {
+  // A FormData body (a CSV upload) must NOT get an explicit Content-Type here -- the browser
+  // sets multipart/form-data with the correct boundary itself only when the header is absent.
+  if (init.body !== undefined && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 

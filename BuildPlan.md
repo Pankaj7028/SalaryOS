@@ -1380,8 +1380,48 @@ verified.
   > `GET /admin/audit/export` produced the matching CSV row. Both `/admin/audit` and `/admin/fx-rates`
   > render server-side (curled with a real session cookie, `200` with the expected heading in the
   > HTML) against a rebuilt `next start`.
-- [ ] **P8.4** Employee CSV import with dry-run diff.
+- [x] **P8.4** Employee CSV import with dry-run diff.
   *Verify:* the dry run reports counts and writes nothing.
+  > **Done (2026-08-22):** `EmployeeService.importCsv` mirrors `BandService.importCsv`'s (P5.3)
+  > create-vs-version shape as create-vs-update, keyed by `employeeNumber` (a human-edited CSV's
+  > only realistic key, same reasoning `ChangeService.bulkUpload`'s FR-5.8 upload already used).
+  > 12-column CSV (`employeeNumber,firstName,lastName,workEmail,departmentId,locationId,
+  > jobFamilyId,jobLevelId,managerId,hireDate,employmentType,fte`); an existing number updates that
+  > employee's profile through the exact same `Employee#updateProfile` the single-employee edit
+  > endpoint calls, so a level/location change via import sets `bandMismatched` exactly as it would
+  > there — importing never touches pay. Everything is pre-validated in Java before any write
+  > (department/location/jobFamily/jobLevel existence via `existsById`, employment type, FTE range,
+  > required fields) rather than relying on a caught `DataIntegrityViolationException` — same
+  > reasoning `BandService.importCsv`'s own javadoc gives: a dry run must not touch the DB at all,
+  > so nothing here can find out it was wrong from a failed constraint.
+  > `POST /api/employees/import` is `HR_ADMIN`-only ("Import / bulk upload", CLAUDE.md §7).
+  >
+  > A real bug caught before it shipped: `apiFetch` (`client.ts`) unconditionally set
+  > `Content-Type: application/json` whenever a request had a body, which would have broken the
+  > CSV upload's `FormData` body (the browser needs to set its own `multipart/form-data; boundary=…`
+  > header, and can only do that when no `Content-Type` is already present). Fixed with one
+  > `instanceof FormData` guard — the one shared fetch seam every request crosses, so every future
+  > file upload gets this for free too.
+  >
+  > Frontend: `/admin/import` — file input, "Preview (dry run)" always runs first and renders the
+  > row-by-row diff (a `CREATE`/`UPDATE`/`ERROR` badge per row) without writing anything, "Apply
+  > import" then resends the identical file with `dryRun=false`. No new nav entry or RBAC table
+  > row needed — `/admin/import` and its `HR_ADMIN`-only visibility already existed in `roles.ts`/
+  > `nav.ts` since P3.5, waiting for this step to give it a screen.
+  >
+  > New backend test: `EmployeeImportTest` — a dry run over one good + one bad row reports
+  > `created=1, errors=1, rowsApplied=0` and leaves the database empty; the real run then applies
+  > exactly the good row; a follow-up import of the same `employeeNumber` updates the existing row
+  > (same id, new `firstName`) instead of erroring as a duplicate. `RolePermissionMatrixTest` gained
+  > `EmployeeController#importCsv`.
+  >
+  > Observed: `./mvnw clean verify` → `Tests run: 128, Failures: 0, Errors: 0`, `BUILD SUCCESS` (127
+  > pre-existing + `EmployeeImportTest`). Live-verified against the throwaway dev DB: a real 2-row
+  > CSV (one valid, one with a nonexistent department) dry-ran to `created:1, errors:1,
+  > rowsApplied:0` with the database unchanged (confirmed via direct SQL), then the real run wrote
+  > exactly the one valid employee and left the bad row rejected with its error message intact.
+  > `/admin/import` renders server-side (curled with a real session cookie, `200` with the expected
+  > heading) against a rebuilt `next start`. Test data cleaned up afterward.
 After completion of complete P8 stop executing next P9 task and do the local setup of this service and give me access URL for progress and feature check also here you can check and verify the current implementation you did so farthat does all features are working as expected and is UI is looking good and stable.
 ## P9 — Seed, hardening, acceptance
 
@@ -1407,8 +1447,8 @@ After completion of complete P8 stop executing next P9 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P8.2` Audit write/read wiring + `AuditImmutabilityTest` — done, `[x]`, 125/125 backend tests (2026-08-21). |
-| **Current step** | `P8.3` — Audit log screen with filters and export; FX rate admin by month. |
+| **Last completed** | `P8.4` Employee CSV import with dry-run diff — done, `[x]`, 128/128 backend tests (2026-08-22). P8 is complete; per the standing instruction below, stopped here for local setup + review rather than starting P9. |
+| **Current step** | `P9.1` — `SeedRunner` and generators, once the user resumes the build. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._
