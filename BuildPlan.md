@@ -1648,8 +1648,42 @@ afterward.
   `Tests run: 1, Failures: 1` citing exactly that file and field; removed it → `Tests run: 1,
   Failures: 0` again. Full suite after: `./mvnw clean verify` → `Tests run: 131, Failures: 0,
   Errors: 0`, `BUILD SUCCESS`.
-- [ ] **P9.4** Performance pass against NFR-1…4. *Verify:* record observed p95 for the list, detail,
+- [x] **P9.4** Performance pass against NFR-1…4. *Verify:* record observed p95 for the list, detail,
   and each analytics endpoint. Add indexes only where a measurement justifies it.
+
+  Measured against the real local Postgres with the full P9.1 seed loaded (10,000 employees,
+  49,688 comp records) — app started with `--spring.profiles.active=local` (no seed profile),
+  authenticated as `admin@acme.test`, then 20–30 timed requests per endpoint via `curl -w
+  "%{time_total}"`, p95 computed directly from the sorted samples (a JMH-lite timed-integration
+  pass, per backend doc §10's own description of this step, not a formal JMH harness).
+
+  | NFR | Target | Endpoint | Observed p50 / p95 / max |
+  |---|---|---|---|
+  | NFR-1 | p95 < 400ms | `GET /api/employees?status=ACTIVE&countryCode=US&limit=50` | 11.6 / 22.5 / 114.6 ms |
+  | NFR-3 | p95 < 300ms | `GET /api/employees/{id}` | 7.1 / 10.1 / 16.5 ms |
+  | NFR-3 | p95 < 300ms | `GET /api/employees/{id}/compensation` (full ledger) | 5.1 / 8.6 / 20.3 ms |
+  | NFR-2 | p95 < 1.5s | `GET /api/analytics/payroll-cost` | 16.5 / 17.8 / 25.3 ms |
+  | NFR-2 | p95 < 1.5s | `GET /api/analytics/headcount` | 15.3 / 19.9 / 25.5 ms |
+  | NFR-2 | p95 < 1.5s | `GET /api/analytics/out-of-band` | 43.8 / 51.0 / 52.3 ms |
+  | NFR-2 | p95 < 1.5s | `GET /api/analytics/compa-ratio-distribution` | 66.7 / 68.1 / 70.6 ms |
+  | NFR-2 | p95 < 1.5s | `GET /api/analytics/pay-gap` | 34.9 / 36.5 / 43.3 ms |
+  | NFR-2 | p95 < 1.5s | `GET /api/analytics/increase-cycle?fromDate=2025-08-01&toDate=2026-08-01` | 2.6 / 3.4 / 8.6 ms |
+
+  All six comfortably clear their targets (the widest margin is `compa-ratio-distribution` at
+  ~4.5% of budget) — **no index changes made**, exactly per this step's own instruction to add
+  indexes only where a measurement justifies it; V10's existing indexes are sufficient at this
+  data volume. `increase-cycle` 401'd on the first attempt because the request omitted its
+  required `fromDate`/`toDate`; not a real auth failure — re-ran with them, 200 immediately.
+
+  NFR-4 (FCP on the list route, < 1.5s cold cache) is a client-rendering metric that needs a real
+  browser (Lighthouse or Chrome DevTools); browser tooling is not enabled in this session, so it
+  was **not measured**. As a proxy, `npm run build && npm run start` against the same seeded
+  backend and a `curl` of `/employees` with an authenticated cookie measured server TTFB only:
+  125ms on the very first (cold, on-demand-compiled) request, 7–16ms steady-state on the next 10 —
+  well inside budget for the part this proxy actually covers, but it excludes JS parse/hydrate and
+  font/CSS paint time, so it is not a substitute for a real FCP measurement. Flagging as an open
+  item for whenever browser tooling is available, rather than reporting a number that wasn't
+  actually observed (CLAUDE.md §12.13).
 - [ ] **P9.5** Accessibility and responsive pass (`salary-management-ui.md §10`, §12 checklist).
   *Verify:* contrast measured in both themes; keyboard-only run through the core flow; 375px.
 - [ ] **P9.6** Walk the twelve acceptance criteria in `Technical-Requirements.md §6`.
@@ -1663,8 +1697,8 @@ afterward.
 
 | | |
 |---|---|
-| **Last completed** | `P9.3` `DemographicsIsolationTest` — done, `[x]`, source-scans every non-`analytics` DTO record header; verified fail-on-add/pass-on-remove; full suite `131/131` (2026-08-22). |
-| **Current step** | `P9.4` — performance pass against NFR-1…4 (list/detail/analytics endpoint p95, against the real 10k-employee seed). |
+| **Last completed** | `P9.4` Performance pass — done, `[x]`, NFR-1/2/3 all measured against the real 10k-employee local seed and well within budget, no index changes needed; NFR-4 (FCP) needs a real browser and is flagged as unmeasured this session (2026-08-22). |
+| **Current step** | `P9.5` — accessibility and responsive pass (`salary-management-ui.md §10`, §12 checklist). |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._
