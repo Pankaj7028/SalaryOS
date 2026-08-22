@@ -75,9 +75,9 @@ export function EmployeeImportScreen() {
       </header>
 
       <section className="border-border bg-card space-y-3 rounded-lg border p-4">
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <span className="type-label text-muted-foreground">Columns, in order</span>
-          <code className="figure-sm bg-muted/40 rounded px-2 py-1.5">{CSV_COLUMNS}</code>
+          <code className="figure-sm bg-muted/40 block rounded px-2 py-1.5 break-words whitespace-normal">{CSV_COLUMNS}</code>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <input

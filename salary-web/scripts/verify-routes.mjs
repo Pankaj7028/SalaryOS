@@ -6,7 +6,9 @@
  * runtime, or one that's simply missing while its sibling routes are fine, both build clean).
  *
  * Needs one seeded user per role — set via env vars if the defaults below don't exist in your
- * database (`QA_HR_ADMIN_EMAIL` etc.), all sharing `QA_PASSWORD` (default `Password123!`).
+ * database (`QA_HR_ADMIN_EMAIL` etc.). All share `QA_PASSWORD` (default `Password123!`) unless
+ * overridden per role (`QA_HR_ADMIN_PASSWORD` etc.) — SeedRunner-generated accounts each have
+ * their own password, not one shared one.
  */
 import { chromium } from "@playwright/test";
 import { mkdirSync } from "node:fs";
@@ -40,12 +42,20 @@ const ROUTE_ROLES = {
   "/admin/audit": ["HR_ADMIN", "AUDITOR"],
 };
 
+// Each seeded account can have its own password (SeedRunner generates one per user, not one
+// shared password) -- QA_<ROLE>_PASSWORD overrides QA_PASSWORD per role when they differ.
 const PASSWORD = process.env.QA_PASSWORD ?? "Password123!";
 const USERS = {
   HR_ADMIN: process.env.QA_HR_ADMIN_EMAIL ?? "admin@acme.test",
   HR_MANAGER: process.env.QA_HR_MANAGER_EMAIL ?? "qa.manager@acme.test",
   COMP_ANALYST: process.env.QA_COMP_ANALYST_EMAIL ?? "qa.analyst@acme.test",
   AUDITOR: process.env.QA_AUDITOR_EMAIL ?? "qa.auditor@acme.test",
+};
+const PASSWORDS = {
+  HR_ADMIN: process.env.QA_HR_ADMIN_PASSWORD ?? PASSWORD,
+  HR_MANAGER: process.env.QA_HR_MANAGER_PASSWORD ?? PASSWORD,
+  COMP_ANALYST: process.env.QA_COMP_ANALYST_PASSWORD ?? PASSWORD,
+  AUDITOR: process.env.QA_AUDITOR_PASSWORD ?? PASSWORD,
 };
 
 async function login(page, email, password) {
@@ -79,7 +89,7 @@ async function crawlRole(role) {
   });
   page.on("pageerror", (err) => consoleErrors.push("pageerror: " + err.message));
 
-  await login(page, email, PASSWORD);
+  await login(page, email, PASSWORDS[role]);
   const problems = [];
 
   for (const [route, allowedRoles] of Object.entries(ROUTE_ROLES)) {

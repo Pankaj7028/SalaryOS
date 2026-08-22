@@ -1894,6 +1894,67 @@ sort.png` (git-ignored).
 Only 1 of P9.6's 3 gaps remains: `fxRateMonth`, an open design decision (not a build task) — see
 `docs/STATE.md`.
 
+### QA + feature-improvement pass (2026-08-22)
+
+User ask: do a QA and feature-improvement analysis, plan it, and start implementing. Real browser
+QA first (one continuous session per role, per the standing P9.5/P9.6 lesson): all 14 nav routes ×
+4 roles (56 combinations) render correctly and every role-gated route degrades gracefully rather
+than crashing; band creation via the bands-grid empty-cell dialog persists correctly end to end
+(DB row count confirmed before/after); the 60-row PENDING changes queue, `/admin/users`,
+`/admin/fx-rates`, `/admin/import`, `/admin/audit` all render real content; combined employee
+filters (`status`+`bandStatus`+`sortBy`) plus Next-button pagination work through the actual UI;
+zero console/page errors anywhere in the session; zero TypeScript `any` (NFR-10). One early
+hypothesis (a missing merit-budget input) turned out to be **wrong** — `/insights/pay`'s increase-
+cycle question already has a full budget input + burn-percent display; caught by checking the code
+before adding it to a plan, not after building something redundant.
+
+**Two real bugs found and fixed**, both 375px overflow (checked every route P9.5 didn't cover):
+
+1. `/admin/import`: 963px of content in a 375px viewport. Cause: the CSV-columns `<code>` block
+   sat inside a `flex flex-col` container with no `min-w-0` — a flex item's default `min-width` is
+   `auto` (its own content width), not `0`, so it refused to shrink or wrap, forcing the whole page
+   wide (a well-known flexbox gotcha, not obvious from the markup alone). Fixed:
+   `min-w-0` on the flex container, `break-words whitespace-normal` on the `<code>` itself, so the
+   column list wraps onto multiple lines instead of pushing the page wider.
+2. `/changes`: 415px in a 375px viewport — smaller, but real. Cause: `ui/tabs.tsx`'s shared
+   `TabsList` primitive is `inline-flex w-fit` with no width cap, so five tabs with a long label
+   ("Awaiting approval") don't wrap or scroll, they just grow past the viewport. Fixed at the
+   primitive (`tabs.tsx`), not the call site — added `max-w-full overflow-x-auto` so `TabsList`
+   still hugs its content width when there's room, but caps to the parent's width and scrolls
+   internally instead of blowing out the page once there isn't. Only one current consumer
+   (`changes-screen.tsx`), so this protects the next one too, not just today's bug.
+
+Both re-measured at 375px after the fix (`scrollWidth === clientWidth` on both routes, `FIXED`),
+screenshotted, and `npm run verify` (tokens + contrast + lint + typecheck + test + build) stayed
+clean.
+
+**Three feature gaps found by cross-referencing the backend against the frontend** (a capability
+that curls fine but nothing in the UI can ever reach):
+
+1. **`/insights/equity` has no CSV export** — every other insights screen (`/insights/pay`,
+   `/insights/reports`, the Overview dashboard) exports its data; the pay-gap screen doesn't use
+   `ChartCard` at all (plain cards/tables), so it silently has no export path anywhere. Real
+   inconsistency for what is arguably the most compliance-sensitive screen in the app.
+2. **Salary-band CSV import has a complete backend** (`POST /api/bands/import`, dry-run diff,
+   per-row `CREATE`/`VERSION`/`ERROR`, `jobLevelId,countryCode,currency,minAmount,midAmount,
+   maxAmount,effectiveFrom,note`) **and zero frontend.** `BuildPlan.md`'s own P5.3 done-note said
+   so explicitly at the time — "a UI renders/downloads it whenever a bulk-upload screen exists
+   (not this step)" — and no later step ever picked it back up. `/admin/import` was built for
+   employees only (P8.4), even though CLAUDE.md's RBAC table has exactly one "Import / bulk
+   upload: HR Admin" row covering all three CSV types, not three separate capabilities.
+3. **Merit-cycle bulk upload has a complete backend** (`POST /api/changes/bulk-upload`,
+   `employeeNumber,newAmount,changeReason[,note]`, one `effectiveDate` for the whole batch, no
+   dry-run — a DRAFT is cheap to discard so there's no separate preview step by design) **and
+   zero frontend**, same story as bands.
+
+**Plan for the three gaps** — turn `/admin/import` into a tabbed hub (Employees / Salary bands /
+Merit changes) instead of three separate nav entries, since RBAC already treats them as one
+capability: reuses the just-fixed `Tabs` primitive (real regression coverage), tab state in
+`?tab=` per CLAUDE.md §9, and the existing `EmployeeImportScreen` becomes one of three panels
+rather than a page of its own. Equity export uses the existing `downloadCsv` utility directly
+(no `ChartCard` refactor needed) on both the unadjusted comparison and the level-adjusted cohort
+table.
+
 ---
 
 ## Progress log
