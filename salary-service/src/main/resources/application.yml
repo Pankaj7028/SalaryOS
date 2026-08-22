@@ -37,6 +37,12 @@ app:
   # The normalisation target (CLAUDE.md §6.4/§10) — every comp record's normalized_annual_base
   # is in this currency, pinned via fx_rates, never recomputed at today's rate.
   base-currency: ${APP_BASE_CURRENCY:USD}
+  seed:
+    # P9.1: threaded through every generator so two runs on empty databases produce identical
+    # data — no UUID.randomUUID(), no Instant.now(), no Math.random() anywhere in seed/.
+    random-seed: ${APP_SEED_RANDOM_SEED:20260820}
+    # Refuses to run against a non-empty employees table unless this is true (--app.seed.force=true).
+    force: ${APP_SEED_FORCE:false}
 
 server:
   port: 8080

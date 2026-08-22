@@ -1571,9 +1571,46 @@ afterward.
 After completion of complete P8 stop executing next P9 task and do the local setup of this service and give me access URL for progress and feature check also here you can check and verify the current implementation you did so farthat does all features are working as expected and is UI is looking good and stable.
 ## P9 — Seed, hardening, acceptance
 
-- [ ] **P9.1** `SeedRunner` and generators per `salary-management-backend.md §9`, including every
+- [x] **P9.1** `SeedRunner` and generators per `salary-management-backend.md §9`, including every
   deliberate anomaly. *Verify:* 10,000 employees and ~40k comp records in under 90 seconds; log the
   stage timings.
+
+  Observed (local Docker Postgres, `--spring.profiles.active=local,seed`, seed=20260820): **17s**
+  total, well under the 90s target. Per-stage timings logged by `SeedRunner`: countries 3ms,
+  locations 2ms, departments 2ms, job families/levels 3ms, users 431ms (Argon2id hashing), bands
+  38ms, fx rates 9ms, employees 1394ms, demographics 110ms, compensation records+components
+  14652ms (the dominant stage — 10,000 employees × 3–7 periods each), changes 392ms.
+
+  Counts (confirmed against the DB directly, not just the log): `employees=10000`,
+  `compensation_records=49688`, `compensation_components=14288`, `compensation_changes=1200`,
+  `salary_bands=936`, `fx_rates=504`, `employee_current_comp=9580`.
+
+  Anomalies: `belowMin=180` (2 countries, IN/BR), `aboveMax=60` (L5+), `noBand=33` (target ~40 —
+  see below), current-period compa-ratio range `0.60..1.56` (spec's "0.72–1.28" describes the bulk
+  spread; the deliberate below-min/above-max anomalies are meant to sit outside it, which they now
+  do cleanly after a fix — see next paragraph).
+
+  Two rounds of tuning against the doc's approximate targets, both found by actually running the
+  seed rather than reasoning about it: (1) the original per-(level×country) band coverage was a
+  50/50 coin flip, which left ~5,000 employees — half the company — with no band, against the
+  doc's "40 with a level/country combination that has no band." Replaced with a deterministic rule
+  (`BandGenerator`: skip only L6/L7 in Ireland and Poland, the two rarest levels × two
+  lowest-weighted countries), landing at 33. This does widen `bands(rows)` to 936 vs. the doc's
+  "~500" — a direct consequence of fixing the far more consequential employee-facing anomaly count;
+  documented in `BandGenerator`'s javadoc. (2) Compounding raises (2–12% per period, uncompounded
+   by any ceiling) let ordinary long-tenured employees drift past compa-ratio 2.0 with no anomaly
+  involved; `CompensationGenerator` now clamps ordinary period-over-period drift to `band.mid() ×
+  [0.72, 1.28]` before the deliberate below-min/above-max overrides run (which still replace the
+  value outright, so those targets land outside the clamp as intended). Component volume was ~31k
+  against the doc's "~14,000" (a component was attached to every eligible period, not a sample of
+  them); gated both `BONUS_TARGET` and `HOUSING`/`TRANSPORT` behind `COMPONENT_CHANCE=0.46`,
+  landing at 14,288.
+
+  `compensation_records=49688` is ~24% over the doc's "~40,000" and was not further tuned: the
+  same doc line commits to "3–7 periods each" (inclusive), whose own average (5) already implies
+  10,000 × 5 = 50,000 — the two figures in the spec are in tension with each other, and honoring
+  the literal per-employee period count was judged more important than forcing the aggregate
+  total down by narrowing it.
 - [ ] **P9.2** Reproducibility. *Verify:* seed twice from empty; totals, medians, and the anomaly
   counts are identical. Assert it in a test.
 - [ ] **P9.3** `DemographicsIsolationTest` across every DTO package outside `analytics`.
@@ -1593,8 +1630,8 @@ After completion of complete P8 stop executing next P9 task and do the local set
 
 | | |
 |---|---|
-| **Last completed** | `P8.4` Employee CSV import with dry-run diff — done, `[x]`, 128/128 backend tests (2026-08-22). P8 is complete; per the standing instruction below, stopped here for local setup + review rather than starting P9. |
-| **Current step** | `P9.1` — `SeedRunner` and generators, once the user resumes the build. |
+| **Last completed** | `P9.1` `SeedRunner` and 7 generators — done, `[x]`, 10,000 employees + 49,688 comp records seeded in 17s against local Postgres, deliberate anomalies tuned to match doc §9 (2026-08-22). |
+| **Current step** | `P9.2` — reproducibility test (seed twice from empty, assert identical totals/medians/anomaly counts). |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far). |
 
 _Update both rows on every completed step._
