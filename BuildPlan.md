@@ -1830,14 +1830,78 @@ afterward.
   authenticated dashboard actually rendered ("Ada Admin" in the page body) rather than a sign-in
   redirect.
 
+### Closing two of P9.6's three acceptance-criteria gaps: band-status filter + compa-ratio sort (2026-08-22)
+
+User ask: check for and complete any pending/backlog work. P9.6's own done-note listed 3 real
+gaps against `Technical-Requirements.md §6`'s twelve acceptance criteria; `fxRateMonth` (criterion
+#8) is a considered design decision already explained in `PayrollCostResponse`'s own javadoc, not
+a bug, so left alone — but criterion #2's missing band-status filter and compa-ratio sort on the
+employee list are real, closeable feature gaps (`employees-screen.tsx`'s own comment had said so
+since P4.3). Both are now built, server-side, over the full 10k dataset — not a client-side filter
+of one page, which would have silently misreported the true result set exactly as that P4.3
+comment warned against.
+
+**First implementation attempt failed a real regression check, caught before it shipped**: added
+a read-only `@OneToOne Employee.currentComp` so `Specification`/keyset `Sort` could reach
+`compaRatio`/`bandStatus` directly. It compiled, and curl testing against the seeded app looked
+correct — but `./mvnw clean verify` then broke `PayrollCostAndHeadcountTest` and
+`ProjectionConsistencyTest` with `Hibernate.TransientPropertyValueException`: a persistent
+`Employee` already in a test's session got treated as referencing whatever `EmployeeCurrentComp`
+row shared its id, the moment a test legitimately saved both in one transaction. Reverted the
+relationship entirely rather than chase a Hibernate association-management edge case in code the
+rest of this project has deliberately kept relationship-free between separately-owned tables
+(`Employee`'s own class javadoc already explains why, for `employee_demographics`).
+
+**What shipped instead**: `EmployeeSpecifications.bandStatus()` — a correlated subquery against
+`EmployeeCurrentComp`, the same pattern `countryCode` already used against `Location`, no
+relationship needed. Compa-ratio sort couldn't reuse Spring Data's keyset `Window`/`Sort` API at
+all once the relationship was gone (that API resolves a dotted sort property like
+`"currentComp.compaRatio"` against the entity's own JPA-mapped graph) — `EmployeeService
+.listByCompaRatio` hand-rolls the same keyset shape as a native query instead: `ORDER BY
+compa_ratio DESC NULLS LAST, id ASC` (Postgres's own DESC default is NULLS FIRST — confirmed live
+before fixing it, page one was 100% NO_BAND employees with a null compa-ratio), restricted to
+employees who have a current comp record at all. The query returns ordered ids only; the actual
+response rows are built by the same batch-lookup + `toSummary` mapping `listByLastName` uses, so
+the two sort paths can never drift in what they render. Export (`GET /api/employees/export`) got
+`bandStatus` too, for FR-2.7's "always matches the on-screen filter" — it had no sort concept to
+begin with, so `sortBy` doesn't apply there.
+
+New backend test `EmployeeListSortAndFilterTest` (Testcontainers, 600 seeded employees: some with
+no comp record at all, some NO_BAND with a comp record but null compa-ratio) pages every
+`bandStatus` value and the compa-ratio sort to completion, asserting no duplicate/skip, strictly
+non-increasing order, and every null trailing every real value. `./mvnw clean verify` →
+`Tests run: 133, Failures: 0, Errors: 0`, `BUILD SUCCESS` (up from 131 — this test plus the
+now-required extra param in `AuditImmutabilityTest`'s existing `employeeService.list(...)` call).
+
+Re-verified live against the real 10k-employee seed after the rewrite, not just via the new unit
+test: full keyset walk of `sortBy=compaRatio` → 9,580 rows (matches `employee_current_comp`'s own
+count), 0 duplicates, non-null values strictly non-increasing, exactly 33 nulls (matches the
+seed's own `noBand` anomaly count) all trailing at the end. All four `bandStatus` values' full
+walks matched direct DB counts exactly (2636/215/6696/33). Combined `departmentId` +
+`bandStatus=ABOVE_MAX` matched a direct SQL join count (267/267).
+
+**Frontend**: `bandStatus`/`sortBy` added to `EmployeeListParams`/`buildQuery`
+(`lib/api/employees.ts`); two new `Select` controls in `employees-screen.tsx` (band status: In
+band/Below minimum/Above maximum/No band; sort: last name/compa-ratio highest-first), URL-synced
+like every other filter on this screen (CLAUDE.md §9). `npm run verify` (tokens + contrast + lint
++ typecheck + test + build) clean. Verified live through a real Chromium session (`scripts/verify-
+band-status-and-sort.mjs`, new): selected "Below minimum" → URL became `?bandStatus=BELOW_MIN`, 50
+rows rendered; selected the compa-ratio sort → URL became `?sortBy=compaRatio`, and the rendered
+rows showed real descending compa-ratio figures (1.56, 1.56, 1.56, 1.56, 1.55…) with the `BandBar`
+correctly marking each as above-max — a screenshot of this run is in `screenshots/verify-band-
+sort.png` (git-ignored).
+
+Only 1 of P9.6's 3 gaps remains: `fxRateMonth`, an open design decision (not a build task) — see
+`docs/STATE.md`.
+
 ---
 
 ## Progress log
 
 | | |
 |---|---|
-| **Last completed** | `P9.7` README rewrite — done, `[x]`, verified for real against a freshly recreated Postgres container end to end (seed → login → authenticated dashboard render) (2026-08-22). |
-| **Current step** | **None — every `BuildPlan.md` step is now `[x]`.** Not the same as "the build is done" per `Technical-Requirements.md §6`'s own bar: P9.6 found 3 real acceptance-criteria gaps (employee-list band-status filter + compa-ratio sort, `fxRateMonth` on analytics responses) that are real feature/design work, not verification failures — see the P9.6 done-note and `docs/STATE.md` for the open decision. |
+| **Last completed** | Post-P9 backlog sweep — closed 2 of P9.6's 3 acceptance-criteria gaps (employee-list `bandStatus` filter + `sortBy=compaRatio`, both server-side over the full 10k dataset, verified live). `133/133` backend, frontend `verify` clean (2026-08-22). |
+| **Current step** | **None — every `BuildPlan.md` step is `[x]`.** One open item remains: `fxRateMonth` on analytics responses (P9.6 criterion #8) is a considered design decision, not a build task — see `docs/STATE.md`. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._

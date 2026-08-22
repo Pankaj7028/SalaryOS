@@ -41,6 +41,7 @@ import org.springframework.data.domain.ScrollPosition;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Window;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -67,6 +68,10 @@ public class EmployeeService {
 	private static final Sort SORT = Sort.by("lastName", "id");
 	/** FR-6.6/FR-6.4's shared threshold: a cohort under this size could identify individuals. */
 	private static final int PEER_COHORT_SUPPRESSION_THRESHOLD = 5;
+	/** A BigDecimal string can never collide with this -- the compa-ratio-sort cursor's encoding
+	 * (see {@link #listByCompaRatio}) for "the last row on this page had a null compaRatio" (an
+	 * employee with no band). */
+	private static final String NULL_CURSOR_MARKER = "__NULL__";
 
 	private final EmployeeRepository employeeRepository;
 	private final EmployeeCurrentCompRepository employeeCurrentCompRepository;
@@ -81,6 +86,7 @@ public class EmployeeService {
 	private final CursorCodec cursorCodec;
 	private final AuditService auditService;
 	private final EffectiveDating effectiveDating;
+	private final JdbcTemplate jdbcTemplate;
 
 	private static final Set<String> VALID_EMPLOYMENT_TYPES = Set.of("FULL_TIME", "PART_TIME", "CONTRACT");
 
@@ -97,7 +103,8 @@ public class EmployeeService {
 			EmployeeCurrentCompProjector projector,
 			CursorCodec cursorCodec,
 			AuditService auditService,
-			EffectiveDating effectiveDating) {
+			EffectiveDating effectiveDating,
+			JdbcTemplate jdbcTemplate) {
 		this.employeeRepository = employeeRepository;
 		this.employeeCurrentCompRepository = employeeCurrentCompRepository;
 		this.compensationRecordRepository = compensationRecordRepository;
@@ -111,11 +118,25 @@ public class EmployeeService {
 		this.cursorCodec = cursorCodec;
 		this.auditService = auditService;
 		this.effectiveDating = effectiveDating;
+		this.jdbcTemplate = jdbcTemplate;
 	}
 
 	public KeysetPage<EmployeeSummaryResponse> list(
 			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId,
-			String status, String cursor, int limit, UUID currentUserId) {
+			String status, String bandStatus, String sortBy, String cursor, int limit, UUID currentUserId) {
+
+		KeysetPage<EmployeeSummaryResponse> page = "compaRatio".equals(sortBy)
+				? listByCompaRatio(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, cursor, limit)
+				: listByLastName(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, cursor, limit);
+
+		auditService.recordListRead(currentUserId, "EMPLOYEE",
+				describeFilter(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus), page.items().size());
+		return page;
+	}
+
+	private KeysetPage<EmployeeSummaryResponse> listByLastName(
+			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId,
+			String status, String bandStatus, String cursor, int limit) {
 
 		// Specification.where/and reject a null argument outright (no longer the historical
 		// null-means-"no restriction" behaviour) — start unrestricted and fold in only the
@@ -126,12 +147,12 @@ public class EmployeeService {
 				.and(nonNullOrUnrestricted(EmployeeSpecifications.locationId(locationId)))
 				.and(nonNullOrUnrestricted(EmployeeSpecifications.countryCode(countryCode)))
 				.and(nonNullOrUnrestricted(EmployeeSpecifications.jobLevelId(jobLevelId)))
-				.and(nonNullOrUnrestricted(EmployeeSpecifications.status(status)));
+				.and(nonNullOrUnrestricted(EmployeeSpecifications.status(status)))
+				.and(nonNullOrUnrestricted(EmployeeSpecifications.bandStatus(bandStatus)));
 
 		ScrollPosition position = toScrollPosition(cursor);
 
-		Window<Employee> window = employeeRepository.findBy(spec,
-				q -> q.sortBy(SORT).limit(limit).scroll(position));
+		Window<Employee> window = employeeRepository.findBy(spec, q -> q.sortBy(SORT).limit(limit).scroll(position));
 
 		List<Employee> employees = window.getContent();
 		Map<UUID, EmployeeCurrentComp> currentComp = employeeCurrentCompRepository
@@ -152,18 +173,146 @@ public class EmployeeService {
 		if (window.hasNext() && !employees.isEmpty()) {
 			nextCursor = encodeCursor(window.positionAt(employees.size() - 1));
 		}
-
-		auditService.recordListRead(currentUserId, "EMPLOYEE", describeFilter(query, departmentId, locationId, countryCode, jobLevelId, status), items.size());
-
 		return new KeysetPage<>(items, nextCursor);
 	}
 
-	private String describeFilter(String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId, String status) {
+	/** FR-2.2's compa-ratio sort. {@code Employee} deliberately has no JPA relationship to {@link
+	 * EmployeeCurrentComp} (see {@code Employee}'s class javadoc for why an earlier attempt at
+	 * one broke unrelated tests), which rules out Spring Data's {@code Sort}/keyset-{@code Window}
+	 * machinery here — that API resolves a dotted sort property like {@code
+	 * "currentComp.compaRatio"} against the entity's own JPA-mapped graph. This hand-rolls the
+	 * same keyset shape with a native query instead: order by {@code compa_ratio DESC NULLS LAST,
+	 * id ASC} (Postgres's own DESC default is NULLS FIRST, which would otherwise bury every real
+	 * compa-ratio behind the NO_BAND employees on page one), restricted to employees who have a
+	 * current comp record at all — a day-one hire with no pay set yet has no meaningful place in
+	 * this ordering. The query returns ids in the right order only; the actual {@link
+	 * EmployeeSummaryResponse} rows are built by the exact same batch-lookup + {@link #toSummary}
+	 * path {@link #listByLastName} uses, so the two sorts can never drift in what they render. */
+	private KeysetPage<EmployeeSummaryResponse> listByCompaRatio(
+			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId,
+			String status, String bandStatus, String cursor, int limit) {
+
+		StringBuilder sql = new StringBuilder(
+				"select e.id as id, ecc.compa_ratio as compa_ratio "
+						+ "from salary_schema.employees e "
+						+ "join salary_schema.employee_current_comp ecc on ecc.employee_id = e.id ");
+		List<Object> params = new ArrayList<>();
+		List<String> where = new ArrayList<>();
+
+		if (countryCode != null && !countryCode.isBlank()) {
+			sql.append("join salary_schema.locations l on l.id = e.location_id ");
+			where.add("l.country_code = ?");
+			params.add(countryCode);
+		}
+		if (query != null && !query.isBlank()) {
+			where.add("(e.first_name ilike ? or e.last_name ilike ? or e.employee_number ilike ? or e.work_email ilike ?)");
+			String pattern = "%" + query + "%";
+			params.add(pattern);
+			params.add(pattern);
+			params.add(pattern);
+			params.add(pattern);
+		}
+		if (departmentId != null) {
+			where.add("e.department_id = ?");
+			params.add(departmentId);
+		}
+		if (locationId != null) {
+			where.add("e.location_id = ?");
+			params.add(locationId);
+		}
+		if (jobLevelId != null) {
+			where.add("e.job_level_id = ?");
+			params.add(jobLevelId);
+		}
+		if (status != null && !status.isBlank()) {
+			where.add("e.status = ?");
+			params.add(status);
+		}
+		if (bandStatus != null && !bandStatus.isBlank()) {
+			where.add("ecc.band_status = ?");
+			params.add(bandStatus);
+		}
+
+		CompaRatioCursor decoded = decodeCompaRatioCursor(cursor);
+		if (decoded != null) {
+			if (decoded.compaRatio() == null) {
+				where.add("(ecc.compa_ratio is null and e.id > ?)");
+				params.add(decoded.id());
+			}
+			else {
+				where.add("(ecc.compa_ratio is null or ecc.compa_ratio < ? or (ecc.compa_ratio = ? and e.id > ?))");
+				params.add(decoded.compaRatio());
+				params.add(decoded.compaRatio());
+				params.add(decoded.id());
+			}
+		}
+
+		if (!where.isEmpty()) {
+			sql.append("where ").append(String.join(" and ", where)).append(' ');
+		}
+		sql.append("order by ecc.compa_ratio desc nulls last, e.id asc limit ?");
+		params.add(limit + 1); // +1 to detect whether there's a next page, same as Window's own convention
+
+		List<CompaRatioRow> rows = jdbcTemplate.query(sql.toString(), params.toArray(), (rs, rowNum) -> new CompaRatioRow(
+				(UUID) rs.getObject("id"), (BigDecimal) rs.getObject("compa_ratio")));
+
+		boolean hasNext = rows.size() > limit;
+		List<CompaRatioRow> page = hasNext ? rows.subList(0, limit) : rows;
+
+		Map<UUID, Employee> employeesById = employeeRepository.findAllById(page.stream().map(CompaRatioRow::id).toList())
+				.stream().collect(Collectors.toMap(Employee::getId, e -> e));
+		Map<UUID, EmployeeCurrentComp> currentComp = employeeCurrentCompRepository
+				.findAllById(page.stream().map(CompaRatioRow::id).toList())
+				.stream()
+				.collect(Collectors.toMap(EmployeeCurrentComp::getEmployeeId, c -> c));
+		Map<UUID, SalaryBand> bands = fetchBands(currentComp.values());
+
+		List<EmployeeSummaryResponse> items = page.stream()
+				.map(row -> {
+					Employee employee = employeesById.get(row.id());
+					EmployeeCurrentComp comp = currentComp.get(row.id());
+					SalaryBand band = comp == null || comp.getBandId() == null ? null : bands.get(comp.getBandId());
+					return toSummary(employee, comp, band);
+				})
+				.toList();
+
+		String nextCursor = hasNext && !page.isEmpty()
+				? encodeCompaRatioCursor(page.get(page.size() - 1))
+				: null;
+		return new KeysetPage<>(items, nextCursor);
+	}
+
+	private record CompaRatioRow(UUID id, BigDecimal compaRatio) {
+	}
+
+	private record CompaRatioCursor(BigDecimal compaRatio, UUID id) {
+	}
+
+	private CompaRatioCursor decodeCompaRatioCursor(String cursor) {
+		if (cursor == null || cursor.isBlank()) {
+			return null;
+		}
+		Cursor decoded = cursorCodec.decode(cursor);
+		String rawCompaRatio = decoded.keys().get("compaRatio");
+		BigDecimal compaRatio = NULL_CURSOR_MARKER.equals(rawCompaRatio) ? null : new BigDecimal(rawCompaRatio);
+		return new CompaRatioCursor(compaRatio, UUID.fromString(decoded.keys().get("id")));
+	}
+
+	private String encodeCompaRatioCursor(CompaRatioRow lastRow) {
+		Map<String, String> keys = new java.util.LinkedHashMap<>();
+		keys.put("compaRatio", lastRow.compaRatio() == null ? NULL_CURSOR_MARKER : String.valueOf(lastRow.compaRatio()));
+		keys.put("id", String.valueOf(lastRow.id()));
+		return cursorCodec.encode(new Cursor(keys));
+	}
+
+	private String describeFilter(
+			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId, String status, String bandStatus) {
 		StringBuilder sb = new StringBuilder();
 		if (query != null) sb.append("q=").append(query).append(' ');
 		if (departmentId != null) sb.append("departmentId=").append(departmentId).append(' ');
 		if (locationId != null) sb.append("locationId=").append(locationId).append(' ');
 		if (countryCode != null) sb.append("countryCode=").append(countryCode).append(' ');
+		if (bandStatus != null) sb.append("bandStatus=").append(bandStatus).append(' ');
 		if (jobLevelId != null) sb.append("jobLevelId=").append(jobLevelId).append(' ');
 		if (status != null) sb.append("status=").append(status).append(' ');
 		return sb.isEmpty() ? "(none)" : sb.toString().trim();
@@ -171,7 +320,8 @@ public class EmployeeService {
 
 	/** FR-2.7: same filters as {@link #list}, unpaginated — the export always matches the on-screen filter. */
 	public List<EmployeeSummaryResponse> exportAll(
-			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId, String status, UUID currentUserId) {
+			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId, String status,
+			String bandStatus, UUID currentUserId) {
 
 		Specification<Employee> spec = Specification.<Employee>unrestricted()
 				.and(nonNullOrUnrestricted(EmployeeSpecifications.search(query)))
@@ -179,7 +329,8 @@ public class EmployeeService {
 				.and(nonNullOrUnrestricted(EmployeeSpecifications.locationId(locationId)))
 				.and(nonNullOrUnrestricted(EmployeeSpecifications.countryCode(countryCode)))
 				.and(nonNullOrUnrestricted(EmployeeSpecifications.jobLevelId(jobLevelId)))
-				.and(nonNullOrUnrestricted(EmployeeSpecifications.status(status)));
+				.and(nonNullOrUnrestricted(EmployeeSpecifications.status(status)))
+				.and(nonNullOrUnrestricted(EmployeeSpecifications.bandStatus(bandStatus)));
 
 		List<Employee> employees = employeeRepository.findAll(spec, SORT);
 		Map<UUID, EmployeeCurrentComp> currentComp = employeeCurrentCompRepository
@@ -197,7 +348,7 @@ public class EmployeeService {
 				.toList();
 
 		auditService.recordListRead(currentUserId, "EMPLOYEE",
-				"EXPORT " + describeFilter(query, departmentId, locationId, countryCode, jobLevelId, status), rows.size());
+				"EXPORT " + describeFilter(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus), rows.size());
 
 		return rows;
 	}

@@ -36,9 +36,14 @@ export type EmployeeListFilters = {
   countryCode?: string;
   jobLevelId?: string;
   status?: string;
+  bandStatus?: string;
 };
 
 export type EmployeeListParams = EmployeeListFilters & {
+  /** "compaRatio" for FR-2.2's compa-ratio sort; omitted (or anything else) keeps the default
+   * last-name order. Export has no sort param — it always matches the doc's "same filters,
+   * unpaginated" contract, not the on-screen sort. */
+  sortBy?: string;
   cursor?: string;
   limit?: number;
 };
@@ -143,6 +148,8 @@ function buildQuery(params: EmployeeListParams): string {
   if (params.countryCode) search.set("countryCode", params.countryCode);
   if (params.jobLevelId) search.set("jobLevelId", params.jobLevelId);
   if (params.status) search.set("status", params.status);
+  if (params.bandStatus) search.set("bandStatus", params.bandStatus);
+  if ("sortBy" in params && params.sortBy) search.set("sortBy", params.sortBy);
   if (params.cursor) search.set("cursor", params.cursor);
   if (params.limit) search.set("limit", String(params.limit));
   return search.toString();

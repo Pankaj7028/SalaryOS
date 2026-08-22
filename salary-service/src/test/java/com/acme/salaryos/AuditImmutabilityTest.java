@@ -106,7 +106,7 @@ class AuditImmutabilityTest {
 		assertThat(writeEvent.getAfterJson()).contains("\"firstName\"").contains("\"Renamed\"");
 
 		// FR-7.2: a real list read records the filter and the count, never an id list.
-		employeeService.list(null, fx.departmentId(), null, null, null, null, null, 50, fx.userId());
+		employeeService.list(null, fx.departmentId(), null, null, null, null, null, null, null, 50, fx.userId());
 		List<AuditEvent> readEvents = auditEventRepository.findAll().stream()
 				.filter(e -> "READ_LIST".equals(e.getAction()) && "EMPLOYEE".equals(e.getEntityType())
 						&& e.getAfterJson() != null && e.getAfterJson().contains(fx.departmentId().toString()))

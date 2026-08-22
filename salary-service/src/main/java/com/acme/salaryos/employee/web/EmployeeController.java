@@ -69,11 +69,16 @@ public class EmployeeController {
 			@RequestParam(required = false) String countryCode,
 			@RequestParam(required = false) UUID jobLevelId,
 			@RequestParam(required = false) String status,
+			// IN_BAND/BELOW_MIN/ABOVE_MAX/NO_BAND (FR-2.2).
+			@RequestParam(required = false) String bandStatus,
+			// "compaRatio" for the FR-2.2 compa-ratio sort; anything else (including absent)
+			// keeps the default lastName order.
+			@RequestParam(required = false) String sortBy,
 			@RequestParam(required = false) String cursor,
 			@RequestParam(defaultValue = "50") int limit,
 			@AuthenticationPrincipal UUID currentUserId) {
 		int pageSize = Math.min(Math.max(limit, 1), 200);
-		return employeeService.list(q, departmentId, locationId, countryCode, jobLevelId, status, cursor, pageSize, currentUserId);
+		return employeeService.list(q, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, sortBy, cursor, pageSize, currentUserId);
 	}
 
 	@GetMapping("/{id}")
@@ -114,9 +119,10 @@ public class EmployeeController {
 			@RequestParam(required = false) String countryCode,
 			@RequestParam(required = false) UUID jobLevelId,
 			@RequestParam(required = false) String status,
+			@RequestParam(required = false) String bandStatus,
 			@AuthenticationPrincipal UUID currentUserId) {
 
-		List<EmployeeSummaryResponse> rows = employeeService.exportAll(q, departmentId, locationId, countryCode, jobLevelId, status, currentUserId);
+		List<EmployeeSummaryResponse> rows = employeeService.exportAll(q, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, currentUserId);
 		Map<UUID, String> departmentNames = referenceService.departments().stream()
 				.collect(Collectors.toMap(DepartmentResponse::id, DepartmentResponse::name));
 		Map<UUID, String> locationNames = referenceService.locations().stream()

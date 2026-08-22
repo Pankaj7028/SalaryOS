@@ -21,7 +21,17 @@ import java.util.UUID;
 
 /**
  * No JPA relationship to {@code employee_demographics} — that FK points the other way, on
- * purpose, so no fetch here can ever drag a demographic attribute along (CLAUDE.md §6.6).
+ * purpose, so no fetch here can ever drag a demographic attribute along (CLAUDE.md §6.6). Also
+ * deliberately no relationship to {@code employee_current_comp}: an earlier attempt at a
+ * read-only {@code @OneToOne} (for the FR-2.2 band-status filter and compa-ratio sort) made
+ * Hibernate treat a persistent {@code Employee} already in the session as referencing whatever
+ * {@code EmployeeCurrentComp} shared its id, throwing {@code TransientPropertyValueException} on
+ * flush in three unrelated tests that legitimately save both in the same transaction
+ * ({@code PayrollCostAndHeadcountTest}, {@code ProjectionConsistencyTest}) — a real, cross-cutting
+ * regression, not a theoretical one. {@code EmployeeSpecifications#bandStatus} uses a correlated
+ * subquery instead (the same pattern {@code countryCode} there already used, against {@code
+ * Location}), and the compa-ratio sort is a hand-rolled native query in {@code EmployeeService} —
+ * see its javadoc.
  */
 @Entity
 @Table(name = "employees")

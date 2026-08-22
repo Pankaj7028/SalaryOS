@@ -159,12 +159,15 @@ always whatever `SeedRunner` prints to the console on that run (`==== SEEDED LOG
 
 All twelve of `Technical-Requirements.md §6`'s acceptance criteria were walked live against
 seeded data at build step `P9.6` — the full criterion-by-criterion result (what was demonstrated
-and the exact observed output) is in `BuildPlan.md`'s P9.6 done-note. **9 of 12 pass; 3 have real,
-documented gaps** that are feature work, not verification failures: the employee list has no
-band-status filter and no compa-ratio sort (criterion #2), and analytics responses don't carry an
-`fxRateMonth` field — a deliberate design decision explained in `PayrollCostResponse`'s own
-javadoc, not an oversight, but one that conflicts with the criterion's literal wording (criterion
-#8). `docs/STATE.md` carries the same summary as an open question for whoever picks this up next.
+and the exact observed output) is in `BuildPlan.md`'s P9.6 done-note. **11 of 12 pass.** The
+employee list's missing band-status filter and compa-ratio sort (criterion #2) were closed in a
+post-P9 pass — both are server-side over the full 10k dataset (`bandStatus`/`sortBy=compaRatio` on
+`GET /api/employees`), not a client-side filter of one page. The one remaining gap: analytics
+responses don't carry an `fxRateMonth` field — a deliberate design decision explained in
+`PayrollCostResponse`'s own javadoc (an aggregate spanning many employees has no single governing
+FX month to report), not an oversight, but one that conflicts with criterion #8's literal wording.
+`docs/STATE.md` carries the same summary as an open product decision for whoever picks this up
+next.
 
 ## Status
 

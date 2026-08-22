@@ -20,18 +20,19 @@ import { canManageEmployees } from "@/lib/auth/roles";
  * `searchParams` (CLAUDE.md §9) — nothing here is component state that a
  * reload would lose.
  *
- * Two spec items are deliberately not built: a "saved-view select" (nothing
- * backs it — no view-persistence model exists anywhere in the API) and bulk
- * select → "Propose changes for selected" (that flow is P6.4 and doesn't
- * exist yet; a button with no action is worse than no button). A "band
- * status" filter is also omitted — `GET /api/employees` has no such
- * parameter, and filtering only the current page client-side would silently
- * misreport the true result set. Column sort is likewise not wired: the
- * service sorts a fixed `lastName, id` and keyset cursors are tied to that
- * order, so arbitrary column sort needs backend work this pass didn't do.
- * "Page 4" navigation isn't possible either — `KeysetPage` carries no total
- * count. Next uses the returned cursor; Previous uses browser history, which
- * only works for in-app back navigation, not a pasted mid-list link.
+ * One spec item is deliberately not built: a "saved-view select" (nothing
+ * backs it — no view-persistence model exists anywhere in the API). Bulk
+ * select → "Propose changes for selected" is P6.4 and doesn't exist yet; a
+ * button with no action is worse than no button. "Page 4" navigation isn't
+ * possible either — `KeysetPage` carries no total count. Next uses the
+ * returned cursor; Previous uses browser history, which only works for
+ * in-app back navigation, not a pasted mid-list link.
+ *
+ * Band-status filter and compa-ratio sort (both server-side, real keyset
+ * pagination over the full 10k, not a client-side filter of one page) were
+ * added post-P9.6 — `GET /api/employees` now takes `bandStatus` and
+ * `sortBy=compaRatio`; see `EmployeeService`'s javadoc for why the latter is
+ * a hand-rolled native query rather than the default keyset `Sort` path.
  */
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
@@ -49,6 +50,8 @@ export function EmployeesScreen() {
   const countryCode = searchParams.get("countryCode") ?? "";
   const jobLevelId = searchParams.get("jobLevelId") ?? "";
   const status = searchParams.get("status") ?? "";
+  const bandStatus = searchParams.get("bandStatus") ?? "";
+  const sortBy = searchParams.get("sortBy") ?? "";
   const cursor = searchParams.get("cursor") ?? "";
   const limit = Number(searchParams.get("limit") ?? "50");
 
@@ -84,7 +87,7 @@ export function EmployeesScreen() {
   const locations = useLocations();
   const jobLevels = useJobLevels();
   const countries = useCountries();
-  const employees = useEmployees({ q, departmentId, locationId, countryCode, jobLevelId, status, cursor, limit });
+  const employees = useEmployees({ q, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, sortBy, cursor, limit });
 
   const departmentNames = useMemo(
     () => new Map((departments.data ?? []).map((d) => [d.id, d.name])),
@@ -99,7 +102,7 @@ export function EmployeesScreen() {
     [jobLevels.data],
   );
 
-  const exportUrl = employeesExportUrl({ q, departmentId, locationId, countryCode, jobLevelId, status });
+  const exportUrl = employeesExportUrl({ q, departmentId, locationId, countryCode, jobLevelId, status, bandStatus });
   const session = useSession();
   const canManage = session.data ? canManageEmployees(session.data.role) : false;
   const [creating, setCreating] = useState(false);
@@ -185,6 +188,29 @@ export function EmployeesScreen() {
             <SelectItem value="ACTIVE">Active</SelectItem>
             <SelectItem value="ON_LEAVE">On leave</SelectItem>
             <SelectItem value="TERMINATED">Terminated</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={bandStatus || ALL}
+          onValueChange={(value) => updateParams({ bandStatus: value === ALL ? undefined : value })}
+        >
+          <SelectTrigger size="sm"><SelectValue placeholder="Band status" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Any band status</SelectItem>
+            <SelectItem value="IN_BAND">In band</SelectItem>
+            <SelectItem value="BELOW_MIN">Below minimum</SelectItem>
+            <SelectItem value="ABOVE_MAX">Above maximum</SelectItem>
+            <SelectItem value="NO_BAND">No band</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select
+          value={sortBy || "lastName"}
+          onValueChange={(value) => updateParams({ sortBy: value === "lastName" ? undefined : value })}
+        >
+          <SelectTrigger size="sm"><SelectValue placeholder="Sort" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="lastName">Sort: last name</SelectItem>
+            <SelectItem value="compaRatio">Sort: compa-ratio (highest first)</SelectItem>
           </SelectContent>
         </Select>
         <Select value={String(limit)} onValueChange={(value) => updateParams({ limit: value })}>

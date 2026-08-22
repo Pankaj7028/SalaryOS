@@ -14,9 +14,9 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | **Every `BuildPlan.md` step is `[x]`.** Not the same as "done" per `Technical-Requirements.md §6` — see below. |
-| **Last completed** | `P9.7` — README rewrite, verified end-to-end against a freshly recreated Postgres container (seed → login → authenticated dashboard render), not just written. |
-| **Next step** | None queued. Open product decision below is the natural next work if picked up. |
-| **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far — everything runs against local Postgres). **Open product decision (P9.6):** 3 of 12 acceptance criteria have real gaps — no band-status filter or compa-ratio sort on the employee list (criterion #2 — the P4.3 gap noted below was never closed), and no `fxRateMonth` field on analytics responses (criterion #8 — a *deliberate, reasoned* omission per `PayrollCostResponse`'s own javadoc, not an oversight, but it conflicts with the criterion's literal wording). Fix them (real feature work) or accept as documented limitations — see `BuildPlan.md`'s P9.6 note for full detail per criterion. |
+| **Last completed** | Post-P9 backlog sweep — closed 2 of P9.6's 3 acceptance-criteria gaps: employee list now has a real `bandStatus` filter and a `sortBy=compaRatio` keyset sort, both server-side over the full 10k dataset (verified live, not just unit-tested). `133/133` backend, frontend `verify` clean. |
+| **Next step** | None queued. Open product decision below is the only remaining item. |
+| **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far — everything runs against local Postgres). **Open product decision:** `fxRateMonth` is absent from every analytics response (P9.6 criterion #8) — a *deliberate, reasoned* omission per `PayrollCostResponse`'s own javadoc (an aggregate spanning many employees has no single governing FX month; inventing one would misleadingly imply a live recompute that never happens), not an oversight, but it conflicts with the criterion's literal wording. Needs a product call: accept the design as-is (and treat the criterion's wording as loose), or design some other UI treatment (a range, or per-row FX info) — not a "just add the field" fix. |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
@@ -80,10 +80,12 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
 - **One `.gitignore`, at the root.** Add new ignores there, not in a package subdirectory.
 - **`getCurrentUser()` in `src/lib/auth/current-user.ts` is a placeholder**, the seam where
   `GET /api/auth/me` lands at P2.5. Change `role` there to view the app as another role.
-- **P4.3's Employees list omits column sort, a "band status" filter, "page N" jump, saved views, and
-  bulk-select; `GET /employees/{id}/peers` (FR-6.6) was built at P4.4, not P7.5 (P7.5's real
-  remaining scope is just `increase-cycle`, FR-6.5); `TooltipProvider` lives once in
-  `query-provider.tsx`** — full reasoning for each in the P4.3/P4.4 done-notes in `BuildPlan.md`.
+- **P4.3's Employees list omitted column sort, a "band status" filter, "page N" jump, saved views,
+  and bulk-select. The first two were closed post-P9 (`bandStatus` + `sortBy=compaRatio`, see the
+  gotcha above); "page N", saved views, and bulk-select are still absent — `KeysetPage` carries no
+  total count for the first, and nothing backs the other two anywhere in the API.** `GET
+  /employees/{id}/peers` (FR-6.6) was built at P4.4, not P7.5 (P7.5's real remaining scope was
+  just `increase-cycle`, FR-6.5); `TooltipProvider` lives once in `query-provider.tsx`.
 - **FTE annualisation (P5.1, user-confirmed):** grossed to FTE = 1.0 (÷ FTE) for `ANNUAL`/`MONTHLY`;
   `HOURLY` is the exception — `amount × 2080` (documented nowhere else) already IS that figure, so
   no further ÷ FTE. `app.base-currency` (`APP_BASE_CURRENCY`, default `USD`) added the same step.
@@ -242,6 +244,17 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
   **Any future full end-to-end acceptance walkthrough (P9.5/P9.6) MUST be one continuous browser
   session across multiple pages, never a fresh session per check** — this class of bug is
   invisible to the latter.
+
+- **Don't add a JPA relationship between `Employee` and `EmployeeCurrentComp` to make a
+  `Specification`/keyset `Sort` reach `compaRatio`/`bandStatus`.** Tried this for P9.6's
+  band-status filter + compa-ratio sort; it broke `PayrollCostAndHeadcountTest` and
+  `ProjectionConsistencyTest` with `TransientPropertyValueException` -- Hibernate treats a
+  persistent `Employee` already in a session as referencing whatever `EmployeeCurrentComp`
+  shares its id the moment both get saved in one transaction, even with
+  `insertable/updatable=false`. Use a correlated subquery `Specification` (matching
+  `countryCode`'s own pattern against `Location`) for filters, and a hand-rolled native
+  query for anything that needs to sort by a field on the other table --
+  `EmployeeService.listByCompaRatio` is the template.
 
 ---
 
