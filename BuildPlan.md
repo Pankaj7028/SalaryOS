@@ -1957,12 +1957,212 @@ table.
 
 ---
 
+## P10 — Close v1
+
+> **Source (2026-08-23):** post-v1 feature + market analysis. Reasoning, scope verdicts and the
+> exclusion-list stance are in `docs/feature-roadmap.md`; `F<n>` ids below index into its table.
+> `requirements-one-pager.md` is still the scope contract — every step below was checked against it,
+> and the two that collided with an exclusion (`P11.5`, `P13.7`) were narrowed, not argued past.
+
+- [ ] **P10.1** `FxBasis` on the six analytics responses (F3) — resolves the standing FR-6.8 /
+  P9.6-criterion-#8 open decision recorded in `docs/STATE.md`. Replace the scalar `fxRateMonth` with
+  a record: `monthsSpanned`, `distinctRates`, `earliestMonth`, `latestMonth`, `missingCoverage`. The
+  existing `null` is **not** a bug — an aggregate over many employees has no single governing month;
+  this reports the basis honestly instead of fabricating one.
+  *Verify:* `curl` each of the six endpoints, every one carries a populated `fxBasis`; a targeted
+  test asserts `distinctRates` equals a direct SQL `count(distinct fx_rate_id)` over the same
+  population.
+- [ ] **P10.2** FX coverage matrix on `/admin/fx-rates` (F3) — currency × month over the currencies
+  actually in use by `employee_current_comp`, gaps in `--attention`.
+  *Verify:* delete one month's rate for one in-use currency locally; the cell renders as missing
+  **and** `missingCoverage` flips true on the analytics envelope.
+- [ ] **P10.3** `saved_views` (`V14`) + `GET/POST/DELETE /api/saved-views` (F1) — name, owner, route,
+  query string, shared flag. This is an **unshipped contract line**, not an enhancement:
+  `requirements-one-pager.md` excludes a free-text pay assistant and in the same sentence commits to
+  "a saved-question library plus a structured query builder".
+  *Verify:* save a filtered employee-list view; as another role, a shared view loads and reproduces
+  the exact filter set; an unshared view is 404 for a non-owner.
+- [ ] **P10.4** Saved-view picker + structured query builder UI (F1). A typed UI over the filter
+  params the endpoints already accept — never free text, so every cohort-suppression guardrail stays
+  in SQL.
+  *Verify:* `npm run verify` clean; build a three-filter question, save it, reload from the picker,
+  URL and result set identical.
+- [ ] **P10.5** `totalCount` on `KeysetPage`, page jump, bulk select (F4) — closes the last three
+  P4.3 omissions. **Do not** add a JPA relationship between `Employee` and `EmployeeCurrentComp` to
+  reach this (`docs/STATE.md` — it breaks `PayrollCostAndHeadcountTest`); follow
+  `EmployeeService.listByCompaRatio`'s native-query template.
+  *Verify:* count matches direct SQL for three filter combinations; NFR-1 (p95 < 400 ms) still holds
+  on the full 10k **with** the extra count — measure it, don't assume it.
+- [ ] **P10.6** `basis=BASE|TOTAL_TARGET_CASH` on `/analytics/payroll-cost` and
+  `/compa-ratio-distribution` (F2). FR-3.4 stores components and says they are "included in total
+  target cash"; today no analytic reads them, so Q1 does not answer what ACME actually spends.
+  Aggregate in SQL through `compensation_components` per NFR-6. **Build this as the seam equity
+  plugs into later** — it is the one-pager's named v2 candidate.
+  *Verify:* `TOTAL_TARGET_CASH` reconciles against a direct SQL sum of base + components over the
+  seed; `BASE` is byte-identical to today's response.
+- [ ] **P10.7** Basis toggle beside the existing as-paid/normalised control (F2).
+  *Verify:* `npm run verify` clean; toggling changes the figure **and** the URL (`?basis=`) per
+  CLAUDE.md §9.
+
+## P11 — Trust the data
+
+> Read-only, no migration except `P11.5`, cannot corrupt the ledger. **If only one phase gets built,
+> build this one** — it answers the two questions the HR Manager asks on their first real day.
+
+- [ ] **P11.1** `GET /api/analytics/data-health` (F11) — named checks, each `{key, label, severity,
+  count}`: no matching band, no compensation record at all, pay currency inconsistent with the
+  location's country, hire date after first ledger period, terminated employee with an open period,
+  FTE outliers, duplicate employee numbers, terminated managers, circular management chains. The
+  seed generates *deliberate* anomalies; a real import will generate accidental ones and nothing
+  currently surfaces them.
+  *Verify:* each count reconciles against its own direct SQL; FR-8.4's ~40 no-band employees land in
+  the right check with the right count.
+- [ ] **P11.2** `/admin/data-health` with drill-through and export (F11). Drill-through reuses the
+  employee list's existing filters wherever one exists.
+  *Verify:* `npm run verify`; each check drills to a real row list; 375px card degradation per UI
+  doc §12.10.
+- [ ] **P11.3** `GET /api/analytics/band-health` (F9) — range spread (`max/min − 1`), midpoint
+  progression between adjacent levels, adjacent-level overlap, population by quartile,
+  zero-incumbent bands, staleness (not versioned in N months).
+  *Verify:* spread and progression reconcile against direct SQL on three known bands; a deliberately
+  broken band (max below the next level's min) is flagged.
+- [ ] **P11.4** Band-health matrix on `/bands` (F9).
+  *Verify:* `npm run verify`; flagged bands use `--attention`/`--critical` per CLAUDE.md §5.1 —
+  no raw hex.
+- [ ] **P11.5** `market_data_points` (`V15`) + `POST /api/bands/market-import` (F10, **reframed**).
+  Benchmark data is a data business and a single-tenant tool has no contributor network — so build
+  the seam, not the dataset: source, job level, country, currency, p25/p50/p75, effective month.
+  Same CSV discipline as the bands import (header row, per-row `CREATE`/`ERROR`, one bad row never
+  blocks the rest). HR_ADMIN only, into the existing import hub.
+  *Verify:* import 20 rows with 2 deliberate errors → 18 `CREATE` + 2 `ERROR`, error report
+  downloadable, no partial-batch rollback.
+- [ ] **P11.6** Market tick on `<BandBar>` + "band mid vs market p50" in band health (F10).
+  **`docs/salary-management-ui.md §7.1` governs this component change and its §12 checklist is not
+  optional** — this is the signature component.
+  *Verify:* `npm run verify`; visual check in both themes at 375px; a band with no market data
+  renders unchanged, with no empty tick.
+
+## P12 — Act, don't just report
+
+> The largest and riskiest phase: `P12.1` changes the shape of `compensation_changes`, and every
+> lifecycle test lives on that table. Do `P12.1` first within the phase.
+
+- [ ] **P12.1** `V16` — `compensation_cycles` + `cycle_budget_pools`, nullable `cycle_id` on
+  `compensation_changes` (F5). Today a merit cycle is emergent: bulk upload creates N unrelated
+  proposals and `increase-cycle` reads a hand-typed budget, so FR-6.5 is answered by remembering the
+  right dates. A migration is immutable once committed (CLAUDE.md §12.11).
+  *Verify:* Flyway migrates against a container; **every existing lifecycle test still green** —
+  `cycle_id` is nullable, so current rows and tests are unaffected.
+- [ ] **P12.2** `/api/cycles` + status machine `DRAFT → OPEN → LOCKED → CLOSED` (F5). Check the
+  CLAUDE.md §7 RBAC table for the right roles and mirror it in `RolePermissionMatrixTest` — there is
+  no role hierarchy, so a missing role is a hard 403.
+  *Verify:* the matrix test fails when a role is added or removed; a `LOCKED` cycle refuses new
+  proposals with a 409.
+- [ ] **P12.3** `propose` and `bulk-upload` accept an optional `cycleId`; `increase-cycle?cycleId=`
+  replaces the hand-typed budget (F5).
+  *Verify:* upload 50 rows into a cycle; burn percent matches a direct SQL sum against the pool; the
+  existing date-range form still works unchanged.
+- [ ] **P12.4** Cycle dashboard + budget-pool burn (F5). **Pools warn, they never block** — the
+  one-pager's reasoning against configurable workflow engines ("nobody can explain why an approval is
+  stuck") applies just as well to hard budget locks.
+  *Verify:* `npm run verify`; an over-pool proposal **submits successfully** and renders a visible
+  warning.
+- [ ] **P12.5** `POST /changes/{id}/request-changes` — `PENDING → DRAFT` with a mandatory note (F7).
+  Today an approver's only options are approve, reject or discard, so "number's fine, reason code is
+  wrong" destroys the proposal and its history. Still exactly **one** approval step — this is not the
+  excluded multi-level chain.
+  *Verify:* new lifecycle test; the proposal survives with history intact; the audit event records
+  actor and note.
+- [ ] **P12.6** `daysInState` on the change list DTO + queue aging on the dashboard (F7). A proposal
+  with a July effective date sitting unapproved in June is the failure mode that pays someone late.
+  *Verify:* the count pending beyond threshold reconciles against direct SQL.
+- [ ] **P12.7** `approval_delegations` (`V17`, F7) — dated; only *who may take* the single approval
+  step changes; both parties recorded in the audit event.
+  *Verify:* `ProposerIsNotApproverTest` still green; a delegate can approve inside the window and
+  cannot outside it.
+- [ ] **P12.8** `POST /api/scenarios/preview` (F6) — population from any employee-list filter or an
+  explicit id set; rules: to-minimum, to-compa-target, percent-uplift. All money server-side.
+  *Verify:* the to-minimum total equals today's FR-6.2 cost-to-minimum figure **exactly** — a real
+  cross-check against an already-shipped number, not a fresh assertion.
+- [ ] **P12.9** `POST /api/scenarios/{id}/materialise` → DRAFT proposals in a cycle (F6). Reuses
+  `ChangeService.propose` per row unchanged, with P6.3's per-row `try/catch` pattern. **Any path that
+  opens or closes a ledger row must call `projector.refresh(employeeId)`** (`docs/STATE.md`).
+  *Verify:* materialise 100 rows → 100 DRAFTs plus per-row errors reported as counts; an employee
+  with an open non-terminal change is reported as an error, **not silently skipped**.
+- [ ] **P12.10** Scenario UI on `/insights/pay` (F6).
+  *Verify:* `npm run verify` clean.
+- [ ] **P12.11** `notifications` (`V18`) + write points in `ApplyDueChangesJob`, `ChangeService`,
+  `BandService` (F8). **In-app only, no mail transport** — FR-1.6 already establishes v1 has none,
+  and adding one drags in deliverability, templating and a new outbound security surface.
+  *Verify:* run the apply job manually → one notification row per applied change; running it twice
+  does **not** double-write (the job's idempotence must survive this).
+- [ ] **P12.12** Topbar bell + digest panel (F8).
+  *Verify:* `npm run verify`; polled via TanStack Query with the cache key from `keys.ts`.
+
+## P13 — Regulation
+
+> Needs `P10.6` (component join) and `P12.8` (scenarios). Timed against a June 2027 first filing on
+> **CY2026** data — the year this ledger is recording now. Reasoning and sources:
+> `docs/feature-roadmap.md §2`.
+
+- [ ] **P13.1** Mean alongside median, plus quartile representation per group, on `PayGapResponse`
+  (F12). Reuses the compa-ratio distribution's existing quartile machinery. ≥5 suppression unchanged.
+  *Verify:* `DemographicsIsolationTest` green; suppression still fires at a cohort of 4; the mean
+  reconciles against direct SQL.
+- [ ] **P13.2** Variable-pay gap + receipt rate per group (F12) — depends on `P10.6`. Without it the
+  report is base-only and incomplete.
+  *Verify:* receipt rate reconciles against direct SQL over `compensation_components`.
+- [ ] **P13.3** `flaggedCategories` at the ≥5% statutory threshold (F12) — today this has to be
+  eyeballed off a table.
+  *Verify:* a seeded category with a known >5% gap is flagged; one at 4.9% is not.
+- [ ] **P13.4** `/insights/equity` renders and exports the new shape (F12).
+  *Verify:* `npm run verify`; the export includes every new field.
+- [ ] **P13.5** `V19` — `pay_assessments` (F13): flagged-category key, status, author, rationale, and
+  the figures **snapshotted at assessment time**.
+  *Verify:* Flyway migrates; the snapshot is immutable — no update path reaches the figures.
+- [ ] **P13.6** Assessment workspace: justify or remediate (F13). Remediate opens a `P12.8` scenario
+  scoped to that category. **The record attaches to a category, never a named person** (CLAUDE.md
+  §6.6) — the product's own rule that no change happens without a recorded reason, applied to a
+  cohort.
+  *Verify:* `DemographicsIsolationTest` green **without being weakened**; the justification is
+  audited; the remediation path lands drafts in a cycle.
+- [ ] **P13.7** Pay-information request pack (F14, **reframed**). The Directive's worker information
+  right suggests a portal; `requirements-one-pager.md` excludes self-service because it changes the
+  threat model, the audit requirements and the support load. So: a print-ready pack generated by the
+  HR Manager from `/employees/[id]` — that person's pay, their band, and their category's aggregates
+  under the same ≥5 suppression. No new auth surface, no new role, no employee login.
+  *Verify:* audited as a pay-data read (FR-7.2) — confirm the audit row exists; a category under 5
+  renders as suppressed, not blank.
+
+## P14 — Downstream
+
+> Independent of `P10`–`P13`; pull forward if payroll hand-off becomes urgent. Payroll *execution*
+> stays excluded — but the exclusion's own wording ("the upstream source of truth that feeds
+> payroll") creates this obligation, and today the only path out is a person exporting a CSV and
+> hoping they picked the right filter.
+
+- [ ] **P14.1** `GET /api/feeds/applied-changes?since=` (F15) — every ledger row opened since a
+  cursor, with employee number, amounts, currency, effective date, reason, approver. Cursor-paged per
+  NFR-5, audited as a pay-data read.
+  *Verify:* re-running with the same cursor returns the same rows (idempotent); rows appear only at
+  `APPLIED`, never at `APPROVED` — an approved change is a promise, not a fact (CLAUDE.md §8).
+- [ ] **P14.2** `GET /api/feeds/extract?asAt=` full reconciliation extract (F15).
+  *Verify:* row count matches `employee_current_comp` for that date; every money field carries its
+  currency (CLAUDE.md §6.2).
+- [ ] **P14.3** `groupBy=manager` on payroll cost + org drill-down (F15). `employees.manager_id`
+  exists and no analytic uses it. **Analytics dimension for the HR Manager only** — not a delegated
+  manager workflow, which would be employee self-service by another name.
+  *Verify:* the manager rollup sums to the org total; circular chains (`P11.1`'s check) do not
+  infinite-loop.
+
+---
+
 ## Progress log
 
 | | |
 |---|---|
 | **Last completed** | Post-P9 backlog sweep — closed 2 of P9.6's 3 acceptance-criteria gaps (employee-list `bandStatus` filter + `sortBy=compaRatio`, both server-side over the full 10k dataset, verified live). `133/133` backend, frontend `verify` clean (2026-08-22). |
-| **Current step** | **None — every `BuildPlan.md` step is `[x]`.** One open item remains: `fxRateMonth` on analytics responses (P9.6 criterion #8) is a considered design decision, not a build task — see `docs/STATE.md`. |
+| **Current step** | **`P10.1`** — `FxBasis` on the analytics responses. This also closes the long-standing `fxRateMonth` question (P9.6 criterion #8): it was a considered design decision, not an oversight, and `P10.1` is the resolution rather than a "just add the field" fix. `P10`–`P14` were appended 2026-08-23 from the post-v1 feature + market analysis; reasoning in `docs/feature-roadmap.md`. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._

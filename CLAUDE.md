@@ -406,6 +406,7 @@ npx shadcn@latest add <component>
 - **Scope contract:** `requirements-one-pager.md`
 - **Requirements, data model, API, acceptance criteria:** `Technical-Requirements.md`
 - **Build tracker:** `BuildPlan.md`
+- **Why a `P10`–`P14` step exists (analysis, not binding):** `docs/feature-roadmap.md`
 - **Backend (BINDING):** `docs/salary-management-backend.md`
 - **UI + design system (BINDING):** `docs/salary-management-ui.md`
 - **Session carry-over:** `docs/STATE.md` · **section reader:** `scripts/doc.sh` · **commands:**

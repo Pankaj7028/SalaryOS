@@ -13,10 +13,10 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 
 | | |
 |---|---|
-| **Phase** | **Every `BuildPlan.md` step is `[x]`.** Not the same as "done" per `Technical-Requirements.md §6` — see below. |
-| **Last completed** | Post-P9 backlog sweep — closed 2 of P9.6's 3 acceptance-criteria gaps: employee list now has a real `bandStatus` filter and a `sortBy=compaRatio` keyset sort, both server-side over the full 10k dataset (verified live, not just unit-tested). `133/133` backend, frontend `verify` clean. |
-| **Next step** | None queued. Open product decision below is the only remaining item. |
-| **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far — everything runs against local Postgres). **Open product decision:** `fxRateMonth` is absent from every analytics response (P9.6 criterion #8) — a *deliberate, reasoned* omission per `PayrollCostResponse`'s own javadoc (an aggregate spanning many employees has no single governing FX month; inventing one would misleadingly imply a live recompute that never happens), not an oversight, but it conflicts with the criterion's literal wording. Needs a product call: accept the design as-is (and treat the criterion's wording as loose), or design some other UI treatment (a range, or per-row FX info) — not a "just add the field" fix. |
+| **Phase** | **`P0`–`P9` all `[x]`. `P10`–`P14` appended 2026-08-23** (35 steps, post-v1 feature + market analysis) — see `docs/feature-roadmap.md` for why each exists. |
+| **Last completed** | `89ff4cd` — the 2026-08-22 QA pass's three feature gaps landed: `/admin/import` is now a tabbed hub (Employees / Salary bands / Merit changes), bands-import and merit bulk-upload finally have a UI (backends idle since P5.3/P6.3), `/insights/equity` gained CSV export. Frontend `verify` clean: tokens 46/46, contrast 28 pairs ≥ AA, lint 0 errors, vitest 29/29, build 21 routes. |
+| **Next step** | **`P10.1`** — `FxBasis` on the six analytics responses. `P10`–`P14` (35 steps) were appended 2026-08-23 from a post-v1 feature + market analysis; the reasoning, scope verdicts and exclusion-list stance live in `docs/feature-roadmap.md` (read it before questioning why a step exists — don't re-derive it). |
+| **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far — everything runs against local Postgres). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
