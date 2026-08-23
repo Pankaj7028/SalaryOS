@@ -14,19 +14,22 @@ import { CreateEmployeeDialog } from "@/components/employees/create-employee-dia
 import { ErrorState } from "@/components/feedback/states";
 import { useSession } from "@/lib/auth/auth-queries";
 import { canManageEmployees } from "@/lib/auth/roles";
+import { SavedViewBar } from "@/components/saved-views/saved-view-bar";
+import { ActiveFilters, type ActiveFilter } from "@/components/saved-views/active-filters";
 
 /**
  * `/employees` (ui doc §8.2). Filter, sort, and page state all live in
  * `searchParams` (CLAUDE.md §9) — nothing here is component state that a
- * reload would lose.
+ * reload would lose. That is also what makes a view savable at all: P10.4's
+ * picker stores this screen's query string verbatim and replays it, so the
+ * URL *is* the saved question.
  *
- * One spec item is deliberately not built: a "saved-view select" (nothing
- * backs it — no view-persistence model exists anywhere in the API). Bulk
- * select → "Propose changes for selected" is P6.4 and doesn't exist yet; a
- * button with no action is worse than no button. "Page 4" navigation isn't
- * possible either — `KeysetPage` carries no total count. Next uses the
- * returned cursor; Previous uses browser history, which only works for
- * in-app back navigation, not a pasted mid-list link.
+ * The saved-view select the spec asked for is now built (P10.4) over the
+ * P10.3 library. Bulk select → "Propose changes for selected" is P6.4 and
+ * doesn't exist yet; a button with no action is worse than no button. "Page 4"
+ * navigation isn't possible either — `KeysetPage` carries no total count.
+ * Next uses the returned cursor; Previous uses browser history, which only
+ * works for in-app back navigation, not a pasted mid-list link.
  *
  * Band-status filter and compa-ratio sort (both server-side, real keyset
  * pagination over the full 10k, not a client-side filter of one page) were
@@ -38,6 +41,20 @@ import { canManageEmployees } from "@/lib/auth/roles";
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const ALL = "__all__";
 const SEARCH_DEBOUNCE_MS = 300;
+const ROUTE = "/employees";
+
+const STATUS_LABELS: Record<string, string> = {
+  ACTIVE: "Active",
+  ON_LEAVE: "On leave",
+  TERMINATED: "Terminated",
+};
+
+const BAND_STATUS_LABELS: Record<string, string> = {
+  IN_BAND: "In band",
+  BELOW_MIN: "Below minimum",
+  ABOVE_MAX: "Above maximum",
+  NO_BAND: "No band",
+};
 
 export function EmployeesScreen() {
   const router = useRouter();
@@ -106,6 +123,45 @@ export function EmployeesScreen() {
   const session = useSession();
   const canManage = session.data ? canManageEmployees(session.data.role) : false;
   const [creating, setCreating] = useState(false);
+
+  const countryNames = useMemo(
+    () => new Map((countries.data ?? []).map((c) => [c.code, c.name])),
+    [countries.data],
+  );
+
+  // The question in words. Ids are resolved to names here rather than in the chip component —
+  // a chip reading "Department is 7f3a…" is not a question anyone can check before saving it.
+  const activeFilters: ActiveFilter[] = [
+    q ? { param: "q", label: "Matching", value: q } : null,
+    departmentId
+      ? { param: "departmentId", label: "Department", value: departmentNames.get(departmentId) ?? departmentId }
+      : null,
+    locationId
+      ? { param: "locationId", label: "Location", value: locationNames.get(locationId) ?? locationId }
+      : null,
+    countryCode
+      ? { param: "countryCode", label: "Country", value: countryNames.get(countryCode) ?? countryCode }
+      : null,
+    jobLevelId
+      ? { param: "jobLevelId", label: "Level", value: jobLevelTitles.get(jobLevelId) ?? jobLevelId }
+      : null,
+    status ? { param: "status", label: "Status", value: STATUS_LABELS[status] ?? status } : null,
+    bandStatus
+      ? { param: "bandStatus", label: "Band status", value: BAND_STATUS_LABELS[bandStatus] ?? bandStatus }
+      : null,
+  ].filter((filter): filter is ActiveFilter => filter !== null);
+
+  function clearAllFilters() {
+    updateParams({
+      q: undefined,
+      departmentId: undefined,
+      locationId: undefined,
+      countryCode: undefined,
+      jobLevelId: undefined,
+      status: undefined,
+      bandStatus: undefined,
+    });
+  }
 
   return (
     <div className="space-y-4">
@@ -221,6 +277,15 @@ export function EmployeesScreen() {
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <ActiveFilters
+          filters={activeFilters}
+          onClear={(param) => updateParams({ [param]: undefined })}
+          onClearAll={clearAllFilters}
+        />
+        <SavedViewBar route={ROUTE} currentQueryString={searchParams.toString()} />
       </div>
 
       {employees.isError ? (

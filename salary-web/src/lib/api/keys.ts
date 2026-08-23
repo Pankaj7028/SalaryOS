@@ -43,6 +43,11 @@ export const fxRateKeys = {
   admin: () => ["fxRates", "admin"] as const,
 };
 
+/** One list for the whole app, not one per route — the picker filters it by route client-side. */
+export const savedViewKeys = {
+  list: () => ["savedViews", "list"] as const,
+};
+
 export const analyticsKeys = {
   payrollCost: () => ["analytics", "payrollCost"] as const,
   headcount: () => ["analytics", "headcount"] as const,

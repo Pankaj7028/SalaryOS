@@ -2101,11 +2101,39 @@ table.
   > **Observed:** `SavedViewTest` 6/6. Full suite `./mvnw clean verify` →
   > `Tests run: 144, Failures: 0, Errors: 0`, `BUILD SUCCESS` (138 before). Ran the full suite
   > because this adds a migration — a module boundary per CLAUDE.md §2B.
-- [ ] **P10.4** Saved-view picker + structured query builder UI (F1). A typed UI over the filter
+- [x] **P10.4** Saved-view picker + structured query builder UI (F1). A typed UI over the filter
   params the endpoints already accept — never free text, so every cohort-suppression guardrail stays
   in SQL.
   *Verify:* `npm run verify` clean; build a three-filter question, save it, reload from the picker,
   URL and result set identical.
+  > **Done (2026-08-23):** `<SavedViewBar>` (route-scoped picker, Yours / Shared with you, delete on
+  > your own rows) + `<SaveViewDialog>` + `<ActiveFilters>` on `/employees`, over the P10.3 library.
+  >
+  > **The "structured query builder" is the filter bar that was already there** — deliberately.
+  > `/employees` already renders typed `<Select>`s over ids the endpoint accepts; a second, parallel
+  > query UI would be a free-text-shaped hole in the exact guardrail this step exists to preserve.
+  > What was missing was not typing, it was *legibility*: `<ActiveFilters>` states the question in
+  > words ("Department is Engineering, Band status is Below minimum"), resolving ids to names in the
+  > screen, because a chip reading `Department is 7f3a…` is not something anyone can check before
+  > saving it, and someone opening a shared view has to see the question to trust the numbers.
+  >
+  > **`cursor` is stripped before saving** (`saveableQueryString`). A cursor is a position in one
+  > result set; replayed a week later it opens the view somewhere arbitrary inside a list that moved
+  > underneath it. `limit` and `sortBy` are kept — how many rows and in what order is part of the
+  > question. Nothing in the frontend parses `queryString` otherwise: stored verbatim, replayed
+  > verbatim, so the replay is a request the user could have typed and is answered by the endpoint
+  > that already enforces their role and the cohort floor.
+  >
+  > **Observed:** `npm run verify` → `check:tokens` clean, `lint` 0 errors (5 pre-existing
+  > react-compiler warnings), `typecheck` clean, `Test Files 3 passed (3) / Tests 34 passed (34)`
+  > (31 before — `saveable-query-string.test.ts` adds 3), `build` clean, 21 routes.
+  > Live round-trip against the local stack: three-filter question
+  > (`departmentId=7748330c…&status=ACTIVE&bandStatus=BELOW_MIN`, 7 rows) saved, read back, and
+  > replayed — saved `queryString` byte-identical to the one sent, and the replayed
+  > `/api/employees` response byte-identical to the direct one (`diff` clean).
+  >
+  > **Unrun:** the visual pass (ui doc §12 items 6 and 10 — both themes, 375px). Browser automation
+  > still cannot reach this machine per `docs/STATE.md`; the picker and chips are unlooked-at.
 - [ ] **P10.5** `totalCount` on `KeysetPage`, page jump, bulk select (F4) — closes the last three
   P4.3 omissions. **Do not** add a JPA relationship between `Employee` and `EmployeeCurrentComp` to
   reach this (`docs/STATE.md` — it breaks `PayrollCostAndHeadcountTest`); follow
@@ -2402,7 +2430,7 @@ table.
 | | |
 |---|---|
 | **Last completed** | **`P10.2`** — FX coverage matrix on `/admin/fx-rates`: currency × month over the currencies actually in use, gaps in `--attention`, riding on the existing list endpoint. `FxCoverageTest` 3/3; frontend `typecheck`/`lint`/`build` clean; live-verified against a restarted stack (16 months, 7 currencies, 9,580 people; adding a rate flipped exactly one cell). **Visual pass in both themes and at 375px still owed** — the paired Chrome is on another device and can't reach this machine (2026-08-23). |
-| **Current step** | **`P10.4`.** A live stack is up again this session (backend `:8080`, web `:3100`), so the UI/live-stack steps `P10.4`, `P10.5`, `P10.7`, `P11.2`, `P11.4`, `P11.6` are unblocked; `P12.1` follows them. |
+| **Current step** | **`P10.5`.** `P10.4` closed 2026-08-23 (saved-view picker on `/employees`, live round-trip verified). A live stack is up (backend `:8080`, web `:3100`), so the remaining UI/live-stack steps `P10.5`, `P10.7`, `P11.2`, `P11.4`, `P11.6` are unblocked; `P12.1` follows them. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._
