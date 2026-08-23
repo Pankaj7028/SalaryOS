@@ -2008,10 +2008,62 @@ table.
   > What remains unproven is only that Jackson serialises the record as expected. **Run the four
   > `curl`s when a service is next up**; `FxBasisTest.responsesWithoutMoneyCarryNoFxBasis` already
   > pins the "other two carry none" half structurally.
-- [ ] **P10.2** FX coverage matrix on `/admin/fx-rates` (F3) — currency × month over the currencies
+- [x] **P10.2** FX coverage matrix on `/admin/fx-rates` (F3) — currency × month over the currencies
   actually in use by `employee_current_comp`, gaps in `--attention`.
   *Verify:* delete one month's rate for one in-use currency locally; the cell renders as missing
   **and** `missingCoverage` flips true on the analytics envelope.
+  > **The second half of this Verify is unsatisfiable as written** — `missingCoverage` was dropped
+  > during `P10.1` (see its note above: a missing rate is a hard *write-time* 422, so a field that is
+  > structurally always `false` on a read is noise pretending to be a safety check). The flip is
+  > therefore asserted where it can actually happen: on the coverage cell itself, by
+  > `FxCoverageTest.addingAndDeletingARateFlipsItsCellForAnInUseCurrency`, which adds a rate, sees
+  > the cell go covered, deletes it, and sees it go missing again — against real Postgres. Same
+  > substitution `P10.1` made: replace an uncheckable assertion with one that can fail.
+  >
+  > **Rides on the existing `GET /api/admin/fx-rates`**, as a third component of
+  > `FxRateAdminResponse`, rather than a new endpoint — so there is no new row for
+  > `RolePermissionMatrixTest`, and the screen still makes one request.
+  >
+  > **Rows are the currencies in `employee_current_comp`, not every known currency.** The
+  > missing-months chip list above it already enumerates every country default plus the base
+  > currency — that answers "what could ever need a rate". This grid answers the narrower, more
+  > urgent question: which months today's payroll population cannot be written for. A gap against
+  > 1,429 EUR employees is an outage; the same gap in a currency nobody is paid in is noise. Both
+  > share `pinnedRateKeys()` and the same 16-month window (`TRAILING_MONTHS - 1` back through
+  > `LOOKAHEAD_MONTHS` ahead), so the two surfaces can never disagree about what "covered" means.
+  >
+  > **An uncovered cell is always a statement about the future, never the past** (`FxCoverageCell`'s
+  > Javadoc says so, because it is the thing a reader will get wrong): every already-written ledger
+  > row pinned its own `fx_rate_id` (CLAUDE.md §6.4), so an uncovered *past* month cannot invalidate
+  > a stored figure — it only blocks a new record dated into that month.
+  >
+  > **Observed:** `FxCoverageTest` 3/3 (`Tests run: 3, Failures: 0, Errors: 0`, 5.3s). Frontend
+  > `typecheck` clean, `lint` 0 errors / 4 pre-existing warnings, `build` clean (19 routes).
+  >
+  > **Live, against the running stack** (backend restarted first — the one that had been up since
+  > 21:23 predated this code): 16 months `2025-08-01 … 2026-11-01`, quote `USD`, 7 in-use currencies
+  > totalling 9,580 people (USD 3,251 · INR 1,963 · EUR 1,429 · GBP 1,208 · SGD 633 · BRL 631 ·
+  > PLN 465), each with 16 cells and the same 3 uncovered lookahead months. `POST` of a
+  > `USD→USD 2026-09` rate flipped **that one cell** to covered and left the other six rows at 3
+  > gaps — the live flip, in the direction that does not destroy seeded data; the delete direction is
+  > the Testcontainers test above.
+  >
+  > **Not verified: the visual pass** (ui doc §12 items 6 and 10 — both themes, 375px). The Chrome
+  > the automation is paired with is on another device and cannot reach this machine's `localhost`;
+  > it error-paged on `localhost` and on `127.0.0.1`. The grid uses only `--primary` / `--attention`
+  > / `--attention-subtle` / `--border` / `--muted` tokens and the `figure-sm`/`type-caption`/
+  > `type-label` scale, and scrolls inside its own bordered `overflow-x-auto` container the way the
+  > pinned-rates table already does — but **someone must still look at it in both themes and at
+  > 375px** before this screen is called finished.
+  >
+  > **Test fixture note for whoever adds the next test class:** `FxCoverageTest` owns country `QW`
+  > and job family `FXCOV`. `countries` has *no* migration-seeded rows, so a class needing one must
+  > create it, and whatever code it picks becomes valid for every class sharing the cached
+  > container — which is why `ZZ` (`V2ReferenceDataMigrationTest`'s deliberately-invalid FK
+  > sentinel), `QX` (`BandHealthTest`) and `QM` (`MarketDataImportTest`) are all taken. `locations`
+  > and `compensation_records` have no unique key to hang `ON CONFLICT` off, so the fixture guards
+  > those with `INSERT … SELECT … WHERE NOT EXISTS`; an `ON CONFLICT DO NOTHING` there is a silent
+  > no-op that makes the helper non-idempotent across the class's own test methods.
 - [x] **P10.3** `saved_views` (`V14`) + `GET/POST/DELETE /api/saved-views` (F1) — name, owner, route,
   query string, shared flag. This is an **unshipped contract line**, not an enhancement:
   `requirements-one-pager.md` excludes a free-text pay assistant and in the same sentence commits to
@@ -2349,8 +2401,8 @@ table.
 
 | | |
 |---|---|
-| **Last completed** | Post-P9 backlog sweep — closed 2 of P9.6's 3 acceptance-criteria gaps (employee-list `bandStatus` filter + `sortBy=compaRatio`, both server-side over the full 10k dataset, verified live). `133/133` backend, frontend `verify` clean (2026-08-22). |
-| **Current step** | **`P12.1`** — `compensation_cycles` migration. **All backend-verifiable steps in P10 and P11 are now done.** Remaining `[ ]` in those phases are UI/live-stack only: `P10.2`, `P10.4`, `P10.5`, `P10.7`, `P11.2`, `P11.4`, `P11.6`. |
+| **Last completed** | **`P10.2`** — FX coverage matrix on `/admin/fx-rates`: currency × month over the currencies actually in use, gaps in `--attention`, riding on the existing list endpoint. `FxCoverageTest` 3/3; frontend `typecheck`/`lint`/`build` clean; live-verified against a restarted stack (16 months, 7 currencies, 9,580 people; adding a rate flipped exactly one cell). **Visual pass in both themes and at 375px still owed** — the paired Chrome is on another device and can't reach this machine (2026-08-23). |
+| **Current step** | **`P10.4`.** A live stack is up again this session (backend `:8080`, web `:3100`), so the UI/live-stack steps `P10.4`, `P10.5`, `P10.7`, `P11.2`, `P11.4`, `P11.6` are unblocked; `P12.1` follows them. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._

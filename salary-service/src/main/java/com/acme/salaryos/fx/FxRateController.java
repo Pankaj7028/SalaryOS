@@ -33,7 +33,7 @@ public class FxRateController {
 	@GetMapping
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST','AUDITOR')")
 	public FxRateAdminResponse list() {
-		return new FxRateAdminResponse(fxRateService.list(), fxRateService.missingMonths());
+		return new FxRateAdminResponse(fxRateService.list(), fxRateService.missingMonths(), fxRateService.coverage());
 	}
 
 	@PostMapping

@@ -9,6 +9,7 @@ import { useCountries } from "@/lib/api/reference-queries";
 import { useSession } from "@/lib/auth/auth-queries";
 import { canManageFxRates } from "@/lib/auth/roles";
 import { AddFxRateDialog } from "@/components/fx-rates/add-fx-rate-dialog";
+import { FxCoverageMatrix } from "@/components/fx-rates/fx-coverage-matrix";
 import type { MissingFxRateMonth } from "@/lib/api/fx-rates";
 
 /**
@@ -44,6 +45,7 @@ export function FxRatesScreen() {
 
   const rates = admin.data?.rates ?? [];
   const missing = admin.data?.missing ?? [];
+  const coverage = admin.data?.coverage;
 
   return (
     <div className="space-y-6">
@@ -91,6 +93,19 @@ export function FxRatesScreen() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="space-y-2">
+        <div>
+          <h2 className="type-section">Coverage</h2>
+          <p className="type-caption text-muted-foreground mt-1">
+            Only the currencies people are actually paid in. A currency nobody is on cannot block a
+            write.
+          </p>
+        </div>
+        {coverage ? (
+          <FxCoverageMatrix coverage={coverage} canManage={canManage} onAddRate={setDialogPrefill} />
+        ) : null}
       </section>
 
       <section className="space-y-2">

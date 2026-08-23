@@ -4,11 +4,15 @@ import com.acme.salaryos.audit.AuditService;
 import com.acme.salaryos.fx.FxRate;
 import com.acme.salaryos.fx.FxRateRepository;
 import com.acme.salaryos.fx.dto.CreateFxRateRequest;
+import com.acme.salaryos.fx.dto.FxCoverageCell;
+import com.acme.salaryos.fx.dto.FxCoverageResponse;
+import com.acme.salaryos.fx.dto.FxCoverageRow;
 import com.acme.salaryos.fx.dto.FxRateResponse;
 import com.acme.salaryos.fx.dto.MissingFxRateMonth;
 import com.acme.salaryos.reference.domain.Country;
 import com.acme.salaryos.reference.repository.CountryRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,15 +47,17 @@ public class FxRateService {
 	private final AuditService auditService;
 	private final Clock clock;
 	private final String baseCurrency;
+	private final JdbcTemplate jdbcTemplate;
 
 	public FxRateService(
 			FxRateRepository fxRateRepository, CountryRepository countryRepository, AuditService auditService,
-			Clock clock, @Value("${app.base-currency}") String baseCurrency) {
+			Clock clock, @Value("${app.base-currency}") String baseCurrency, JdbcTemplate jdbcTemplate) {
 		this.fxRateRepository = fxRateRepository;
 		this.countryRepository = countryRepository;
 		this.auditService = auditService;
 		this.clock = clock;
 		this.baseCurrency = baseCurrency;
+		this.jdbcTemplate = jdbcTemplate;
 	}
 
 	public List<FxRateResponse> list() {
@@ -76,10 +82,7 @@ public class FxRateService {
 				.collect(Collectors.toCollection(TreeSet::new));
 		currencies.add(baseCurrency);
 
-		Set<String> existing = fxRateRepository.findAll().stream()
-				.filter(rate -> rate.getQuoteCurrency().equals(baseCurrency))
-				.map(rate -> rate.getBaseCurrency() + "|" + rate.getRateMonth())
-				.collect(Collectors.toSet());
+		Set<String> existing = pinnedRateKeys();
 
 		YearMonth current = YearMonth.now(clock);
 		List<MissingFxRateMonth> missing = new ArrayList<>();
@@ -94,6 +97,44 @@ public class FxRateService {
 		missing.sort(Comparator.comparing(MissingFxRateMonth::rateMonth).reversed()
 				.thenComparing(MissingFxRateMonth::baseCurrency));
 		return missing;
+	}
+
+	/**
+	 * P10.2: the coverage matrix — currency × month over the currencies actually in use by
+	 * {@code employee_current_comp}, same window as {@link #missingMonths()}. Where the chip list
+	 * answers "what could ever need a rate", this answers "which months can today's payroll
+	 * population not be written for". A currency nobody is paid in cannot produce a gap that
+	 * matters, so it does not get a row.
+	 */
+	public FxCoverageResponse coverage() {
+		YearMonth current = YearMonth.now(clock);
+		List<LocalDate> months = new ArrayList<>();
+		for (int back = TRAILING_MONTHS - 1; back >= -LOOKAHEAD_MONTHS; back--) {
+			months.add(current.minusMonths(back).atDay(1));
+		}
+
+		Set<String> existing = pinnedRateKeys();
+
+		List<FxCoverageRow> rows = jdbcTemplate.query(
+				"SELECT currency, count(*) AS employee_count "
+						+ "FROM salary_schema.employee_current_comp "
+						+ "GROUP BY currency ORDER BY currency",
+				(rs, rowNum) -> {
+					String currency = rs.getString("currency").trim();
+					List<FxCoverageCell> cells = months.stream()
+							.map(month -> new FxCoverageCell(month, existing.contains(currency + "|" + month)))
+							.toList();
+					return new FxCoverageRow(currency, rs.getLong("employee_count"), cells);
+				});
+		return new FxCoverageResponse(months, baseCurrency, rows);
+	}
+
+	/** Keys of every pinned rate that converts into the base currency, as {@code ccy|monthStart}. */
+	private Set<String> pinnedRateKeys() {
+		return fxRateRepository.findAll().stream()
+				.filter(rate -> rate.getQuoteCurrency().equals(baseCurrency))
+				.map(rate -> rate.getBaseCurrency() + "|" + rate.getRateMonth())
+				.collect(Collectors.toSet());
 	}
 
 	@Transactional
