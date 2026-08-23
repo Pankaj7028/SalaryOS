@@ -2229,9 +2229,47 @@ table.
   > normalised recurring components; cash never below base and same headcount; response states its
   > basis; every breakdown reconciles to `overall` on both bases). Full suite → `Tests run: 149,
   > Failures: 0, Errors: 0`, `BUILD SUCCESS` (144 before).
-- [ ] **P10.7** Basis toggle beside the existing as-paid/normalised control (F2).
+- [x] **P10.7** Basis toggle beside the existing as-paid/normalised control (F2).
   *Verify:* `npm run verify` clean; toggling changes the figure **and** the URL (`?basis=`) per
   CLAUDE.md §9.
+  > **Done (2026-08-24).** "Counting: Base pay | Total target cash" on the payroll-cost question
+  > card, `?basis=` in the URL.
+  >
+  > **Placed on the card, not in the topbar — a deliberate reading of "beside".** The existing
+  > as-paid/normalised control (`<CurrencyToggle>`, `?ccy=`) lives in the topbar because it applies
+  > to every money figure on every screen. `basis` applies to one analytic. In the topbar it would
+  > render on `/employees`, `/bands`, `/changes` and twelve other routes where nothing reads it —
+  > a control that appears to do something and does nothing is worse than no control. It is
+  > "beside" it in the sense that matters: the same kind of URL-backed product toggle, same
+  > convention, default value absent from the URL.
+  >
+  > **`breakdown` moved into the URL at the same time.** It was `useState`, which CLAUDE.md §9
+  > forbids for exactly this reason — and the reason bites harder for `basis`: "what do we spend?"
+  > now has two legitimate answers **$61M apart** on the local 10k, so a link to this screen that
+  > does not say which one was on screen shows the recipient a different number under the same
+  > question, and neither of them finds out.
+  >
+  > **`PayrollCostGroup.totalAnnualBase` → `total`, `averageAnnualBase` → `average`** — P10.6's
+  > deferred rename, done here as that note directed, because this is the step that touches the UI
+  > and can verify the fallout. The old name was a lie on the `TOTAL_TARGET_CASH` basis: the field
+  > held base plus recurring components while still calling itself base. The response's own
+  > `basis` says what is counted (FR-6.8), so the field does not have to.
+  >
+  > **The frontend `PayrollCostResponse` type was missing `basis` and `fxBasis` entirely** —
+  > exactly the drift `docs/STATE.md` warns about (response-shape changes are invisible to
+  > `npm run typecheck`). Both added, and the basis line now reads its basis off the response
+  > rather than the screen asserting one.
+  >
+  > **Observed:** frontend `npm run verify` clean (`Tests 36 passed (36)`, build clean, 21 routes).
+  > Backend `./mvnw clean verify` → `Tests run: 189, Failures: 0, Errors: 0`, `BUILD SUCCESS` — run
+  > in full because the rename crosses a DTO boundary. Live against the 10k:
+  > `basis=BASE` → **$1,140,812,145.76** (avg $119,082.69), `basis=TOTAL_TARGET_CASH` →
+  > **$1,201,948,551.35** (avg $125,464.36), same headcount 9,580. The figure changes; the renamed
+  > fields serialise correctly.
+  >
+  > **Unrun:** the toggle's URL round-trip *in a browser*, and the visual pass (ui doc §12 items 6
+  > and 10). The paired Chrome still reports "extension is not connected" — re-checked this
+  > session, not assumed.
 
 ## P11 — Trust the data
 
@@ -2479,7 +2517,7 @@ table.
 | | |
 |---|---|
 | **Last completed** | **`P10.2`** — FX coverage matrix on `/admin/fx-rates`: currency × month over the currencies actually in use, gaps in `--attention`, riding on the existing list endpoint. `FxCoverageTest` 3/3; frontend `typecheck`/`lint`/`build` clean; live-verified against a restarted stack (16 months, 7 currencies, 9,580 people; adding a rate flipped exactly one cell). **Visual pass in both themes and at 375px still owed** — the paired Chrome is on another device and can't reach this machine (2026-08-23). |
-| **Current step** | **`P10.7`.** `P10.4` and `P10.5` closed (saved-view picker; result count, page jump, bulk propose — plus a service-wide 401-on-validation bug found in QA and fixed). A live stack is up (backend `:8080`, web `:3100`), so the remaining UI/live-stack steps `P10.7`, `P11.2`, `P11.4`, `P11.6` are unblocked; `P12.1` follows them. |
+| **Current step** | **`P11.2`.** **P10 is closed** — `P10.4` (saved-view picker), `P10.5` (result count, page jump, bulk propose, plus a service-wide 401-on-validation bug found in QA and fixed), `P10.7` (basis toggle + P10.6's deferred rename). A live stack is up (backend `:8080`, web `:3100`), so `P11.2`, `P11.4`, `P11.6` are unblocked; `P12.1` follows them. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._

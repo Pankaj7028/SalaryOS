@@ -57,7 +57,7 @@ class TotalTargetCashBasisTest {
 	/** BASE must be byte-identical to what this endpoint returned before P10.6 existed. */
 	@Test
 	void baseBasisMatchesADirectSumOfNormalisedBase() {
-		BigDecimal total = analyticsService.payrollCost(AnalyticsBasis.BASE).overall().totalAnnualBase().amount();
+		BigDecimal total = analyticsService.payrollCost(AnalyticsBasis.BASE).overall().total().amount();
 
 		assertThat(total).isEqualByComparingTo(jdbcTemplate.queryForObject(BASE_TOTAL_SQL, BigDecimal.class));
 	}
@@ -66,7 +66,7 @@ class TotalTargetCashBasisTest {
 	@Test
 	void totalTargetCashEqualsBasePlusNormalisedRecurringComponents() {
 		BigDecimal totalCash = analyticsService.payrollCost(AnalyticsBasis.TOTAL_TARGET_CASH)
-				.overall().totalAnnualBase().amount();
+				.overall().total().amount();
 
 		BigDecimal expected = jdbcTemplate.queryForObject(BASE_TOTAL_SQL, BigDecimal.class)
 				.add(jdbcTemplate.queryForObject(COMPONENT_TOTAL_SQL, BigDecimal.class));
@@ -83,8 +83,8 @@ class TotalTargetCashBasisTest {
 		PayrollCostResponse base = analyticsService.payrollCost(AnalyticsBasis.BASE);
 		PayrollCostResponse cash = analyticsService.payrollCost(AnalyticsBasis.TOTAL_TARGET_CASH);
 
-		assertThat(cash.overall().totalAnnualBase().amount())
-				.isGreaterThanOrEqualTo(base.overall().totalAnnualBase().amount());
+		assertThat(cash.overall().total().amount())
+				.isGreaterThanOrEqualTo(base.overall().total().amount());
 		assertThat(cash.overall().headcount()).isEqualTo(base.overall().headcount());
 		assertThat(cash.population().headcount()).isEqualTo(base.population().headcount());
 	}
@@ -103,7 +103,7 @@ class TotalTargetCashBasisTest {
 	void breakdownsReconcileToOverallOnBothBases() {
 		for (AnalyticsBasis basis : AnalyticsBasis.values()) {
 			PayrollCostResponse response = analyticsService.payrollCost(basis);
-			BigDecimal overall = response.overall().totalAnnualBase().amount();
+			BigDecimal overall = response.overall().total().amount();
 
 			assertThat(sum(response, "country")).as("byCountry on %s", basis).isEqualByComparingTo(overall);
 			assertThat(sum(response, "department")).as("byDepartment on %s", basis).isEqualByComparingTo(overall);
@@ -117,7 +117,7 @@ class TotalTargetCashBasisTest {
 			case "department" -> response.byDepartment();
 			default -> response.byLevel();
 		};
-		return rows.stream().map(group -> group.totalAnnualBase().amount())
+		return rows.stream().map(group -> group.total().amount())
 				.reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
 

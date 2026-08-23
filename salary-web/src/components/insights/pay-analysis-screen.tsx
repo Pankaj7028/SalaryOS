@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Money } from "@/components/comp/money";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +11,7 @@ import { EmptyState, ErrorState, GoodNewsState, TableSkeleton } from "@/componen
 import { ChartCard } from "@/components/charts/chart-card";
 import { ThemedBarChart, type BarDatum } from "@/components/charts/themed-bar-chart";
 import { QuestionCard } from "@/components/insights/question-card";
+import type { AnalyticsBasis } from "@/lib/api/analytics";
 import {
   useCompaRatioDistribution,
   useIncreaseCycle,
@@ -50,9 +52,35 @@ export function PayAnalysisScreen() {
 
 // ---- FR-6.1 -------------------------------------------------------------------------------
 
+const BASIS_LABEL: Record<AnalyticsBasis, string> = {
+  BASE: "Base pay",
+  TOTAL_TARGET_CASH: "Total target cash",
+};
+
 function PayrollCostQuestion() {
-  const payrollCost = usePayrollCost();
-  const [breakdown, setBreakdown] = useState<"byCountry" | "byDepartment" | "byLevel">("byCountry");
+  // P10.7 / CLAUDE.md §9: both the basis and the breakdown live in the URL, not in component
+  // state. "What do we spend?" has two legitimate answers and they differ by millions — a link to
+  // this screen has to say which one the sender was looking at, or the recipient reads a different
+  // number under the same question and neither of them knows.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const basis: AnalyticsBasis =
+    searchParams.get("basis") === "TOTAL_TARGET_CASH" ? "TOTAL_TARGET_CASH" : "BASE";
+  const breakdown = (
+    ["byCountry", "byDepartment", "byLevel"] as const
+  ).find((b) => b === searchParams.get("breakdown")) ?? "byCountry";
+
+  const payrollCost = usePayrollCost(basis);
+
+  function setParam(key: string, value: string, isDefault: boolean) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (isDefault) params.delete(key);
+    else params.set(key, value);
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
   if (payrollCost.isLoading) {
     return (
@@ -71,36 +99,69 @@ function PayrollCostQuestion() {
 
   const data = payrollCost.data;
   const rows = data[breakdown];
-  const basisLine = `As at ${data.asAtDate} · normalised to ${data.baseCurrency} · ${data.population.headcount} employees · ${data.population.excluded.terminated ?? 0} terminated excluded`;
+  // The response states its own basis (FR-6.8) rather than the screen asserting it — if the two
+  // ever disagree, the figure on screen is the one that is wrong, and this is where it shows.
+  const basisLine = `As at ${data.asAtDate} · ${BASIS_LABEL[data.basis].toLowerCase()} · normalised to ${data.baseCurrency} · ${data.population.headcount} employees · ${data.population.excluded.terminated ?? 0} terminated excluded`;
 
   return (
     <QuestionCard
-      question="What do we spend on base pay?"
-      headline={<Money value={data.overall.totalAnnualBase} size="figure-lg" whole />}
+      question={
+        data.basis === "TOTAL_TARGET_CASH"
+          ? "What do we spend on total target cash?"
+          : "What do we spend on base pay?"
+      }
+      headline={<Money value={data.overall.total} size="figure-lg" whole />}
     >
-      <div className="flex items-center gap-2">
-        <Label className="type-caption text-muted-foreground">Break down by</Label>
-        <Select value={breakdown} onValueChange={(v) => setBreakdown(v as typeof breakdown)}>
-          <SelectTrigger size="sm" className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="byCountry">Country</SelectItem>
-            <SelectItem value="byDepartment">Department</SelectItem>
-            <SelectItem value="byLevel">Level</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="flex items-center gap-2">
+          <Label className="type-caption text-muted-foreground">Counting</Label>
+          <Select
+            value={basis}
+            onValueChange={(v) => setParam("basis", v, v === "BASE")}
+          >
+            <SelectTrigger size="sm" className="w-44" aria-label="Payroll cost basis">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="BASE">{BASIS_LABEL.BASE}</SelectItem>
+              <SelectItem value="TOTAL_TARGET_CASH">{BASIS_LABEL.TOTAL_TARGET_CASH}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-center gap-2">
+          <Label className="type-caption text-muted-foreground">Break down by</Label>
+          <Select
+            value={breakdown}
+            onValueChange={(v) => setParam("breakdown", v, v === "byCountry")}
+          >
+            <SelectTrigger size="sm" className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="byCountry">Country</SelectItem>
+              <SelectItem value="byDepartment">Department</SelectItem>
+              <SelectItem value="byLevel">Level</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
+      {data.basis === "TOTAL_TARGET_CASH" ? (
+        <p className="type-caption text-muted-foreground">
+          Base pay plus recurring components, each converted at the rate pinned to that employee&rsquo;s
+          own record. One-off payments are not counted — they are not part of what someone is paid
+          annually, and including them would make two runs of this report differ as they age out.
+        </p>
+      ) : null}
       <ChartCard
-        title="Total annualised base"
+        title={data.basis === "TOTAL_TARGET_CASH" ? "Total target cash" : "Total annualised base"}
         basisLine={basisLine}
         chart={
           <ThemedBarChart
             data={rows.map((r) => ({
               key: r.key,
               label: r.label,
-              value: Number(r.totalAnnualBase.amount),
-              displayValue: `${formatAmount(r.totalAnnualBase, { whole: true })} ${r.totalAnnualBase.currency}`,
+              value: Number(r.total.amount),
+              displayValue: `${formatAmount(r.total, { whole: true })} ${r.total.currency}`,
             }))}
           />
         }
@@ -122,8 +183,8 @@ function PayrollCostQuestion() {
                   <TableRow key={r.key} className="h-10">
                     <TableCell className="type-body-sm">{r.label}</TableCell>
                     <TableCell className="figure-sm">{r.headcount}</TableCell>
-                    <TableCell className="figure-sm">{formatAmount(r.totalAnnualBase, { whole: true })} {r.totalAnnualBase.currency}</TableCell>
-                    <TableCell className="figure-sm">{formatAmount(r.averageAnnualBase)} {r.averageAnnualBase.currency}</TableCell>
+                    <TableCell className="figure-sm">{formatAmount(r.total, { whole: true })} {r.total.currency}</TableCell>
+                    <TableCell className="figure-sm">{formatAmount(r.average)} {r.average.currency}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -136,8 +197,8 @@ function PayrollCostQuestion() {
           rows: rows.map((r) => [
             r.label,
             String(r.headcount),
-            `${r.totalAnnualBase.amount} ${r.totalAnnualBase.currency}`,
-            `${r.averageAnnualBase.amount} ${r.averageAnnualBase.currency}`,
+            `${r.total.amount} ${r.total.currency}`,
+            `${r.average.amount} ${r.average.currency}`,
           ]),
         }}
       />

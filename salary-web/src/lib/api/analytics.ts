@@ -15,18 +15,41 @@ export type AnalyticsPopulation = {
 
 // ---- payroll-cost / headcount (FR-6.1) -------------------------------------------------------
 
+/**
+ * `total` and `average` are basis-neutral on purpose (renamed from `totalAnnualBase` in P10.7).
+ * On the `TOTAL_TARGET_CASH` basis the figure is base plus recurring components, and a field still
+ * calling itself "base" would be describing something it is not. The response's own `basis` says
+ * what is being totalled.
+ */
 export type PayrollCostGroup = {
   key: string;
   label: string;
   headcount: number;
-  totalAnnualBase: Money;
-  averageAnnualBase: Money;
+  total: Money;
+  average: Money;
+};
+
+/** What a payroll-cost figure counts (FR-3.4 / P10.6). */
+export type AnalyticsBasis = "BASE" | "TOTAL_TARGET_CASH";
+
+/**
+ * The FX span this population was normalised over (P10.1). A population spanning many employees
+ * has no single governing rate month — every figure is pinned to whichever rate was in force when
+ * that employee's own record was written — so the response reports a span, not a scalar.
+ */
+export type FxBasis = {
+  earliestRateMonth: string | null;
+  latestRateMonth: string | null;
+  distinctRateMonths: number;
+  currencies: string[];
 };
 
 export type PayrollCostResponse = {
   asAtDate: string;
   baseCurrency: string;
+  basis: AnalyticsBasis;
   population: AnalyticsPopulation;
+  fxBasis: FxBasis;
   overall: PayrollCostGroup;
   byCountry: PayrollCostGroup[];
   byDepartment: PayrollCostGroup[];
@@ -44,8 +67,11 @@ export type HeadcountResponse = {
   byStatus: HeadcountGroup[];
 };
 
-export async function fetchPayrollCost(): Promise<PayrollCostResponse> {
-  const response = await apiFetch("/api/analytics/payroll-cost");
+export async function fetchPayrollCost(basis?: AnalyticsBasis): Promise<PayrollCostResponse> {
+  // BASE is the server's own default; omitting it keeps the request identical to every call site
+  // that predates the basis parameter.
+  const query = basis && basis !== "BASE" ? `?basis=${basis}` : "";
+  const response = await apiFetch(`/api/analytics/payroll-cost${query}`);
   return (await response.json()) as PayrollCostResponse;
 }
 

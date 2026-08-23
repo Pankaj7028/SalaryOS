@@ -52,7 +52,9 @@ export const savedViewKeys = {
 };
 
 export const analyticsKeys = {
-  payrollCost: () => ["analytics", "payrollCost"] as const,
+  /** Keyed by basis (P10.7): BASE and TOTAL_TARGET_CASH are two different answers to the same
+   * question, and one must never be served from the other's cache entry. */
+  payrollCost: (basis: string = "BASE") => ["analytics", "payrollCost", basis] as const,
   headcount: () => ["analytics", "headcount"] as const,
   outOfBand: () => ["analytics", "outOfBand"] as const,
   compaRatioDistribution: (params: Record<string, string | undefined>) =>

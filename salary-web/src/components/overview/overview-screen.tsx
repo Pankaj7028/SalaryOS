@@ -69,7 +69,7 @@ export function OverviewScreen() {
               <>
                 <StatCard
                   label="Total annualised base"
-                  value={<Money value={payrollCost.data!.overall.totalAnnualBase} size="figure-xl" whole />}
+                  value={<Money value={payrollCost.data!.overall.total} size="figure-xl" whole />}
                   comparison={`${payrollCost.data!.overall.headcount} employees`}
                 />
                 <StatCard
@@ -131,8 +131,8 @@ export function OverviewScreen() {
                 rows: (payrollCost.data?.byCountry ?? []).map((r) => [
                   r.label,
                   String(r.headcount),
-                  `${r.totalAnnualBase.amount} ${r.totalAnnualBase.currency}`,
-                  `${r.averageAnnualBase.amount} ${r.averageAnnualBase.currency}`,
+                  `${r.total.amount} ${r.total.currency}`,
+                  `${r.average.amount} ${r.average.currency}`,
                 ]),
               }}
             />
@@ -182,16 +182,16 @@ export function OverviewScreen() {
   );
 }
 
-function toCountryBars(groups: { key: string; label: string; totalAnnualBase: { amount: string; currency: string } }[]): BarDatum[] {
+function toCountryBars(groups: { key: string; label: string; total: { amount: string; currency: string } }[]): BarDatum[] {
   return groups.map((g) => ({
     key: g.key,
     label: g.label,
-    value: Number(g.totalAnnualBase.amount),
-    displayValue: `${formatAmount(g.totalAnnualBase, { whole: true })} ${g.totalAnnualBase.currency}`,
+    value: Number(g.total.amount),
+    displayValue: `${formatAmount(g.total, { whole: true })} ${g.total.currency}`,
   }));
 }
 
-function PayrollByCountryTable({ rows }: { rows: { key: string; label: string; headcount: number; totalAnnualBase: { amount: string; currency: string }; averageAnnualBase: { amount: string; currency: string } }[] }) {
+function PayrollByCountryTable({ rows }: { rows: { key: string; label: string; headcount: number; total: { amount: string; currency: string }; average: { amount: string; currency: string } }[] }) {
   if (rows.length === 0) {
     return <EmptyState title="No countries yet" detail="Base pay by country appears once employees have current comp records." />;
   }
@@ -210,8 +210,8 @@ function PayrollByCountryTable({ rows }: { rows: { key: string; label: string; h
           <TableRow key={r.key} className="h-10">
             <TableCell className="type-body-sm">{r.label}</TableCell>
             <TableCell className="figure-sm">{r.headcount}</TableCell>
-            <TableCell className="figure-sm">{formatAmount(r.totalAnnualBase, { whole: true })} {r.totalAnnualBase.currency}</TableCell>
-            <TableCell className="figure-sm">{formatAmount(r.averageAnnualBase)} {r.averageAnnualBase.currency}</TableCell>
+            <TableCell className="figure-sm">{formatAmount(r.total, { whole: true })} {r.total.currency}</TableCell>
+            <TableCell className="figure-sm">{formatAmount(r.average)} {r.average.currency}</TableCell>
           </TableRow>
         ))}
       </TableBody>

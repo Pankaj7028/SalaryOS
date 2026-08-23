@@ -9,12 +9,19 @@ import {
   fetchOutOfBand,
   fetchPayGap,
   fetchPayrollCost,
+  type AnalyticsBasis,
   type CompaRatioDistributionParams,
   type IncreaseCycleParams,
 } from "@/lib/api/analytics";
 
-export function usePayrollCost() {
-  return useQuery({ queryKey: analyticsKeys.payrollCost(), queryFn: fetchPayrollCost });
+export function usePayrollCost(basis: AnalyticsBasis = "BASE") {
+  return useQuery({
+    queryKey: analyticsKeys.payrollCost(basis),
+    queryFn: () => fetchPayrollCost(basis),
+    // Switching basis re-asks the same question a different way; keeping the old answer on screen
+    // while the new one loads reads as a figure that is still valid, which it is not.
+    placeholderData: undefined,
+  });
 }
 
 export function useHeadcount() {

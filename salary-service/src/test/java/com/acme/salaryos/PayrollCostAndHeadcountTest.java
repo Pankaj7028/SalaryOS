@@ -102,13 +102,13 @@ class PayrollCostAndHeadcountTest {
 		// The terminated employee's row was deleted (P5.2), so only the two active hires count:
 		// 100000 + 120000 = 220000, not 310000.
 		assertThat(department.headcount()).isEqualTo(2);
-		assertThat(department.totalAnnualBase().amount()).isEqualByComparingTo("220000.00");
-		assertThat(department.totalAnnualBase().amount()).isEqualByComparingTo(directDeptSum);
-		assertThat(department.averageAnnualBase().amount()).isEqualByComparingTo("110000.00");
+		assertThat(department.total().amount()).isEqualByComparingTo("220000.00");
+		assertThat(department.total().amount()).isEqualByComparingTo(directDeptSum);
+		assertThat(department.average().amount()).isEqualByComparingTo("110000.00");
 
 		PayrollCostGroup level = findByKey(response.byLevel(), fx.jobLevelId().toString());
 		assertThat(level.headcount()).isEqualTo(2);
-		assertThat(level.totalAnnualBase().amount()).isEqualByComparingTo("220000.00");
+		assertThat(level.total().amount()).isEqualByComparingTo("220000.00");
 
 		// The terminated employee is excluded from the total but not hidden from the basis envelope.
 		assertThat(response.population().excluded().get("terminated")).isGreaterThanOrEqualTo(1);
