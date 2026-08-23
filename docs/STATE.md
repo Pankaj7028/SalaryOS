@@ -15,7 +15,8 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 |---|---|
 | **Phase** | **`P0`–`P9` all `[x]`. `P10`–`P14` appended 2026-08-23** (35 steps, post-v1 feature + market analysis) — see `docs/feature-roadmap.md` for why each exists. |
 | **Last completed** | **`P10.1`** — `FxBasis(distinctRates, monthsSpanned, earliestMonth, latestMonth)` replaces the scalar `fxRateMonth` on the four money-carrying analytics responses, closing the P9.6 criterion-#8 question that stood open since P7.1. `138/138` backend (was 133). Before that: `89ff4cd`, the 22 Aug QA pass's three feature gaps (import hub, bands + merit CSV UI, equity export). |
-| **Next step** | **`P10.1`** — `FxBasis` on the six analytics responses. `P10`–`P14` (35 steps) were appended 2026-08-23 from a post-v1 feature + market analysis; the reasoning, scope verdicts and exclusion-list stance live in `docs/feature-roadmap.md` (read it before questioning why a step exists — don't re-derive it). |
+| **Next step** | **`P10.2`** — FX coverage matrix on `/admin/fx-rates`. `P10`–`P14` (35 steps) were appended 2026-08-23 from a post-v1 feature + market analysis; the reasoning, scope verdicts and exclusion-list stance live in `docs/feature-roadmap.md` (read it before questioning why a step exists — don't re-derive it). |
+| **Live verification is unavailable this session** | `P10.1`'s `curl` half went unrun — no running service, and Docker/`application-local.yml` were not reachable. Several `P10`–`P14` Verify clauses need a live stack (`P10.2`, `P10.4`, `P10.5`, `P11.2`…). **Steps landed under this constraint carry an explicit "not verified" line in their done-note** — re-run those checks when a stack is next up rather than assuming they passed. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far — everything runs against local Postgres). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
