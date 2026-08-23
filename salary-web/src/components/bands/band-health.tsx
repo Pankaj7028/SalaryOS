@@ -1,5 +1,6 @@
 "use client";
 
+import { formatAmount } from "@/lib/money";
 import type { BandHealthResponse, BandHealthRow } from "@/lib/api/analytics";
 
 /**
@@ -169,8 +170,37 @@ export function BandShapeFigures({ row }: { row: BandHealthRow }) {
           {row.medianCompaRatio === null ? <span className="text-muted-foreground">—</span> : row.medianCompaRatio}
         </dd>
       </div>
+      {/* P11.6. Rendered only when a survey exists for this band — no "—" placeholder row, because
+          most bands have no benchmark and a column of dashes reads as missing data rather than as
+          a feature nobody has fed yet. */}
+      {row.marketP50 ? (
+        <>
+          <div>
+            <dt className="type-label text-muted-foreground">Market median</dt>
+            <dd className="figure-sm">
+              {formatAmount(row.marketP50)} {row.marketP50.currency}
+            </dd>
+          </div>
+          <div>
+            <dt className="type-label text-muted-foreground">Mid vs market</dt>
+            <dd className="figure-sm">
+              {row.midVsMarketP50 === null ? (
+                <span className="text-muted-foreground">—</span>
+              ) : (
+                signedFraction(row.midVsMarketP50)
+              )}
+            </dd>
+          </div>
+        </>
+      ) : null}
     </dl>
   );
+}
+
+/** "+4.2%" / "-11.0%" — the sign is the whole point of a comparison figure. */
+function signedFraction(value: string): string {
+  const pct = Number(value) * 100;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
 }
 
 /**

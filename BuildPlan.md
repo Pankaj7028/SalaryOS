@@ -2474,11 +2474,59 @@ table.
   >
   > **Observed:** `MarketDataImportTest` 6/6. Full suite → `Tests run: 172, Failures: 0, Errors: 0`,
   > `BUILD SUCCESS` (166 before).
-- [ ] **P11.6** Market tick on `<BandBar>` + "band mid vs market p50" in band health (F10).
+- [x] **P11.6** Market tick on `<BandBar>` + "band mid vs market p50" in band health (F10).
   **`docs/salary-management-ui.md §7.1` governs this component change and its §12 checklist is not
   optional** — this is the signature component.
   *Verify:* `npm run verify`; visual check in both themes at 375px; a band with no market data
   renders unchanged, with no empty tick.
+  > **Done (2026-08-24).** §7.1 read before touching the component, as the step demands.
+  >
+  > **The tick sits above the track, not on it.** The track *is* the band; a market median is a
+  > different kind of claim about the same scale. Deliberately not a second marker shape competing
+  > with the salary's, which is the one thing on this bar a reader is actually looking for.
+  >
+  > **A median outside the band renders no tick at all, and says so in words instead.** Pinning it
+  > to the track end would assert "the market is exactly at your maximum" — precisely wrong in the
+  > case that matters most, a band that has fallen behind the market entirely. Same reasoning §7.1
+  > already applies to the salary marker (never clamped), reached from the other direction: the
+  > salary overshoots *outside* the track because it is the subject; a benchmark cannot overshoot
+  > without competing with it, so it drops out and the `detail` variant labels it as "outside this
+  > band".
+  >
+  > **It is in the accessible sentence.** §7.1 is explicit that the bar is decorative and the
+  > sentence is the content, so a tick that is visible has to be audible: "... · market median
+  > 62,000 USD". Otherwise the benchmark exists only for people who can see it.
+  >
+  > **A survey in another currency is dropped, never converted** — enforced in two places
+  > (`MarketBenchmarkLookup.sameCurrencyOnly` and the band-health SQL). A GBP band ticked from a USD
+  > median reads as ~25% under market: a plausible figure, right shape, wrong, and nothing about it
+  > looks broken. Converting is not the fix either — it pins a benchmark to one month's FX rate and
+  > makes it drift for reasons unrelated to the market (P11.5's reasoning, unchanged).
+  >
+  > **Being below market is not a flag.** It is a commercial position someone chose, not a defect in
+  > the band structure. Flagging it would put an amber dot on most bands at most companies and train
+  > people to ignore the dots that mean someone's pay is actually wrong.
+  >
+  > **Batched, one query per page.** `MarketBenchmarkLookup` resolves the whole page's distinct
+  > (level, country) pairs at once against `market_data_points_lookup_idx`; the newest month wins and
+  > `source ASC` breaks ties, so two runs of the same report agree (CLAUDE.md §6.4 applies to survey
+  > data as much as to FX). Measured after the change: employee list p50 **15 ms**, max 28 ms — no
+  > N+1 behind the screen this product opens on.
+  >
+  > **Observed:** `MarketBenchmarkTest` 4/4. Full backend suite → `Tests run: 197, Failures: 0,
+  > Errors: 0`, `BUILD SUCCESS` (193 before). Frontend `npm run verify` clean,
+  > `Tests 45 passed (45)` (44 before). Live end-to-end **through the real P11.5 import seam**: a
+  > 3-row CSV imported (`dryRun=false`, 3 created, 0 errors) against three real US bands →
+  > **2 of 470 bands carry a benchmark**, the third correctly dropped for being a EUR survey on a
+  > USD band. Marketing L1 US mid 56,596.71 vs p50 62,000 → `-0.0871`; Operations L1 US mid
+  > 55,635.66 vs 50,000 → `+0.1127`; both reconcile by hand. Employee detail in the benchmarked band
+  > carries `marketP50: {50000.00, USD}`; every other employee carries `marketP50: null` and renders
+  > no tick.
+  >
+  > **Unrun — and this is the one the step named explicitly:** the visual check in both themes at
+  > 375px, plus the §12 checklist items that need eyes. Browser automation reports "extension is not
+  > connected" (re-checked this session, not assumed). **This is the signature component and its
+  > visual pass is outstanding** — do it first when a local browser is available.
 
 ## P12 — Act, don't just report
 
@@ -2600,7 +2648,7 @@ table.
 | | |
 |---|---|
 | **Last completed** | **`P10.2`** — FX coverage matrix on `/admin/fx-rates`: currency × month over the currencies actually in use, gaps in `--attention`, riding on the existing list endpoint. `FxCoverageTest` 3/3; frontend `typecheck`/`lint`/`build` clean; live-verified against a restarted stack (16 months, 7 currencies, 9,580 people; adding a rate flipped exactly one cell). **Visual pass in both themes and at 375px still owed** — the paired Chrome is on another device and can't reach this machine (2026-08-23). |
-| **Current step** | **`P11.6`.** **P10 is closed** — `P10.4` (saved-view picker), `P10.5` (result count, page jump, bulk propose, plus a service-wide 401-on-validation bug found in QA and fixed), `P10.7` (basis toggle + P10.6's deferred rename). A live stack is up (backend `:8080`, web `:3100`), so `P11.2`, `P11.4`, `P11.6` are unblocked; `P12.1` follows them. |
+| **Current step** | **`P12.1`.** **P10 is closed** — `P10.4` (saved-view picker), `P10.5` (result count, page jump, bulk propose, plus a service-wide 401-on-validation bug found in QA and fixed), `P10.7` (basis toggle + P10.6's deferred rename). A live stack is up (backend `:8080`, web `:3100`), so `P11.2`, `P11.4`, `P11.6` are unblocked; `P12.1` follows them. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._

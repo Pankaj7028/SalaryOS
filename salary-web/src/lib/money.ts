@@ -19,11 +19,21 @@ export type Money = {
 
 export type BandStatus = "IN_BAND" | "BELOW_MIN" | "ABOVE_MAX" | "NO_BAND";
 
-/** Salary band, with its own currency — bands and pay can differ in currency. */
+/**
+ * Salary band, with its own currency — bands and pay can differ in currency.
+ *
+ * `marketP50` is the most recently imported market median for this band's (job level, country),
+ * in the band's own currency (P11.6/F10). It is **null far more often than not**, and that is the
+ * ordinary case rather than a degraded one: Salary OS ships the seam for market data, not a
+ * dataset. The server also sends null when the survey is denominated differently from the band —
+ * a tick drawn on a GBP scale from a USD figure would be a silent lie on a scale the reader trusts
+ * to be one currency.
+ */
 export type Band = {
   min: Money;
   mid: Money;
   max: Money;
+  marketP50?: Money | null;
 };
 
 /**

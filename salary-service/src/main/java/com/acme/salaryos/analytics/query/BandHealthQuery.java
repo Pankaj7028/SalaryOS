@@ -2,6 +2,7 @@ package com.acme.salaryos.analytics.query;
 
 import com.acme.salaryos.analytics.dto.BandHealthRow;
 import com.acme.salaryos.common.money.Money;
+import com.acme.salaryos.market.service.MarketBenchmarkLookup;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -43,6 +44,7 @@ public class BandHealthQuery {
 			WITH in_force AS (
 			    SELECT b.id, b.country_code, b.currency,
 			           b.min_amount, b.mid_amount, b.max_amount, b.effective_from,
+			           b.job_level_id,
 			           jl.level_code, jl.title AS level_title, jl.sort_order, jl.job_family_id,
 			           jf.name AS family_name, co.name AS country_name
 			      FROM salary_schema.salary_bands b
@@ -64,7 +66,8 @@ public class BandHealthQuery {
 			       (EXTRACT(YEAR FROM age(current_date, p.effective_from)) * 12
 			        + EXTRACT(MONTH FROM age(current_date, p.effective_from)))::int AS months_since_versioned,
 			       coalesce(stats.incumbents, 0) AS incumbents,
-			       stats.median_compa_ratio
+			       stats.median_compa_ratio,
+			       market.p50_amount AS market_p50, market.currency AS market_currency
 			  FROM with_previous p
 			  LEFT JOIN LATERAL (
 			      SELECT count(*) AS incumbents,
@@ -72,6 +75,18 @@ public class BandHealthQuery {
 			        FROM salary_schema.employee_current_comp c
 			       WHERE c.band_id = p.id
 			  ) stats ON true
+			  -- P11.6. Newest month wins; source breaks a tie alphabetically so the figure cannot
+			  -- change between two runs of the same report (CLAUDE.md §6.4 applies to survey data
+			  -- exactly as it does to FX). Most bands have no row here, which is the normal case:
+			  -- this product ships the seam for market data, not a dataset.
+			  LEFT JOIN LATERAL (
+			      SELECT m.p50_amount, m.currency
+			        FROM salary_schema.market_data_points m
+			       WHERE m.job_level_id = p.job_level_id
+			         AND m.country_code = p.country_code
+			       ORDER BY m.effective_month DESC, m.source ASC
+			       LIMIT 1
+			  ) market ON true
 			 ORDER BY p.family_name, p.country_name, p.sort_order
 			""";
 
@@ -86,6 +101,15 @@ public class BandHealthQuery {
 		BigDecimal max = rs.getBigDecimal("max_amount");
 		BigDecimal previousMid = rs.getBigDecimal("previous_mid");
 		BigDecimal previousMax = rs.getBigDecimal("previous_max");
+
+		// A survey in a different currency is dropped rather than converted (P11.5/P11.6): a GBP
+		// band judged against a USD median would read as ~25% under market for no reason anyone
+		// could act on, and converting would pin the benchmark to one month's FX rate.
+		BigDecimal marketAmount = rs.getBigDecimal("market_p50");
+		String marketCurrency = rs.getString("market_currency");
+		Money marketP50 = marketAmount == null || marketCurrency == null || !currency.equals(marketCurrency.trim())
+				? null
+				: new Money(marketAmount, marketCurrency.trim());
 
 		return new BandHealthRow(
 				UUID.fromString(rs.getString("id")),
@@ -102,7 +126,9 @@ public class BandHealthQuery {
 				previousMax != null && previousMax.compareTo(min) < 0,
 				rs.getInt("incumbents"),
 				rs.getBigDecimal("median_compa_ratio"),
-				rs.getInt("months_since_versioned"));
+				rs.getInt("months_since_versioned"),
+				marketP50,
+				MarketBenchmarkLookup.midVsMarket(mid, marketP50));
 	}
 
 	/**

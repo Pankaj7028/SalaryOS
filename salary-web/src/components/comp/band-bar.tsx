@@ -62,9 +62,16 @@ function accessibleSentence(props: BandBarProps): string {
     return `${money} · no band${scope ? ` for ${scope}` : ""}`;
   }
   const state = BAND_STATUS_LABEL[position.status].toLowerCase();
-  return `${money} · compa-ratio ${formatCompaRatio(position.compaRatio)} · ${state}, ${Math.round(
+  const base = `${money} · compa-ratio ${formatCompaRatio(position.compaRatio)} · ${state}, ${Math.round(
     position.percentThroughRange,
   )}% through range`;
+  // §7.1: the bar is decorative to a screen reader and this sentence is the content, so a tick
+  // that is visible must also be audible — otherwise the market benchmark exists only for people
+  // who can see it.
+  const marketP50 = props.band?.marketP50;
+  return marketP50
+    ? `${base} · market median ${formatAmount(marketP50)} ${marketP50.currency}`
+    : base;
 }
 
 export function BandBar(props: BandBarProps) {
@@ -116,6 +123,21 @@ export function BandBar(props: BandBarProps) {
   const midN = Number(band.mid.amount);
   const midPct = maxN > minN ? ((midN - minN) / (maxN - minN)) * 100 : 50;
 
+  /**
+   * Market-median tick position, same layout-geometry reasoning as the mid tick — where to put a
+   * 1px rule, not a figure anyone reads off the pixels.
+   *
+   * Null when there is no market data (the ordinary case) **and when the median falls outside the
+   * band**. A tick pinned to the track end would say "the market is exactly at your maximum", which
+   * is precisely wrong in the situation that matters most: a band that has fallen behind the market
+   * entirely. The figure is still in the accessible sentence, where it cannot mislead by position.
+   */
+  const marketN = band.marketP50 ? Number(band.marketP50.amount) : null;
+  const marketPct =
+    marketN !== null && maxN > minN && marketN >= minN && marketN <= maxN
+      ? ((marketN - minN) / (maxN - minN)) * 100
+      : null;
+
   return (
     <div className={cn("flex flex-col gap-1.5", WIDTH[variant], className)}>
       <div aria-hidden className="relative h-3.5">
@@ -129,6 +151,17 @@ export function BandBar(props: BandBarProps) {
           className="bg-border absolute top-1/2 h-2 w-px -translate-y-1/2"
           style={{ left: `${midPct}%` }}
         />
+        {/* P11.6 — market median. Drawn ABOVE the track rather than on it, and only when there is
+            data: the track is the band, and a market figure is a different kind of claim about the
+            same scale. It is deliberately not a second marker shape competing with the salary's,
+            which is the one thing on this bar the reader is looking for. A band with no market data
+            renders exactly as it did before — no placeholder, no empty tick. */}
+        {marketPct !== null ? (
+          <div
+            className="bg-muted-foreground absolute top-0 h-1.5 w-px"
+            style={{ left: `${marketPct}%` }}
+          />
+        ) : null}
         {/* marker: 3 × 14px */}
         <div
           className={cn(
@@ -151,6 +184,15 @@ export function BandBar(props: BandBarProps) {
           </span>
           <span className="figure-sm absolute right-0">{formatAmount(band.max)}</span>
         </div>
+      ) : null}
+
+      {/* The detail variant labels its ticks, so it labels this one too — as a sentence rather
+          than a floating number, because "market median" is not self-evident from a position. */}
+      {variant === "detail" && band.marketP50 ? (
+        <p aria-hidden className="type-caption text-muted-foreground">
+          Market median {formatAmount(band.marketP50)} {band.marketP50.currency}
+          {marketPct === null ? " — outside this band" : ""}
+        </p>
       ) : null}
 
       {/* The bar is decorative; this sentence is the content (§7.1). */}

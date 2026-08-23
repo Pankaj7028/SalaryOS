@@ -31,6 +31,8 @@ function row(overrides: Partial<BandHealthRow> = {}): BandHealthRow {
     incumbents: 12,
     medianCompaRatio: "1.02",
     monthsSinceVersioned: 4,
+    marketP50: null,
+    midVsMarketP50: null,
     ...overrides,
   };
 }
@@ -79,5 +81,19 @@ describe("flagsFor", () => {
   /** A band that has never been versioned reports null, which is not "stale forever". */
   it("does not call an unversioned band stale", () => {
     expect(flagsFor(row({ monthsSinceVersioned: null }), STALE_AFTER_MONTHS)).toEqual([]);
+  });
+
+  /**
+   * P11.6 added market data to this row, and it is deliberately NOT a flag. Being below market is
+   * a commercial position someone chose, not a defect in the band structure — flagging it would
+   * put an amber dot on most bands at most companies and train people to ignore the dots that mean
+   * someone's pay is actually wrong.
+   */
+  it("does not flag a band for sitting below market", () => {
+    const belowMarket = row({
+      marketP50: { amount: "150000.00", currency: "USD" },
+      midVsMarketP50: "-0.2000",
+    });
+    expect(flagsFor(belowMarket, STALE_AFTER_MONTHS)).toEqual([]);
   });
 });

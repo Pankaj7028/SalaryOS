@@ -33,6 +33,7 @@ import com.acme.salaryos.employee.repository.EmployeeRepository;
 import com.acme.salaryos.analytics.query.DataHealthQuery;
 import com.acme.salaryos.employee.spec.DataHealthDrillThrough;
 import com.acme.salaryos.employee.spec.EmployeeSpecifications;
+import com.acme.salaryos.market.service.MarketBenchmarkLookup;
 import com.acme.salaryos.reference.domain.Location;
 import com.acme.salaryos.reference.repository.DepartmentRepository;
 import com.acme.salaryos.reference.repository.JobFamilyRepository;
@@ -92,6 +93,7 @@ public class EmployeeService {
 	private final EffectiveDating effectiveDating;
 	private final JdbcTemplate jdbcTemplate;
 	private final DataHealthQuery dataHealthQuery;
+	private final MarketBenchmarkLookup marketBenchmarkLookup;
 
 	private static final Set<String> VALID_EMPLOYMENT_TYPES = Set.of("FULL_TIME", "PART_TIME", "CONTRACT");
 
@@ -110,7 +112,8 @@ public class EmployeeService {
 			AuditService auditService,
 			EffectiveDating effectiveDating,
 			JdbcTemplate jdbcTemplate,
-			DataHealthQuery dataHealthQuery) {
+			DataHealthQuery dataHealthQuery,
+			MarketBenchmarkLookup marketBenchmarkLookup) {
 		this.employeeRepository = employeeRepository;
 		this.employeeCurrentCompRepository = employeeCurrentCompRepository;
 		this.compensationRecordRepository = compensationRecordRepository;
@@ -126,6 +129,7 @@ public class EmployeeService {
 		this.effectiveDating = effectiveDating;
 		this.jdbcTemplate = jdbcTemplate;
 		this.dataHealthQuery = dataHealthQuery;
+		this.marketBenchmarkLookup = marketBenchmarkLookup;
 	}
 
 	/**
@@ -196,12 +200,13 @@ public class EmployeeService {
 				.stream()
 				.collect(Collectors.toMap(EmployeeCurrentComp::getEmployeeId, c -> c));
 		Map<UUID, SalaryBand> bands = fetchBands(currentComp.values());
+		Map<MarketBenchmarkLookup.Scope, Money> marketP50 = marketP50For(bands.values());
 
 		List<EmployeeSummaryResponse> items = employees.stream()
 				.map(employee -> {
 					EmployeeCurrentComp comp = currentComp.get(employee.getId());
 					SalaryBand band = comp == null || comp.getBandId() == null ? null : bands.get(comp.getBandId());
-					return toSummary(employee, comp, band);
+					return toSummary(employee, comp, band, marketP50);
 				})
 				.toList();
 
@@ -279,13 +284,14 @@ public class EmployeeService {
 				.stream()
 				.collect(Collectors.toMap(EmployeeCurrentComp::getEmployeeId, c -> c));
 		Map<UUID, SalaryBand> bands = fetchBands(currentComp.values());
+		Map<MarketBenchmarkLookup.Scope, Money> marketP50 = marketP50For(bands.values());
 
 		List<EmployeeSummaryResponse> items = page.stream()
 				.map(row -> {
 					Employee employee = employeesById.get(row.id());
 					EmployeeCurrentComp comp = currentComp.get(row.id());
 					SalaryBand band = comp == null || comp.getBandId() == null ? null : bands.get(comp.getBandId());
-					return toSummary(employee, comp, band);
+					return toSummary(employee, comp, band, marketP50);
 				})
 				.toList();
 
@@ -828,17 +834,44 @@ public class EmployeeService {
 	}
 
 	private BandBoundaries toBoundaries(SalaryBand band) {
+		return toBoundaries(band, Map.of());
+	}
+
+	/**
+	 * P11.6: {@code marketP50} comes from the batch looked up for this page, and is dropped when the
+	 * survey is in a different currency from the band — a tick drawn on a GBP scale from a USD
+	 * figure is a silent lie on a scale the reader trusts to be one currency (CLAUDE.md §6.2).
+	 */
+	private BandBoundaries toBoundaries(SalaryBand band, Map<MarketBenchmarkLookup.Scope, Money> marketP50) {
 		if (band == null) {
 			return null;
 		}
 		String currency = band.getCurrency();
+		Money benchmark = MarketBenchmarkLookup.sameCurrencyOnly(
+				marketP50.get(new MarketBenchmarkLookup.Scope(band.getJobLevelId(), band.getCountryCode())),
+				currency);
 		return new BandBoundaries(
 				new Money(band.getMinAmount(), currency),
 				new Money(band.getMidAmount(), currency),
-				new Money(band.getMaxAmount(), currency));
+				new Money(band.getMaxAmount(), currency),
+				benchmark);
+	}
+
+	/** One query for the whole page's bands, rather than one per row (P11.6). */
+	private Map<MarketBenchmarkLookup.Scope, Money> marketP50For(java.util.Collection<SalaryBand> bands) {
+		return marketBenchmarkLookup.latestP50(bands.stream()
+				.filter(band -> band.getJobLevelId() != null && band.getCountryCode() != null)
+				.map(band -> new MarketBenchmarkLookup.Scope(band.getJobLevelId(), band.getCountryCode()))
+				.distinct()
+				.toList());
 	}
 
 	private EmployeeSummaryResponse toSummary(Employee employee, EmployeeCurrentComp comp, SalaryBand band) {
+		return toSummary(employee, comp, band, Map.of());
+	}
+
+	private EmployeeSummaryResponse toSummary(Employee employee, EmployeeCurrentComp comp, SalaryBand band,
+			Map<MarketBenchmarkLookup.Scope, Money> marketP50) {
 		return new EmployeeSummaryResponse(
 				employee.getId(), employee.getEmployeeNumber(), employee.getFirstName(), employee.getLastName(),
 				employee.getWorkEmail(), employee.getDepartmentId(), employee.getLocationId(), employee.getJobLevelId(),
@@ -848,7 +881,7 @@ public class EmployeeService {
 				comp == null ? null : comp.getCompaRatio(),
 				comp == null ? null : comp.getRangePenetration(),
 				comp == null ? null : comp.getBandStatus(),
-				toBoundaries(band));
+				toBoundaries(band, marketP50));
 	}
 
 	private EmployeeDetailResponse toDetail(
@@ -863,7 +896,8 @@ public class EmployeeService {
 				comp == null ? null : comp.getCompaRatio(),
 				comp == null ? null : comp.getRangePenetration(),
 				comp == null ? null : comp.getBandStatus(),
-				toBoundaries(band),
+				// One band, so the single-scope lookup rather than a batch of one.
+				toBoundaries(band, band == null ? Map.of() : marketP50For(List.of(band))),
 				components);
 	}
 

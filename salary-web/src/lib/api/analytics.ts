@@ -125,6 +125,13 @@ export type BandHealthRow = {
   incumbents: number;
   medianCompaRatio: string | null;
   monthsSinceVersioned: number | null;
+  /**
+   * Most recently imported market median for this (job level, country), in the band's own
+   * currency, and `mid / p50 - 1`. Both null when no survey has been imported for the pair — the
+   * ordinary case — and both null when the survey is denominated differently from the band.
+   */
+  marketP50: Money | null;
+  midVsMarketP50: string | null;
 };
 
 export type BandHealthResponse = {
