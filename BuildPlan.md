@@ -1964,14 +1964,50 @@ table.
 > `requirements-one-pager.md` is still the scope contract — every step below was checked against it,
 > and the two that collided with an exclusion (`P11.5`, `P13.7`) were narrowed, not argued past.
 
-- [ ] **P10.1** `FxBasis` on the six analytics responses (F3) — resolves the standing FR-6.8 /
-  P9.6-criterion-#8 open decision recorded in `docs/STATE.md`. Replace the scalar `fxRateMonth` with
-  a record: `monthsSpanned`, `distinctRates`, `earliestMonth`, `latestMonth`, `missingCoverage`. The
+- [x] **P10.1** `FxBasis` on the **four money-carrying** analytics responses (F3) — resolves the
+  standing FR-6.8 / P9.6-criterion-#8 open decision recorded in `docs/STATE.md`. Replace the scalar
+  `fxRateMonth` with a record: `distinctRates`, `monthsSpanned`, `earliestMonth`, `latestMonth`. The
   existing `null` is **not** a bug — an aggregate over many employees has no single governing month;
   this reports the basis honestly instead of fabricating one.
-  *Verify:* `curl` each of the six endpoints, every one carries a populated `fxBasis`; a targeted
-  test asserts `distinctRates` equals a direct SQL `count(distinct fx_rate_id)` over the same
-  population.
+  > **Scope corrected during the step (2026-08-23):** the plan said "six responses". It is four.
+  > `HeadcountResponse` carries no money at all, and `CompaRatioDistributionResponse` reports
+  > `compa_ratio` — pay ÷ band mid, both already in the same currency, so no FX enters it. Confirmed
+  > against the queries: exactly four of the six touch `normalized_annual_base` (`PayrollCostQuery`,
+  > `OutOfBandQuery`, `PayGapQuery`, `IncreaseCycleQuery`). Attaching an FX basis to the other two
+  > would fabricate a basis for a figure that has none — the exact mistake the original `null` was
+  > avoiding.
+  *Verify:* `curl` the four money endpoints, every one carries a populated `fxBasis`; the other two
+  carry none. A targeted test asserts `distinctRates` equals a direct SQL
+  `count(distinct fx_rate_id)` over the same population.
+  > **Done (2026-08-23):** `FxBasis(distinctRates, monthsSpanned, earliestMonth, latestMonth)` +
+  > `FxBasisQuery`, wired into `payrollCost`, `outOfBand`, `payGap` (all `forCurrentComp()`) and
+  > `increaseCycle` (`forAppliedChanges(from, to)`, scoped exactly as `IncreaseCycleQuery` scopes
+  > its own figures).
+  >
+  > `employee_current_comp` carries the normalised figure but **not** the rate behind it —
+  > `fx_rate_id` lives on `compensation_records`, where it is `NOT NULL` — so the basis joins
+  > through `compensation_record_id`. That `NOT NULL` is what makes the count trustworthy: every
+  > row in the population has exactly one governing rate and none can be silently missed.
+  >
+  > **`missingCoverage` was dropped from the design during the step.** It cannot happen on a read:
+  > a missing rate is a hard write-time failure (`MissingFxRateException`, 422, backend doc §5), so
+  > every already-written record necessarily has a rate. Reporting a field that is structurally
+  > always `false` would be noise pretending to be a safety check. The genuine forward-looking
+  > question — "is next month's rate loaded, so writes will keep succeeding?" — belongs to `P10.2`'s
+  > coverage matrix, which is an admin concern about the *future*, not a property of *this* report.
+  >
+  > **Observed:** `FxBasisTest` 5/5. Full suite `./mvnw clean verify` →
+  > `Tests run: 138, Failures: 0, Errors: 0`, `BUILD SUCCESS` (133 before this step; +5 here). Ran
+  > the full suite rather than just the targeted one because this changes four shared DTOs, which
+  > CLAUDE.md §2B treats as a module boundary.
+  >
+  > **Not verified: the `curl` half.** No running service this session — the local-Postgres recipe
+  > needs Docker and an `application-local.yml` this session was not permitted to reach. The
+  > substantive assertion (service value vs. independent SQL over the identical join) *is* covered,
+  > against real Postgres via Testcontainers, which is strictly stronger than a shape check on JSON.
+  > What remains unproven is only that Jackson serialises the record as expected. **Run the four
+  > `curl`s when a service is next up**; `FxBasisTest.responsesWithoutMoneyCarryNoFxBasis` already
+  > pins the "other two carry none" half structurally.
 - [ ] **P10.2** FX coverage matrix on `/admin/fx-rates` (F3) — currency × month over the currencies
   actually in use by `employee_current_comp`, gaps in `--attention`.
   *Verify:* delete one month's rate for one in-use currency locally; the cell renders as missing
@@ -2162,7 +2198,7 @@ table.
 | | |
 |---|---|
 | **Last completed** | Post-P9 backlog sweep — closed 2 of P9.6's 3 acceptance-criteria gaps (employee-list `bandStatus` filter + `sortBy=compaRatio`, both server-side over the full 10k dataset, verified live). `133/133` backend, frontend `verify` clean (2026-08-22). |
-| **Current step** | **`P10.1`** — `FxBasis` on the analytics responses. This also closes the long-standing `fxRateMonth` question (P9.6 criterion #8): it was a considered design decision, not an oversight, and `P10.1` is the resolution rather than a "just add the field" fix. `P10`–`P14` were appended 2026-08-23 from the post-v1 feature + market analysis; reasoning in `docs/feature-roadmap.md`. |
+| **Current step** | **`P10.2`** — FX coverage matrix on `/admin/fx-rates`. `P10.1` done: `FxBasis` span replaces the scalar `fxRateMonth` on the four money-carrying analytics responses, closing the P9.6 criterion-#8 question. `138/138` backend. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._

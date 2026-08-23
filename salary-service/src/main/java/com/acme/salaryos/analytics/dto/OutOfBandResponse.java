@@ -16,6 +16,7 @@ public record OutOfBandResponse(
 		LocalDate asAtDate,
 		String baseCurrency,
 		AnalyticsPopulation population,
+		FxBasis fxBasis,
 		int belowMinCount,
 		int aboveMaxCount,
 		Money totalCostToMinimum,

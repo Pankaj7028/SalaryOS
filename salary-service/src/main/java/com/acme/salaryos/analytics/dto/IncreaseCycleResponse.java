@@ -20,6 +20,7 @@ public record IncreaseCycleResponse(
 		LocalDate toDate,
 		String baseCurrency,
 		AnalyticsPopulation population,
+		FxBasis fxBasis,
 		Money totalIncrease,
 		BigDecimal avgIncreasePercent,
 		BigDecimal medianIncreasePercent,

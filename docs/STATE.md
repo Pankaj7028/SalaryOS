@@ -14,7 +14,7 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | **`P0`–`P9` all `[x]`. `P10`–`P14` appended 2026-08-23** (35 steps, post-v1 feature + market analysis) — see `docs/feature-roadmap.md` for why each exists. |
-| **Last completed** | `89ff4cd` — the 2026-08-22 QA pass's three feature gaps landed: `/admin/import` is now a tabbed hub (Employees / Salary bands / Merit changes), bands-import and merit bulk-upload finally have a UI (backends idle since P5.3/P6.3), `/insights/equity` gained CSV export. Frontend `verify` clean: tokens 46/46, contrast 28 pairs ≥ AA, lint 0 errors, vitest 29/29, build 21 routes. |
+| **Last completed** | **`P10.1`** — `FxBasis(distinctRates, monthsSpanned, earliestMonth, latestMonth)` replaces the scalar `fxRateMonth` on the four money-carrying analytics responses, closing the P9.6 criterion-#8 question that stood open since P7.1. `138/138` backend (was 133). Before that: `89ff4cd`, the 22 Aug QA pass's three feature gaps (import hub, bands + merit CSV UI, equity export). |
 | **Next step** | **`P10.1`** — `FxBasis` on the six analytics responses. `P10`–`P14` (35 steps) were appended 2026-08-23 from a post-v1 feature + market analysis; the reasoning, scope verdicts and exclusion-list stance live in `docs/feature-roadmap.md` (read it before questioning why a step exists — don't re-derive it). |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far — everything runs against local Postgres). |
 

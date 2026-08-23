@@ -13,6 +13,7 @@ import com.acme.salaryos.analytics.dto.PayGapResponse;
 import com.acme.salaryos.analytics.dto.PayrollCostResponse;
 import com.acme.salaryos.analytics.query.CompaRatioDistributionQuery;
 import com.acme.salaryos.analytics.query.HeadcountQuery;
+import com.acme.salaryos.analytics.query.FxBasisQuery;
 import com.acme.salaryos.analytics.query.IncreaseCycleQuery;
 import com.acme.salaryos.analytics.query.OutOfBandQuery;
 import com.acme.salaryos.analytics.query.PayGapQuery;
@@ -43,13 +44,14 @@ public class AnalyticsService {
 	private final CompaRatioDistributionQuery compaRatioDistributionQuery;
 	private final PayGapQuery payGapQuery;
 	private final IncreaseCycleQuery increaseCycleQuery;
+	private final FxBasisQuery fxBasisQuery;
 	private final Clock clock;
 	private final String baseCurrency;
 
 	public AnalyticsService(
 			PayrollCostQuery payrollCostQuery, HeadcountQuery headcountQuery, OutOfBandQuery outOfBandQuery,
 			CompaRatioDistributionQuery compaRatioDistributionQuery, PayGapQuery payGapQuery,
-			IncreaseCycleQuery increaseCycleQuery, Clock clock,
+			IncreaseCycleQuery increaseCycleQuery, FxBasisQuery fxBasisQuery, Clock clock,
 			@Value("${app.base-currency}") String baseCurrency) {
 		this.payrollCostQuery = payrollCostQuery;
 		this.headcountQuery = headcountQuery;
@@ -57,6 +59,7 @@ public class AnalyticsService {
 		this.compaRatioDistributionQuery = compaRatioDistributionQuery;
 		this.payGapQuery = payGapQuery;
 		this.increaseCycleQuery = increaseCycleQuery;
+		this.fxBasisQuery = fxBasisQuery;
 		this.clock = clock;
 		this.baseCurrency = baseCurrency;
 	}
@@ -67,7 +70,7 @@ public class AnalyticsService {
 				overall.headcount(), Map.of("terminated", payrollCostQuery.terminatedCount()));
 
 		return new PayrollCostResponse(
-				LocalDate.now(clock), baseCurrency, population, overall,
+				LocalDate.now(clock), baseCurrency, population, fxBasisQuery.forCurrentComp(), overall,
 				payrollCostQuery.byCountry(baseCurrency),
 				payrollCostQuery.byDepartment(baseCurrency),
 				payrollCostQuery.byLevel(baseCurrency));
@@ -95,7 +98,7 @@ public class AnalyticsService {
 				headcountQuery.overall(), Map.of("terminated", payrollCostQuery.terminatedCount()));
 
 		return new OutOfBandResponse(
-				LocalDate.now(clock), baseCurrency, population, belowMinCount, aboveMaxCount,
+				LocalDate.now(clock), baseCurrency, population, fxBasisQuery.forCurrentComp(), belowMinCount, aboveMaxCount,
 				new Money(outOfBandQuery.totalCostToMinimum(), baseCurrency), rows);
 	}
 
@@ -143,7 +146,7 @@ public class AnalyticsService {
 				unadjustedGroups.stream().mapToInt(PayGapGroupMedian::count).sum(), Map.of());
 
 		return new PayGapResponse(
-				LocalDate.now(clock), baseCurrency, population,
+				LocalDate.now(clock), baseCurrency, population, fxBasisQuery.forCurrentComp(),
 				unadjustedGroups, new Money(unadjustedGap[0], baseCurrency), unadjustedGap[1],
 				cohorts, suppressedCohorts);
 	}
@@ -158,6 +161,7 @@ public class AnalyticsService {
 
 		return new IncreaseCycleResponse(
 				LocalDate.now(clock), fromDate, toDate, baseCurrency, population,
+				fxBasisQuery.forAppliedChanges(fromDate, toDate),
 				new Money(overall.total(), baseCurrency), overall.avgPercent(), overall.medianPercent(),
 				increaseCycleQuery.byReason(fromDate, toDate, baseCurrency),
 				budget == null ? null : new Money(budget, baseCurrency), burnPercent);

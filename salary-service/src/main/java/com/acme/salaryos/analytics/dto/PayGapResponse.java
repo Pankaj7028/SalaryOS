@@ -24,6 +24,7 @@ public record PayGapResponse(
 		LocalDate asAtDate,
 		String baseCurrency,
 		AnalyticsPopulation population,
+		FxBasis fxBasis,
 		List<PayGapGroupMedian> unadjustedGroups,
 		Money unadjustedGapAmount,
 		BigDecimal unadjustedGapPercent,
