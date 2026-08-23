@@ -14,8 +14,8 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | **`P0`–`P9` all `[x]`. `P10`–`P14` appended 2026-08-23** (35 steps, post-v1 feature + market analysis) — see `docs/feature-roadmap.md` for why each exists. |
-| **Last completed** | **`P11.1`** — `GET /api/analytics/data-health`, nine checks. Also fixed a real guard gap: `RolePermissionMatrixTest` walks a **hardcoded controller list**, so `SavedViewController` (P10.3) was unguarded and the suite still passed green. `157/157`. |
-| **Next step** | **`P11.3`** — `GET /api/analytics/band-health`. `P10.2`/`.4`/`.5`/`.7` and `P11.2` are UI/live-stack steps, still `[ ]`. |
+| **Last completed** | **`P11.3`** — `GET /api/analytics/band-health`: range spread, midpoint progression, promotion-cliff detection, incumbents, staleness. Read-only, no migration. `166/166`. |
+| **Next step** | **`P11.5`** — `market_data_points` + market CSV import (backend half). Live-stack steps still `[ ]`: `P10.2`, `P10.4`, `P10.5`, `P10.7`, `P11.2`, `P11.6`. |
 | **Live verification is unavailable this session** | `P10.1`'s `curl` half went unrun — no running service, and Docker/`application-local.yml` were not reachable. Several `P10`–`P14` Verify clauses need a live stack (`P10.2`, `P10.4`, `P10.5`, `P11.2`…). **Steps landed under this constraint carry an explicit "not verified" line in their done-note** — re-run those checks when a stack is next up rather than assuming they passed. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far — everything runs against local Postgres). |
 
@@ -161,6 +161,15 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
 ---
 
 ## Gotchas found the hard way
+
+- **`countries` has NO migration-seeded rows** — they come from the seed profile, which never runs
+  under test. A test needing one must create it, **and the code it picks becomes valid for every
+  class sharing the container.** Creating `'ZZ'` broke `V2ReferenceDataMigrationTest`, which uses
+  `'ZZ'` as its deliberately-invalid FK sentinel. Pick an obscure code and say why in a comment.
+- **A shared-container test can pass vacuously over an empty result set.** `BandHealthTest`'s first
+  version was green while asserting nothing — no in-force bands existed when it ran, so every
+  `allSatisfy` trivially held. **Guard every collection assertion with `isNotEmpty()`**, and seed
+  the condition under test rather than hoping another class left one behind.
 
 - **`RolePermissionMatrixTest`'s `CONTROLLERS` list is hardcoded — a new controller is NOT guarded
   until you add it there.** `SavedViewController` shipped at P10.3 with three unguarded endpoints and

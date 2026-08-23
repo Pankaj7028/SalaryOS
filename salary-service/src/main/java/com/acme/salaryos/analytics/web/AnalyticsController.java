@@ -1,6 +1,7 @@
 package com.acme.salaryos.analytics.web;
 
 import com.acme.salaryos.analytics.dto.AnalyticsBasis;
+import com.acme.salaryos.analytics.dto.BandHealthResponse;
 import com.acme.salaryos.analytics.dto.DataHealthResponse;
 import com.acme.salaryos.analytics.dto.CompaRatioDistributionResponse;
 import com.acme.salaryos.analytics.dto.HeadcountResponse;
@@ -32,6 +33,13 @@ public class AnalyticsController {
 
 	public AnalyticsController(AnalyticsService analyticsService) {
 		this.analyticsService = analyticsService;
+	}
+
+	/** P11.3. Band structure diagnostics — no pay figures, only the bands themselves. */
+	@GetMapping("/band-health")
+	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
+	public BandHealthResponse bandHealth() {
+		return analyticsService.bandHealth();
 	}
 
 	/**

@@ -2148,11 +2148,45 @@ table.
   employee list's existing filters wherever one exists.
   *Verify:* `npm run verify`; each check drills to a real row list; 375px card degradation per UI
   doc §12.10.
-- [ ] **P11.3** `GET /api/analytics/band-health` (F9) — range spread (`max/min − 1`), midpoint
+- [x] **P11.3** `GET /api/analytics/band-health` (F9) — range spread (`max/min − 1`), midpoint
   progression between adjacent levels, adjacent-level overlap, population by quartile,
   zero-incumbent bands, staleness (not versioned in N months).
   *Verify:* spread and progression reconcile against direct SQL on three known bands; a deliberately
   broken band (max below the next level's min) is flagged.
+  > **Done (2026-08-23):** `BandHealthQuery` + `BandHealthRow`/`BandHealthResponse`,
+  > `GET /api/analytics/band-health`. Read-only over existing tables, no migration. Per in-force
+  > band: range spread, midpoint progression, gap-to-previous-level, incumbents, median compa-ratio,
+  > months since versioned; plus summary counts and an 18-month staleness constant (a constant, not
+  > a request param — it states how fast pay moves, it is not something a caller should tune until
+  > the number looks acceptable).
+  >
+  > **Adjacency is per job family AND country, not per level code.** `job_levels` is
+  > `UNIQUE (job_family_id, level_code)`, so "the level below" only means something inside one
+  > family — comparing an L4 Engineering band to an L3 Finance band would produce a progression
+  > figure about nothing. `lag()` partitions on (family, country) ordered by `sort_order`.
+  >
+  > **A gap is the defect, not an overlap.** Adjacent bands overlapping is normal and healthy; a
+  > *gap* (this band's min above the previous level's max) is a promotion cliff where someone can be
+  > promoted out of the top of one band into the bottom of the next and go backwards relative to
+  > where they were. That is what `gapToPreviousLevel` flags.
+  >
+  > **The first version of this test passed vacuously and that was the real bug.** The shared
+  > container held no in-force bands when the class ran, so every `allSatisfy` was satisfied by an
+  > empty list and the gap assertion compared 0 to 0 — green, proving nothing. Now seeds its own
+  > family with three levels and a deliberate L2→L3 cliff (L2 tops at 90k, L3 starts at 100k), and
+  > every list assertion is guarded with `isNotEmpty()` so it can never silently pass over nothing
+  > again.
+  >
+  > **Then that fixture broke a different test — worth knowing about.** `countries` has NO
+  > migration-seeded rows (they come from the seed profile, which does not run under test), so the
+  > fixture creates its own. Using `'ZZ'` made `V2ReferenceDataMigrationTest` fail: it uses `'ZZ'`
+  > as its deliberately-*invalid* country code to assert a foreign-key violation, and creating it
+  > for real made that insert succeed. Moved to `'QX'`. **Any reference row a test creates becomes
+  > real for every class sharing the container** — including the sentinel values other tests rely on
+  > being absent.
+  >
+  > **Observed:** `BandHealthTest` 9/9. Full suite → `Tests run: 166, Failures: 0, Errors: 0`,
+  > `BUILD SUCCESS` (157 before). Two intermediate red runs, both real and both reported above.
 - [ ] **P11.4** Band-health matrix on `/bands` (F9).
   *Verify:* `npm run verify`; flagged bands use `--attention`/`--critical` per CLAUDE.md §5.1 —
   no raw hex.
@@ -2289,7 +2323,7 @@ table.
 | | |
 |---|---|
 | **Last completed** | Post-P9 backlog sweep — closed 2 of P9.6's 3 acceptance-criteria gaps (employee-list `bandStatus` filter + `sortBy=compaRatio`, both server-side over the full 10k dataset, verified live). `133/133` backend, frontend `verify` clean (2026-08-22). |
-| **Current step** | **`P11.3`** — `band-health` endpoint. `P11.2` is the data-health UI and needs a live stack. |
+| **Current step** | **`P11.5`** — market-data import seam. Remaining `[ ]` in P10/P11 that need a live stack: `P10.2`, `P10.4`, `P10.5`, `P10.7`, `P11.2`, `P11.6`. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._

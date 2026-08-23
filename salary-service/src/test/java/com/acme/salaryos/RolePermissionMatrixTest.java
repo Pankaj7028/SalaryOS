@@ -111,7 +111,7 @@ class RolePermissionMatrixTest {
 
 		for (String method : List.of(
 				"payrollCost", "outOfBand", "compaRatioDistribution", "payGap", "increaseCycle", "headcount",
-				"dataHealth")) {
+				"dataHealth", "bandHealth")) {
 			map.put("AnalyticsController#" + method, ADMIN_MANAGER_ANALYST);
 		}
 

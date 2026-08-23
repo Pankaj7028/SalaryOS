@@ -14,8 +14,11 @@ import com.acme.salaryos.analytics.dto.PayrollCostResponse;
 import com.acme.salaryos.analytics.query.CompaRatioDistributionQuery;
 import com.acme.salaryos.analytics.query.HeadcountQuery;
 import com.acme.salaryos.analytics.dto.AnalyticsBasis;
+import com.acme.salaryos.analytics.dto.BandHealthResponse;
+import com.acme.salaryos.analytics.dto.BandHealthRow;
 import com.acme.salaryos.analytics.dto.DataHealthCheck;
 import com.acme.salaryos.analytics.dto.DataHealthResponse;
+import com.acme.salaryos.analytics.query.BandHealthQuery;
 import com.acme.salaryos.analytics.query.DataHealthQuery;
 import com.acme.salaryos.analytics.query.FxBasisQuery;
 import com.acme.salaryos.analytics.query.IncreaseCycleQuery;
@@ -50,6 +53,7 @@ public class AnalyticsService {
 	private final IncreaseCycleQuery increaseCycleQuery;
 	private final FxBasisQuery fxBasisQuery;
 	private final DataHealthQuery dataHealthQuery;
+	private final BandHealthQuery bandHealthQuery;
 	private final Clock clock;
 	private final String baseCurrency;
 
@@ -57,7 +61,7 @@ public class AnalyticsService {
 			PayrollCostQuery payrollCostQuery, HeadcountQuery headcountQuery, OutOfBandQuery outOfBandQuery,
 			CompaRatioDistributionQuery compaRatioDistributionQuery, PayGapQuery payGapQuery,
 			IncreaseCycleQuery increaseCycleQuery, FxBasisQuery fxBasisQuery,
-			DataHealthQuery dataHealthQuery, Clock clock,
+			DataHealthQuery dataHealthQuery, BandHealthQuery bandHealthQuery, Clock clock,
 			@Value("${app.base-currency}") String baseCurrency) {
 		this.payrollCostQuery = payrollCostQuery;
 		this.headcountQuery = headcountQuery;
@@ -67,11 +71,33 @@ public class AnalyticsService {
 		this.increaseCycleQuery = increaseCycleQuery;
 		this.fxBasisQuery = fxBasisQuery;
 		this.dataHealthQuery = dataHealthQuery;
+		this.bandHealthQuery = bandHealthQuery;
 		this.clock = clock;
 		this.baseCurrency = baseCurrency;
 	}
 
 	/** FR-6.1 on base pay — the basis every caller meant before P10.6 added the choice. */
+	/**
+	 * A band not re-versioned in this many months is reported as stale. A constant, not a request
+	 * parameter — it is a statement about how fast pay moves, not something a caller should be able
+	 * to tune until the number looks acceptable.
+	 */
+	private static final int STALE_AFTER_MONTHS = 18;
+
+	/** P11.3. Read-only over existing tables — no migration, no writes. */
+	public BandHealthResponse bandHealth() {
+		List<BandHealthRow> rows = bandHealthQuery.rows();
+
+		return new BandHealthResponse(
+				LocalDate.now(clock),
+				rows.size(),
+				(int) rows.stream().filter(row -> row.incumbents() == 0).count(),
+				(int) rows.stream().filter(BandHealthRow::gapToPreviousLevel).count(),
+				(int) rows.stream().filter(row -> row.monthsSinceVersioned() >= STALE_AFTER_MONTHS).count(),
+				STALE_AFTER_MONTHS,
+				rows);
+	}
+
 	/**
 	 * P11.1. Every check, including the passing ones — a console that hides what passed cannot be
 	 * used to answer "is this data clean yet", only "what is broken right now".
