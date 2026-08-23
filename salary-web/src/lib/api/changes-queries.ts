@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { changeKeys, employeeKeys } from "@/lib/api/keys";
 import {
   approveChange,
+  bulkProposeChanges,
   discardDraft,
   fetchChangeImpactPreview,
   fetchChanges,
@@ -11,6 +12,7 @@ import {
   rejectChange,
   submitDraft,
   type ChangeImpactPreviewParams,
+  type BulkProposeInput,
   type ChangeStatus,
   type ProposeChangeInput,
 } from "@/lib/api/changes";
@@ -43,6 +45,35 @@ export function useProposeChange() {
       success("Change proposed", "Submit it for approval when you're ready.");
     },
     onError: (error) => failure(error instanceof ApiError ? error.problem : error, "Couldn't propose change"),
+  });
+}
+
+/**
+ * P10.5: propose one uplift across a selection. The toast reports proposed *and* skipped, because
+ * partial success is the normal outcome — someone in any real selection already has an open change,
+ * and a bare "42 proposed" over a selection of 45 is the kind of quiet arithmetic that costs three
+ * people their rise.
+ */
+export function useBulkProposeChanges() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: BulkProposeInput) => bulkProposeChanges(input),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: employeeKeys.all() });
+      queryClient.invalidateQueries({ queryKey: changeKeys.list("DRAFT") });
+      if (result.errors === 0) {
+        success(
+          `${result.proposed} ${result.proposed === 1 ? "change" : "changes"} proposed`,
+          "They're drafts — submit them for approval from the Changes screen.",
+        );
+      } else {
+        success(
+          `${result.proposed} of ${result.totalRows} proposed`,
+          `${result.errors} skipped. Review the reasons before closing.`,
+        );
+      }
+    },
+    onError: (error) => failure(error instanceof ApiError ? error.problem : error, "Couldn't propose changes"),
   });
 }
 

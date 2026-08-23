@@ -98,6 +98,18 @@ export function canApproveChanges(role: Role): boolean {
   return CHANGE_APPROVER_ROLES.includes(role);
 }
 
+/**
+ * "Propose a compensation change" (CLAUDE.md §7) — one role wider than approving, because a
+ * COMP_ANALYST may propose but not decide. Mirrors the `@PreAuthorize` on `ChangeController#propose`
+ * and `#bulkPropose`; the boundary is that annotation, this only decides whether the bulk-propose
+ * action appears on a selection at all.
+ */
+const CHANGE_PROPOSER_ROLES: readonly Role[] = ["HR_ADMIN", "HR_MANAGER", "COMP_ANALYST"];
+
+export function canProposeChanges(role: Role): boolean {
+  return CHANGE_PROPOSER_ROLES.includes(role);
+}
+
 /** "Manage salary bands & levels"-equivalent for FX rates (CLAUDE.md §7) — same two roles,
  * same reasoning as `FxRateController#add`'s own `@PreAuthorize`. */
 const FX_RATE_MANAGER_ROLES: readonly Role[] = ["HR_ADMIN", "HR_MANAGER"];

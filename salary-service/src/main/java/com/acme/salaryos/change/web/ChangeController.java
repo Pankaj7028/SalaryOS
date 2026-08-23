@@ -4,6 +4,8 @@ import com.acme.salaryos.change.ApplyDueChangesJob;
 import com.acme.salaryos.change.dto.ApplyDueChangesResult;
 import com.acme.salaryos.change.dto.ChangeBulkUploadResult;
 import com.acme.salaryos.change.dto.ChangeImpactPreviewResponse;
+import com.acme.salaryos.change.dto.BulkProposeRequest;
+import com.acme.salaryos.change.dto.BulkProposeResult;
 import com.acme.salaryos.change.dto.ChangeResponse;
 import com.acme.salaryos.change.dto.DecisionRequest;
 import com.acme.salaryos.change.dto.ProposeChangeRequest;
@@ -58,6 +60,14 @@ public class ChangeController {
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
 	public ChangeResponse propose(@Valid @RequestBody ProposeChangeRequest request, @AuthenticationPrincipal UUID currentUserId) {
 		return changeService.propose(request, currentUserId);
+	}
+
+	/** P10.5: propose one uplift across a selection. Same roles as proposing singly — it creates
+	 * DRAFTs and approves nothing, so it grants no authority a single proposal does not. */
+	@PostMapping("/bulk-propose")
+	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
+	public BulkProposeResult bulkPropose(@Valid @RequestBody BulkProposeRequest request, @AuthenticationPrincipal UUID currentUserId) {
+		return changeService.bulkPropose(request, currentUserId);
 	}
 
 	/** ui doc §8.4: the propose-change dialog's live impact panel — same roles as proposing itself. */

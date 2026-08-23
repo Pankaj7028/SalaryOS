@@ -102,7 +102,12 @@ class RolePermissionMatrixTest {
 		map.put("BandController#previewVersionImpact", ADMIN_AND_MANAGER);
 		map.put("BandController#importCsv", HR_ADMIN_ONLY);
 
-		for (String method : List.of("list", "propose", "updateDraft", "submit", "discardDraft", "previewImpact")) {
+		// bulkPropose sits with propose, not with bulkUpload: it creates DRAFTs and approves
+		// nothing, so it grants no authority a single proposal does not. bulkUpload is HR_ADMIN
+		// only because it is an import (CLAUDE.md §7's "Import / bulk upload" row), which is a
+		// different capability from proposing.
+		for (String method : List.of(
+				"list", "propose", "bulkPropose", "updateDraft", "submit", "discardDraft", "previewImpact")) {
 			map.put("ChangeController#" + method, ADMIN_MANAGER_ANALYST);
 		}
 		map.put("ChangeController#approve", ADMIN_AND_MANAGER);

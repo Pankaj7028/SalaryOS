@@ -13,7 +13,10 @@ import { EmployeesTable } from "@/components/employees/employees-table";
 import { CreateEmployeeDialog } from "@/components/employees/create-employee-dialog";
 import { ErrorState } from "@/components/feedback/states";
 import { useSession } from "@/lib/auth/auth-queries";
-import { canManageEmployees } from "@/lib/auth/roles";
+import { canManageEmployees, canProposeChanges } from "@/lib/auth/roles";
+import { ListPagination } from "@/components/employees/list-pagination";
+import { SelectionBar } from "@/components/employees/selection-bar";
+import { BulkProposeDialog } from "@/components/employees/bulk-propose-dialog";
 import { SavedViewBar } from "@/components/saved-views/saved-view-bar";
 import { ActiveFilters, type ActiveFilter } from "@/components/saved-views/active-filters";
 
@@ -70,6 +73,7 @@ export function EmployeesScreen() {
   const bandStatus = searchParams.get("bandStatus") ?? "";
   const sortBy = searchParams.get("sortBy") ?? "";
   const cursor = searchParams.get("cursor") ?? "";
+  const offset = Number(searchParams.get("offset") ?? "0");
   const limit = Number(searchParams.get("limit") ?? "50");
 
   const [searchDraft, setSearchDraft] = useState(q);
@@ -90,7 +94,12 @@ export function EmployeesScreen() {
       if (value) params.set(key, value);
       else params.delete(key);
     }
-    if (opts?.resetCursor !== false) params.delete("cursor");
+    if (opts?.resetCursor !== false) {
+      params.delete("cursor");
+      // A row offset is a position in the *old* result set. Kept across a filter change it opens
+      // row 4,000 of a list that now has 300 rows, which reads as an empty screen, not a filter.
+      params.delete("offset");
+    }
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
   }
 
@@ -104,7 +113,7 @@ export function EmployeesScreen() {
   const locations = useLocations();
   const jobLevels = useJobLevels();
   const countries = useCountries();
-  const employees = useEmployees({ q, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, sortBy, cursor, limit });
+  const employees = useEmployees({ q, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, sortBy, cursor, offset, limit });
 
   const departmentNames = useMemo(
     () => new Map((departments.data ?? []).map((d) => [d.id, d.name])),
@@ -150,6 +159,40 @@ export function EmployeesScreen() {
       ? { param: "bandStatus", label: "Band status", value: BAND_STATUS_LABELS[bandStatus] ?? bandStatus }
       : null,
   ].filter((filter): filter is ActiveFilter => filter !== null);
+
+  // Selection is deliberately NOT in the URL, unlike every filter on this screen (CLAUDE.md §9).
+  // A filter is the question and belongs in a link you can send someone; a selection is a gesture
+  // mid-task, and 200 UUIDs in a query string is not a link anyone can send. It is cleared on any
+  // navigation for the same reason — a checkbox ticked on page 3 that survives to page 7 is a
+  // proposal you did not know you were making.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkProposing, setBulkProposing] = useState(false);
+
+  const pageIds = employees.data?.items.map((employee) => employee.id) ?? [];
+  const [syncedPageKey, setSyncedPageKey] = useState("");
+  const pageKey = `${cursor}|${offset}|${searchParams.toString()}`;
+  if (pageKey !== syncedPageKey) {
+    setSyncedPageKey(pageKey);
+    if (selectedIds.size > 0) setSelectedIds(new Set());
+  }
+
+  function toggleOne(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllOnPage() {
+    setSelectedIds((current) => {
+      const allSelected = pageIds.length > 0 && pageIds.every((id) => current.has(id));
+      return allSelected ? new Set() : new Set(pageIds);
+    });
+  }
+
+  const canPropose = session.data ? canProposeChanges(session.data.role) : false;
 
   function clearAllFilters() {
     updateParams({
@@ -279,14 +322,24 @@ export function EmployeesScreen() {
         </Select>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <ActiveFilters
-          filters={activeFilters}
-          onClear={(param) => updateParams({ [param]: undefined })}
-          onClearAll={clearAllFilters}
+      {selectedIds.size > 0 ? (
+        <SelectionBar
+          selectedCount={selectedIds.size}
+          pageCount={pageIds.length}
+          canPropose={canPropose}
+          onClear={() => setSelectedIds(new Set())}
+          onPropose={() => setBulkProposing(true)}
         />
-        <SavedViewBar route={ROUTE} currentQueryString={searchParams.toString()} />
-      </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <ActiveFilters
+            filters={activeFilters}
+            onClear={(param) => updateParams({ [param]: undefined })}
+            onClearAll={clearAllFilters}
+          />
+          <SavedViewBar route={ROUTE} currentQueryString={searchParams.toString()} />
+        </div>
+      )}
 
       {employees.isError ? (
         <ErrorState
@@ -305,26 +358,45 @@ export function EmployeesScreen() {
           departmentNames={departmentNames}
           locationNames={locationNames}
           jobLevelTitles={jobLevelTitles}
+          selection={
+            canPropose
+              ? { selectedIds, onToggle: toggleOne, onToggleAll: toggleAllOnPage }
+              : undefined
+          }
         />
       )}
 
-      <div className="flex items-center justify-between">
-        <Button size="sm" variant="outline" disabled={!cursor} onClick={() => router.back()}>
-          Previous
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={!employees.data?.nextCursor}
-          onClick={() =>
-            updateParams({ cursor: employees.data?.nextCursor ?? undefined }, { resetCursor: false })
-          }
-        >
-          Next
-        </Button>
-      </div>
+      <ListPagination
+        // Where this page starts is only knowable when it was reached by offset. A cursor walk
+        // does not carry a row index, so the count reads "1-50 of 9,847" on a cursor page and
+        // names the real position on a jumped-to one -- honest either way, and never a guess.
+        pageStart={offset}
+        pageSize={limit}
+        itemCount={employees.data?.items.length ?? 0}
+        totalCount={employees.data?.totalCount ?? 0}
+        hasNext={Boolean(employees.data?.nextCursor)}
+        hasPrevious={Boolean(cursor) || offset > 0}
+        onPrevious={() => router.back()}
+        onNext={() =>
+          updateParams(
+            { cursor: employees.data?.nextCursor ?? undefined, offset: undefined },
+            { resetCursor: false },
+          )
+        }
+        onJump={(nextOffset) =>
+          updateParams({ offset: String(nextOffset), cursor: undefined }, { resetCursor: false })
+        }
+      />
 
       {canManage ? <CreateEmployeeDialog open={creating} onOpenChange={setCreating} /> : null}
+      {canPropose ? (
+        <BulkProposeDialog
+          open={bulkProposing}
+          onOpenChange={setBulkProposing}
+          employeeIds={Array.from(selectedIds)}
+          onProposed={() => setSelectedIds(new Set())}
+        />
+      ) : null}
     </div>
   );
 }

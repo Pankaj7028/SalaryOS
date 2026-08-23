@@ -7,6 +7,7 @@ import {
   type Role,
   canAccess,
   canApproveChanges,
+  canProposeChanges,
   canSee,
 } from "./roles";
 import { NAV_GROUPS } from "@/lib/nav";
@@ -92,6 +93,21 @@ describe("mirrors the RBAC table in CLAUDE.md §7", () => {
     expect(canApproveChanges("HR_MANAGER")).toBe(true);
     expect(canApproveChanges("COMP_ANALYST")).toBe(false);
     expect(canApproveChanges("AUDITOR")).toBe(false);
+  });
+
+  it("proposing is one role wider than approving, and AUDITOR proposes nothing", () => {
+    expect(canProposeChanges("HR_ADMIN")).toBe(true);
+    expect(canProposeChanges("HR_MANAGER")).toBe(true);
+    expect(canProposeChanges("COMP_ANALYST")).toBe(true);
+    expect(canProposeChanges("AUDITOR")).toBe(false);
+  });
+
+  it("every approver may also propose — the narrower right implies the wider one", () => {
+    for (const role of ROLES) {
+      if (canApproveChanges(role)) {
+        expect(canProposeChanges(role)).toBe(true);
+      }
+    }
   });
 
   it("there is no role hierarchy — HR_ADMIN is listed explicitly everywhere it is allowed", () => {

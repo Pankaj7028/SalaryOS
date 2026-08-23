@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Money } from "@/components/comp/money";
 import { BandBar } from "@/components/comp/band-bar";
 import { EmptyState, TableSkeleton } from "@/components/feedback/states";
@@ -49,14 +50,47 @@ export function EmployeesTable({
   departmentNames,
   locationNames,
   jobLevelTitles,
+  selection,
 }: {
   data: EmployeeSummary[];
   isLoading: boolean;
   departmentNames: NameLookup;
   locationNames: NameLookup;
   jobLevelTitles: NameLookup;
+  /** Omitted entirely for a role that cannot act on a selection — no dead checkboxes. */
+  selection?: {
+    selectedIds: Set<string>;
+    onToggle: (id: string) => void;
+    onToggleAll: () => void;
+  };
 }) {
+  const allOnPageSelected =
+    selection !== undefined && data.length > 0 && data.every((row) => selection.selectedIds.has(row.id));
+  const someOnPageSelected =
+    selection !== undefined && data.some((row) => selection.selectedIds.has(row.id));
+
   const columns: ColumnDef<EmployeeSummary>[] = [
+    ...(selection
+      ? [
+          {
+            id: "select",
+            header: () => (
+              <Checkbox
+                checked={allOnPageSelected ? true : someOnPageSelected ? "indeterminate" : false}
+                onCheckedChange={selection.onToggleAll}
+                aria-label={allOnPageSelected ? "Clear selection on this page" : "Select every row on this page"}
+              />
+            ),
+            cell: ({ row }: { row: Row<EmployeeSummary> }) => (
+              <Checkbox
+                checked={selection.selectedIds.has(row.original.id)}
+                onCheckedChange={() => selection.onToggle(row.original.id)}
+                aria-label={`Select ${row.original.firstName} ${row.original.lastName}`}
+              />
+            ),
+          } satisfies ColumnDef<EmployeeSummary>,
+        ]
+      : []),
     {
       id: "name",
       header: "Name",
@@ -166,7 +200,7 @@ export function EmployeesTable({
     return (
       <>
         <div className="hidden md:block">
-          <TableSkeleton columns={SKELETON_COLUMNS} />
+          <TableSkeleton columns={selection ? ["40px", ...SKELETON_COLUMNS] : SKELETON_COLUMNS} />
         </div>
         <div className="flex flex-col gap-3 md:hidden">
           {Array.from({ length: 5 }).map((_, i) => (
@@ -209,7 +243,7 @@ export function EmployeesTable({
             {table.getRowModel().rows.map((row) => (
               <TableRow key={row.id} className="relative h-10">
                 {row.getVisibleCells().map((cell, index) => (
-                  <TableCell key={cell.id}>
+                  <TableCell key={cell.id} className={cell.column.id === "select" ? "w-10" : undefined}>
                     {index === 0 ? (
                       <Link
                         href={`/employees/${row.original.id}`}
@@ -217,7 +251,9 @@ export function EmployeesTable({
                         aria-label={`Open ${row.original.firstName} ${row.original.lastName}`}
                       />
                     ) : null}
-                    <span className="relative z-0">
+                    {/* The row-wide Link overlay sits at z-10 across every cell. The checkbox has
+                        to sit above it, or ticking a row navigates to that employee instead. */}
+                    <span className={cell.column.id === "select" ? "relative z-20 flex" : "relative z-0"}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </span>
                   </TableCell>

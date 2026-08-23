@@ -6,6 +6,8 @@ import com.acme.salaryos.auth.repository.UserRepository;
 import com.acme.salaryos.band.domain.SalaryBand;
 import com.acme.salaryos.band.repository.SalaryBandRepository;
 import com.acme.salaryos.change.domain.CompensationChange;
+import com.acme.salaryos.change.dto.BulkProposeRequest;
+import com.acme.salaryos.change.dto.BulkProposeResult;
 import com.acme.salaryos.change.dto.ChangeBulkUploadResult;
 import com.acme.salaryos.change.dto.ChangeBulkUploadRowResult;
 import com.acme.salaryos.change.dto.ChangeResponse;
@@ -160,6 +162,71 @@ public class ChangeService {
 		CompensationChange saved = changeRepository.save(change);
 		auditService.recordWrite(proposedBy, "PROPOSE_CHANGE", "COMPENSATION_CHANGE", saved.getId(), null, saved);
 		return toResponse(saved);
+	}
+
+	/**
+	 * P10.5: one uplift, applied to a selected set. Each row is proposed independently and a
+	 * failure is reported rather than thrown, so one employee who already has an open change does
+	 * not cost the other 39 their proposals — {@link #bulkUpload}'s reasoning, applied to a
+	 * selection instead of a CSV.
+	 *
+	 * <p>Every new base is computed here, in {@code BigDecimal}, from the figure already in the
+	 * ledger: {@code current x (1 + percent/100)}, rounded HALF_UP to the 2dp the column stores.
+	 * The browser sends a percentage and never a money value (CLAUDE.md §6.1), and the currency
+	 * comes from the employee's own current comp — a bulk operation spanning four countries
+	 * proposes each person's rise in the currency they are actually paid in, and never converts.
+	 */
+	@Transactional
+	public BulkProposeResult bulkPropose(BulkProposeRequest request, UUID proposedBy) {
+		BigDecimal multiplier = BigDecimal.ONE.add(
+				request.percentIncrease().divide(BigDecimal.valueOf(100), 6, RoundingMode.HALF_UP));
+
+		List<ChangeBulkUploadRowResult> rows = new ArrayList<>();
+		int proposed = 0;
+		int errors = 0;
+		int rowNumber = 0;
+
+		for (UUID employeeId : request.employeeIds()) {
+			rowNumber++;
+			String employeeNumber = employeeRepository.findById(employeeId)
+					.map(Employee::getEmployeeNumber).orElse(null);
+			try {
+				EmployeeCurrentComp comp = employeeCurrentCompRepository.findById(employeeId)
+						.orElseThrow(NoCurrentCompensationException::new);
+				BigDecimal newAmount = comp.getAnnualBaseAmount().multiply(multiplier).setScale(2, RoundingMode.HALF_UP);
+
+				ChangeResponse created = propose(new ProposeChangeRequest(
+						employeeId, request.effectiveDate(), newAmount, comp.getBase().currency(),
+						request.changeReason(), null, request.note()), proposedBy);
+
+				rows.add(new ChangeBulkUploadRowResult(
+						rowNumber, "PROPOSED", employeeNumber, newAmount, request.changeReason(), created.id(), null));
+				proposed++;
+			}
+			catch (RuntimeException rejected) {
+				rows.add(new ChangeBulkUploadRowResult(
+						rowNumber, "ERROR", employeeNumber, null, request.changeReason(), null, describe(rejected)));
+				errors++;
+			}
+		}
+
+		auditService.recordWrite(proposedBy, "BULK_PROPOSE_CHANGE", "COMPENSATION_CHANGE", null, null,
+				new BulkProposeResult(rows.size(), proposed, errors, List.of()));
+		return new BulkProposeResult(rows.size(), proposed, errors, rows);
+	}
+
+	/** A row's reason has to be readable in a results table, not a stack trace. */
+	private String describe(RuntimeException rejected) {
+		if (rejected instanceof OpenChangeAlreadyExistsException) {
+			return "Already has an open change — approve, reject, or discard that one first.";
+		}
+		if (rejected instanceof NoCurrentCompensationException) {
+			return "No current compensation on record, so there is nothing to increase.";
+		}
+		if (rejected instanceof NoSuchElementException) {
+			return "No such employee.";
+		}
+		return rejected.getMessage() == null ? rejected.getClass().getSimpleName() : rejected.getMessage();
 	}
 
 	@Transactional

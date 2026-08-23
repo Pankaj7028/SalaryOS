@@ -75,10 +75,14 @@ public class EmployeeController {
 			// keeps the default lastName order.
 			@RequestParam(required = false) String sortBy,
 			@RequestParam(required = false) String cursor,
+			// P10.5's page jump: a 0-based row index into the same ordering. A cursor cannot
+			// express "page 4" -- it names the last row you saw, and page 4 is defined by rows you
+			// have not seen. Ignored when a cursor is also present.
+			@RequestParam(required = false) Integer offset,
 			@RequestParam(defaultValue = "50") int limit,
 			@AuthenticationPrincipal UUID currentUserId) {
 		int pageSize = Math.min(Math.max(limit, 1), 200);
-		return employeeService.list(q, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, sortBy, cursor, pageSize, currentUserId);
+		return employeeService.list(q, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, sortBy, cursor, offset, pageSize, currentUserId);
 	}
 
 	@GetMapping("/{id}")

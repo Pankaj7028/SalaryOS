@@ -45,12 +45,20 @@ export type EmployeeListParams = EmployeeListFilters & {
    * unpaginated" contract, not the on-screen sort. */
   sortBy?: string;
   cursor?: string;
+  /** P10.5's page jump: a 0-based row index. Ignored by the server when `cursor` is also set. */
+  offset?: number;
   limit?: number;
 };
 
 export type EmployeePage = {
   items: EmployeeSummary[];
   nextCursor: string | null;
+  /**
+   * How many rows the filter matches in total (P10.5), not how many are on this page. Produced by
+   * the same query path that produced `items` — the compa-ratio sort counts a smaller population
+   * than the last-name sort, because it cannot order someone who has no pay on record yet.
+   */
+  totalCount: number;
 };
 
 export type CompensationComponent = {
@@ -151,6 +159,7 @@ function buildQuery(params: EmployeeListParams): string {
   if (params.bandStatus) search.set("bandStatus", params.bandStatus);
   if ("sortBy" in params && params.sortBy) search.set("sortBy", params.sortBy);
   if (params.cursor) search.set("cursor", params.cursor);
+  if (params.offset) search.set("offset", String(params.offset));
   if (params.limit) search.set("limit", String(params.limit));
   return search.toString();
 }

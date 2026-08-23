@@ -16,6 +16,9 @@ export const referenceKeys = {
 };
 
 export const employeeKeys = {
+  /** Everything employee-shaped — for a mutation that can change many rows at once (P10.5's bulk
+   * propose) and has no way to know which pages of which filters are now stale. */
+  all: () => ["employees"] as const,
   list: (params: Record<string, string | number | undefined>) => ["employees", "list", params] as const,
   detail: (id: string) => ["employees", "detail", id] as const,
   peers: (id: string) => ["employees", "peers", id] as const,

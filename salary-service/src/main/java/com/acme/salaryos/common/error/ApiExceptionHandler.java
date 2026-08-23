@@ -25,10 +25,14 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.authentication.BadCredentialsException;
+import jakarta.validation.ConstraintViolationException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.NoSuchElementException;
+import java.util.stream.Collectors;
 
 /**
  * Every failure is an RFC 7807 {@code ProblemDetail} with a {@code detail} written for a human
@@ -37,6 +41,43 @@ import java.util.NoSuchElementException;
  */
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+	/**
+	 * Bean-validation failures on a {@code @Valid @RequestBody} (P10.5, found in QA).
+	 *
+	 * <p>Without this handler the failure was <b>reported to the client as 401 "Authentication
+	 * required"</b>, on every validated endpoint in the service. Spring's default resolver sets a
+	 * bare 400 and the container then forwards to {@code /error}; that forward is a fresh ERROR
+	 * dispatch, the session-cookie filter is a {@code OncePerRequestFilter} and does not run
+	 * again, so the security chain sees an empty {@code SecurityContext} on a request matched by
+	 * {@code anyRequest().authenticated()} and the entry point overwrites the 400 with a 401. The
+	 * symptom is the worst kind: a user who typed a bad value is told they are signed out, and the
+	 * validation message they needed never reaches them. Handling the exception here produces a
+	 * normal response and no ERROR dispatch happens at all.
+	 *
+	 * <p>The field messages are the ones written on the DTO's constraints, so the client can show
+	 * the same sentence the API author intended rather than a generic "invalid request".
+	 */
+	@ExceptionHandler(MethodArgumentNotValidException.class)
+	public ProblemDetail handleValidationFailure(MethodArgumentNotValidException exception) {
+		String detail = exception.getBindingResult().getFieldErrors().stream()
+				.map(error -> error.getField() + ": " + error.getDefaultMessage())
+				.collect(Collectors.joining(" "));
+		ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+				HttpStatus.BAD_REQUEST, detail.isBlank() ? "The request was not valid." : detail);
+		problem.setProperty("errors", exception.getBindingResult().getFieldErrors().stream()
+				.collect(Collectors.toMap(
+						FieldError::getField,
+						error -> error.getDefaultMessage() == null ? "Invalid." : error.getDefaultMessage(),
+						(first, second) -> first)));
+		return problem;
+	}
+
+	/** Same reasoning as above for a {@code @Validated} parameter that is not a request body. */
+	@ExceptionHandler(ConstraintViolationException.class)
+	public ProblemDetail handleConstraintViolation(ConstraintViolationException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+	}
 
 	@ExceptionHandler(BadCredentialsException.class)
 	public ProblemDetail handleBadCredentials(BadCredentialsException exception) {

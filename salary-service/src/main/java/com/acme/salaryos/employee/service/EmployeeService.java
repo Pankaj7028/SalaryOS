@@ -37,6 +37,8 @@ import com.acme.salaryos.reference.repository.JobFamilyRepository;
 import com.acme.salaryos.reference.repository.JobLevelRepository;
 import com.acme.salaryos.reference.repository.LocationRepository;
 import org.springframework.data.domain.KeysetScrollPosition;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.ScrollPosition;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Window;
@@ -121,13 +123,20 @@ public class EmployeeService {
 		this.jdbcTemplate = jdbcTemplate;
 	}
 
+	/**
+	 * FR-2.2's list. {@code cursor} walks forward one page at a time; {@code offset} jumps straight
+	 * to a row index (P10.5's "page 4" navigation, which a cursor cannot express — a cursor names
+	 * the last row you saw, and page 4 is defined by rows you have never seen). Exactly one of the
+	 * two is honoured: a supplied cursor wins, because it is the more precise position and the
+	 * frontend clears it when the user jumps.
+	 */
 	public KeysetPage<EmployeeSummaryResponse> list(
 			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId,
-			String status, String bandStatus, String sortBy, String cursor, int limit, UUID currentUserId) {
+			String status, String bandStatus, String sortBy, String cursor, Integer offset, int limit, UUID currentUserId) {
 
 		KeysetPage<EmployeeSummaryResponse> page = "compaRatio".equals(sortBy)
-				? listByCompaRatio(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, cursor, limit)
-				: listByLastName(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, cursor, limit);
+				? listByCompaRatio(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, cursor, offset, limit)
+				: listByLastName(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, cursor, offset, limit);
 
 		auditService.recordListRead(currentUserId, "EMPLOYEE",
 				describeFilter(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus), page.items().size());
@@ -136,7 +145,7 @@ public class EmployeeService {
 
 	private KeysetPage<EmployeeSummaryResponse> listByLastName(
 			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId,
-			String status, String bandStatus, String cursor, int limit) {
+			String status, String bandStatus, String cursor, Integer offset, int limit) {
 
 		// Specification.where/and reject a null argument outright (no longer the historical
 		// null-means-"no restriction" behaviour) — start unrestricted and fold in only the
@@ -150,11 +159,26 @@ public class EmployeeService {
 				.and(nonNullOrUnrestricted(EmployeeSpecifications.status(status)))
 				.and(nonNullOrUnrestricted(EmployeeSpecifications.bandStatus(bandStatus)));
 
-		ScrollPosition position = toScrollPosition(cursor);
+		long totalCount = employeeRepository.count(spec);
 
-		Window<Employee> window = employeeRepository.findBy(spec, q -> q.sortBy(SORT).limit(limit).scroll(position));
+		// Two ways in. A page jump has no cursor to scroll from, so it reads the same ordering by
+		// row index instead -- OFFSET over 10k rows on an indexed sort is cheap, and the
+		// alternative (replaying every intervening page to build a cursor) is not.
+		boolean jumping = cursor == null && offset != null && offset > 0;
+		List<Employee> employees;
+		boolean hasNext;
+		if (jumping) {
+			Page<Employee> jumped = employeeRepository.findAll(spec, PageRequest.of(offset / limit, limit, SORT));
+			employees = jumped.getContent();
+			hasNext = jumped.hasNext();
+		}
+		else {
+			ScrollPosition position = toScrollPosition(cursor);
+			Window<Employee> window = employeeRepository.findBy(spec, q -> q.sortBy(SORT).limit(limit).scroll(position));
+			employees = window.getContent();
+			hasNext = window.hasNext();
+		}
 
-		List<Employee> employees = window.getContent();
 		Map<UUID, EmployeeCurrentComp> currentComp = employeeCurrentCompRepository
 				.findAllById(employees.stream().map(Employee::getId).toList())
 				.stream()
@@ -169,11 +193,14 @@ public class EmployeeService {
 				})
 				.toList();
 
+		// Built from the last row's own sort-key values rather than from the Window's position, so
+		// a jumped-to page hands back a keyset cursor exactly like a scrolled one: Next continues
+		// from page 4 without the client knowing which way it got there.
 		String nextCursor = null;
-		if (window.hasNext() && !employees.isEmpty()) {
-			nextCursor = encodeCursor(window.positionAt(employees.size() - 1));
+		if (hasNext && !employees.isEmpty()) {
+			nextCursor = encodeCursor(employees.get(employees.size() - 1));
 		}
-		return new KeysetPage<>(items, nextCursor);
+		return new KeysetPage<>(items, nextCursor, totalCount);
 	}
 
 	/** FR-2.2's compa-ratio sort. {@code Employee} deliberately has no JPA relationship to {@link
@@ -190,17 +217,91 @@ public class EmployeeService {
 	 * path {@link #listByLastName} uses, so the two sorts can never drift in what they render. */
 	private KeysetPage<EmployeeSummaryResponse> listByCompaRatio(
 			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId,
-			String status, String bandStatus, String cursor, int limit) {
+			String status, String bandStatus, String cursor, Integer offset, int limit) {
 
-		StringBuilder sql = new StringBuilder(
-				"select e.id as id, ecc.compa_ratio as compa_ratio "
-						+ "from salary_schema.employees e "
+		// The FROM/WHERE the page and its count must share. Built once and used twice on purpose:
+		// two hand-kept copies of this filter chain would agree on the seed and disagree on the
+		// one filter combination nobody wrote a test for, and the symptom -- "412 results" over a
+		// list of 380 -- looks like a UI bug rather than a query bug.
+		CompaRatioFilter filter = compaRatioFilter(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus);
+
+		long totalCount = jdbcTemplate.queryForObject(
+				"select count(*) " + filter.fromAndWhere(), Long.class, filter.params().toArray());
+
+		StringBuilder sql = new StringBuilder("select e.id as id, ecc.compa_ratio as compa_ratio " + filter.fromAndWhere());
+		List<Object> params = new ArrayList<>(filter.params());
+
+		CompaRatioCursor decoded = decodeCompaRatioCursor(cursor);
+		boolean jumping = decoded == null && offset != null && offset > 0;
+		if (decoded != null) {
+			sql.append(filter.where().isEmpty() ? "where " : "and ");
+			if (decoded.compaRatio() == null) {
+				sql.append("(ecc.compa_ratio is null and e.id > ?) ");
+				params.add(decoded.id());
+			}
+			else {
+				sql.append("(ecc.compa_ratio is null or ecc.compa_ratio < ? or (ecc.compa_ratio = ? and e.id > ?)) ");
+				params.add(decoded.compaRatio());
+				params.add(decoded.compaRatio());
+				params.add(decoded.id());
+			}
+		}
+
+		sql.append("order by ecc.compa_ratio desc nulls last, e.id asc limit ?");
+		params.add(limit + 1); // +1 to detect whether there's a next page, same as Window's own convention
+		if (jumping) {
+			sql.append(" offset ?");
+			params.add((offset / limit) * limit);
+		}
+
+		List<CompaRatioRow> rows = jdbcTemplate.query(sql.toString(), params.toArray(), (rs, rowNum) -> new CompaRatioRow(
+				(UUID) rs.getObject("id"), (BigDecimal) rs.getObject("compa_ratio")));
+
+		boolean hasNext = rows.size() > limit;
+		List<CompaRatioRow> page = hasNext ? rows.subList(0, limit) : rows;
+
+		Map<UUID, Employee> employeesById = employeeRepository.findAllById(page.stream().map(CompaRatioRow::id).toList())
+				.stream().collect(Collectors.toMap(Employee::getId, e -> e));
+		Map<UUID, EmployeeCurrentComp> currentComp = employeeCurrentCompRepository
+				.findAllById(page.stream().map(CompaRatioRow::id).toList())
+				.stream()
+				.collect(Collectors.toMap(EmployeeCurrentComp::getEmployeeId, c -> c));
+		Map<UUID, SalaryBand> bands = fetchBands(currentComp.values());
+
+		List<EmployeeSummaryResponse> items = page.stream()
+				.map(row -> {
+					Employee employee = employeesById.get(row.id());
+					EmployeeCurrentComp comp = currentComp.get(row.id());
+					SalaryBand band = comp == null || comp.getBandId() == null ? null : bands.get(comp.getBandId());
+					return toSummary(employee, comp, band);
+				})
+				.toList();
+
+		String nextCursor = hasNext && !page.isEmpty()
+				? encodeCompaRatioCursor(page.get(page.size() - 1))
+				: null;
+		return new KeysetPage<>(items, nextCursor, totalCount);
+	}
+
+	/** The compa-ratio sort's FROM + WHERE, without the cursor predicate or the ordering. */
+	private record CompaRatioFilter(String from, List<String> where, List<Object> params) {
+		String fromAndWhere() {
+			return from + (where.isEmpty() ? "" : "where " + String.join(" and ", where) + " ");
+		}
+	}
+
+	private CompaRatioFilter compaRatioFilter(
+			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId,
+			String status, String bandStatus) {
+
+		StringBuilder from = new StringBuilder(
+				"from salary_schema.employees e "
 						+ "join salary_schema.employee_current_comp ecc on ecc.employee_id = e.id ");
 		List<Object> params = new ArrayList<>();
 		List<String> where = new ArrayList<>();
 
 		if (countryCode != null && !countryCode.isBlank()) {
-			sql.append("join salary_schema.locations l on l.id = e.location_id ");
+			from.append("join salary_schema.locations l on l.id = e.location_id ");
 			where.add("l.country_code = ?");
 			params.add(countryCode);
 		}
@@ -233,53 +334,7 @@ public class EmployeeService {
 			params.add(bandStatus);
 		}
 
-		CompaRatioCursor decoded = decodeCompaRatioCursor(cursor);
-		if (decoded != null) {
-			if (decoded.compaRatio() == null) {
-				where.add("(ecc.compa_ratio is null and e.id > ?)");
-				params.add(decoded.id());
-			}
-			else {
-				where.add("(ecc.compa_ratio is null or ecc.compa_ratio < ? or (ecc.compa_ratio = ? and e.id > ?))");
-				params.add(decoded.compaRatio());
-				params.add(decoded.compaRatio());
-				params.add(decoded.id());
-			}
-		}
-
-		if (!where.isEmpty()) {
-			sql.append("where ").append(String.join(" and ", where)).append(' ');
-		}
-		sql.append("order by ecc.compa_ratio desc nulls last, e.id asc limit ?");
-		params.add(limit + 1); // +1 to detect whether there's a next page, same as Window's own convention
-
-		List<CompaRatioRow> rows = jdbcTemplate.query(sql.toString(), params.toArray(), (rs, rowNum) -> new CompaRatioRow(
-				(UUID) rs.getObject("id"), (BigDecimal) rs.getObject("compa_ratio")));
-
-		boolean hasNext = rows.size() > limit;
-		List<CompaRatioRow> page = hasNext ? rows.subList(0, limit) : rows;
-
-		Map<UUID, Employee> employeesById = employeeRepository.findAllById(page.stream().map(CompaRatioRow::id).toList())
-				.stream().collect(Collectors.toMap(Employee::getId, e -> e));
-		Map<UUID, EmployeeCurrentComp> currentComp = employeeCurrentCompRepository
-				.findAllById(page.stream().map(CompaRatioRow::id).toList())
-				.stream()
-				.collect(Collectors.toMap(EmployeeCurrentComp::getEmployeeId, c -> c));
-		Map<UUID, SalaryBand> bands = fetchBands(currentComp.values());
-
-		List<EmployeeSummaryResponse> items = page.stream()
-				.map(row -> {
-					Employee employee = employeesById.get(row.id());
-					EmployeeCurrentComp comp = currentComp.get(row.id());
-					SalaryBand band = comp == null || comp.getBandId() == null ? null : bands.get(comp.getBandId());
-					return toSummary(employee, comp, band);
-				})
-				.toList();
-
-		String nextCursor = hasNext && !page.isEmpty()
-				? encodeCompaRatioCursor(page.get(page.size() - 1))
-				: null;
-		return new KeysetPage<>(items, nextCursor);
+		return new CompaRatioFilter(from.toString(), where, params);
 	}
 
 	private record CompaRatioRow(UUID id, BigDecimal compaRatio) {
@@ -703,6 +758,14 @@ public class EmployeeService {
 				"lastName", decoded.keys().get("lastName"),
 				"id", UUID.fromString(decoded.keys().get("id")));
 		return ScrollPosition.forward(keys);
+	}
+
+	/** The keyset cursor for "you have seen up to this employee", built from the row itself. */
+	private String encodeCursor(Employee lastRow) {
+		Map<String, String> keys = new java.util.LinkedHashMap<>();
+		keys.put("lastName", lastRow.getLastName());
+		keys.put("id", String.valueOf(lastRow.getId()));
+		return cursorCodec.encode(new Cursor(keys));
 	}
 
 	private String encodeCursor(ScrollPosition position) {

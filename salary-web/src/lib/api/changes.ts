@@ -93,6 +93,46 @@ export async function proposeChange(input: ProposeChangeInput): Promise<Change> 
   return (await response.json()) as Change;
 }
 
+/**
+ * P10.5's bulk select → propose. `percentIncrease` and never an amount: everyone selected is on a
+ * different salary, so the per-person figures are computed server-side in `BigDecimal`. Doing that
+ * arithmetic here would be the money-in-TypeScript CLAUDE.md §6.1 forbids, and the result lands in
+ * an insert-only ledger that cannot be quietly corrected.
+ */
+export type BulkProposeInput = {
+  employeeIds: string[];
+  effectiveDate: string;
+  percentIncrease: string;
+  changeReason: string;
+  note?: string;
+};
+
+/** Partial success is the expected outcome — `rows` says which people were skipped and why. */
+export type BulkProposeRow = {
+  rowNumber: number;
+  action: "PROPOSED" | "ERROR";
+  employeeNumber: string | null;
+  newAmount: string | null;
+  changeReason: string | null;
+  changeId: string | null;
+  error: string | null;
+};
+
+export type BulkProposeResult = {
+  totalRows: number;
+  proposed: number;
+  errors: number;
+  rows: BulkProposeRow[];
+};
+
+export async function bulkProposeChanges(input: BulkProposeInput): Promise<BulkProposeResult> {
+  const response = await apiFetch("/api/changes/bulk-propose", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return (await response.json()) as BulkProposeResult;
+}
+
 export async function fetchChanges(status: ChangeStatus): Promise<Change[]> {
   const response = await apiFetch(`/api/changes?status=${status}`);
   return (await response.json()) as Change[];

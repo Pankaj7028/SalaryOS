@@ -2134,12 +2134,61 @@ table.
   >
   > **Unrun:** the visual pass (ui doc §12 items 6 and 10 — both themes, 375px). Browser automation
   > still cannot reach this machine per `docs/STATE.md`; the picker and chips are unlooked-at.
-- [ ] **P10.5** `totalCount` on `KeysetPage`, page jump, bulk select (F4) — closes the last three
+- [x] **P10.5** `totalCount` on `KeysetPage`, page jump, bulk select (F4) — closes the last three
   P4.3 omissions. **Do not** add a JPA relationship between `Employee` and `EmployeeCurrentComp` to
   reach this (`docs/STATE.md` — it breaks `PayrollCostAndHeadcountTest`); follow
   `EmployeeService.listByCompaRatio`'s native-query template.
   *Verify:* count matches direct SQL for three filter combinations; NFR-1 (p95 < 400 ms) still holds
   on the full 10k **with** the extra count — measure it, don't assume it.
+  > **Done (2026-08-24).** No JPA relationship was added; the compa-ratio path's filter chain was
+  > extracted to a `CompaRatioFilter` record used by both the page query and its count.
+  >
+  > **The count must come from the same path that produced the rows.** The two sorts do not select
+  > over the same population — the compa-ratio sort inner-joins `employee_current_comp`, so a hire
+  > with no pay set yet is not in its ordering at all. On the local 10k that is 10,000 vs 9,580, and
+  > both figures are correct for their own sort. A count taken from the wrong path would be off by
+  > exactly 420, silently, and would read on screen as a pagination glitch rather than a query bug.
+  > `eachSortReportsTheCountOfItsOwnPopulation` is the test that pins it.
+  >
+  > **Page jump is by row offset, not by cursor** — a cursor names the last row you saw, and page 12
+  > is defined entirely by rows you have not seen. `?offset=` is 0-based and a cursor wins when both
+  > arrive. A jumped-to page still returns a working keyset `nextCursor`, built from the last row's
+  > own sort-key values rather than from the `Window` position, so Next continues from page 4 without
+  > the client knowing how it got there. `offset` is dropped on any filter change: a row index into
+  > the *old* result set opens row 4,000 of a list that now has 300, which reads as an empty screen.
+  >
+  > **Bulk select proposes by percentage, and the endpoint exists for that reason.** Everyone
+  > selected is on a different salary, so the browser looping `POST /api/changes` would have to
+  > compute 40 absolute figures — the money-in-TypeScript CLAUDE.md §6.1 forbids, landing in an
+  > insert-only ledger. `POST /api/changes/bulk-propose` takes ids + one percentage and computes each
+  > new base in `BigDecimal` from the ledger, in that person's own currency, never converting.
+  > Partial success is the contract (one open change must not cost the other 39 their proposals), and
+  > every row lands as a `DRAFT` — a bulk operation is not a bulk approval.
+  >
+  > **A cross-cutting bug found in QA and fixed here (not P10.5 scope, but it reached the client on
+  > every validated endpoint in the service):** a bean-validation failure was reported as
+  > `401 "Authentication required"`. Spring's default resolver sets a bare 400, the container
+  > forwards to `/error`, that ERROR dispatch does not re-run `SessionCookieAuthFilter` (a
+  > `OncePerRequestFilter`), so `anyRequest().authenticated()` sees an empty `SecurityContext` and
+  > the entry point overwrites the 400. A signed-in user who typed a bad value was told they were
+  > signed out and never saw the message that would have told them what to fix. Handled explicitly
+  > in `ApiExceptionHandler` now, so no ERROR dispatch happens at all.
+  >
+  > **Observed:** `EmployeeListCountAndJumpTest` 6/6, `BulkProposeTest` 5/5,
+  > `ValidationFailureIsNotUnauthorizedTest` 3/3. Full suite `./mvnw clean verify` →
+  > `Tests run: 189, Failures: 0, Errors: 0`, `BUILD SUCCESS`. Frontend `npm run verify` clean —
+  > `Tests 36 passed (36)` (34 before; `roles.test.ts` gains the propose-role pair).
+  >
+  > **NFR-1 measured, not assumed** (60 requests each against the local 10k, *with* the new count):
+  > last-name page 1 p95 **21 ms**; filtered (`status`+`bandStatus`) p95 **17 ms**; jump to
+  > `offset=5000` p95 **20 ms**; compa-ratio page 1 p95 **21 ms**; compa-ratio `offset=5000` p95
+  > **18 ms**. Budget is 400 ms. `totalCount` reconciled live against direct SQL: 10,000 / 9,580 on
+  > both sorts, and a jump to `offset=100` returned byte-identical ids to walking four pages.
+  >
+  > **Unrun:** the visual pass (ui doc §12 items 6 and 10). Browser automation still cannot reach
+  > this machine, so the checkbox column, selection bar, and page-jump control are unlooked-at.
+  > **`RolePermissionMatrixTest` caught the missing `bulkPropose` entry** and failed the build until
+  > it was added — the §7 mirror doing exactly its job.
 - [x] **P10.6** `basis=BASE|TOTAL_TARGET_CASH` on `/analytics/payroll-cost` (F2). FR-3.4 stores components and says they are "included in total
   target cash"; today no analytic reads them, so Q1 does not answer what ACME actually spends.
   Aggregate in SQL through `compensation_components` per NFR-6. **Build this as the seam equity
@@ -2430,7 +2479,7 @@ table.
 | | |
 |---|---|
 | **Last completed** | **`P10.2`** — FX coverage matrix on `/admin/fx-rates`: currency × month over the currencies actually in use, gaps in `--attention`, riding on the existing list endpoint. `FxCoverageTest` 3/3; frontend `typecheck`/`lint`/`build` clean; live-verified against a restarted stack (16 months, 7 currencies, 9,580 people; adding a rate flipped exactly one cell). **Visual pass in both themes and at 375px still owed** — the paired Chrome is on another device and can't reach this machine (2026-08-23). |
-| **Current step** | **`P10.5`.** `P10.4` closed 2026-08-23 (saved-view picker on `/employees`, live round-trip verified). A live stack is up (backend `:8080`, web `:3100`), so the remaining UI/live-stack steps `P10.5`, `P10.7`, `P11.2`, `P11.4`, `P11.6` are unblocked; `P12.1` follows them. |
+| **Current step** | **`P10.7`.** `P10.4` and `P10.5` closed (saved-view picker; result count, page jump, bulk propose — plus a service-wide 401-on-validation bug found in QA and fixed). A live stack is up (backend `:8080`, web `:3100`), so the remaining UI/live-stack steps `P10.7`, `P11.2`, `P11.4`, `P11.6` are unblocked; `P12.1` follows them. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._
