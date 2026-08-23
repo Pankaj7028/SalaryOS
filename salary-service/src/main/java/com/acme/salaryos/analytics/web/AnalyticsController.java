@@ -1,5 +1,6 @@
 package com.acme.salaryos.analytics.web;
 
+import com.acme.salaryos.analytics.dto.AnalyticsBasis;
 import com.acme.salaryos.analytics.dto.CompaRatioDistributionResponse;
 import com.acme.salaryos.analytics.dto.HeadcountResponse;
 import com.acme.salaryos.analytics.dto.IncreaseCycleResponse;
@@ -34,8 +35,9 @@ public class AnalyticsController {
 
 	@GetMapping("/payroll-cost")
 	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
-	public PayrollCostResponse payrollCost() {
-		return analyticsService.payrollCost();
+	public PayrollCostResponse payrollCost(
+			@RequestParam(defaultValue = "BASE") AnalyticsBasis basis) {
+		return analyticsService.payrollCost(basis);
 	}
 
 	@GetMapping("/headcount")

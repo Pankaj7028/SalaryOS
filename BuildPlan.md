@@ -2060,13 +2060,46 @@ table.
   `EmployeeService.listByCompaRatio`'s native-query template.
   *Verify:* count matches direct SQL for three filter combinations; NFR-1 (p95 < 400 ms) still holds
   on the full 10k **with** the extra count — measure it, don't assume it.
-- [ ] **P10.6** `basis=BASE|TOTAL_TARGET_CASH` on `/analytics/payroll-cost` and
-  `/compa-ratio-distribution` (F2). FR-3.4 stores components and says they are "included in total
+- [x] **P10.6** `basis=BASE|TOTAL_TARGET_CASH` on `/analytics/payroll-cost` (F2). FR-3.4 stores components and says they are "included in total
   target cash"; today no analytic reads them, so Q1 does not answer what ACME actually spends.
   Aggregate in SQL through `compensation_components` per NFR-6. **Build this as the seam equity
   plugs into later** — it is the one-pager's named v2 candidate.
   *Verify:* `TOTAL_TARGET_CASH` reconciles against a direct SQL sum of base + components over the
   seed; `BASE` is byte-identical to today's response.
+  > **Scope corrected during the step (2026-08-23): payroll-cost only, NOT
+  > compa-ratio-distribution.** A salary band is a *base pay* range — `EffectiveDating` computes
+  > `compaRatio(annualBaseAmount, band)` — so dividing total target cash by a base-pay midpoint
+  > would push everyone with a bonus target above 1.0 and make the metric mean nothing. Same
+  > reasoning retires it for range penetration and every out-of-band judgement: they compare base
+  > to a base-pay band, and that is correct. Documented on `AnalyticsBasis` itself.
+  >
+  > **Done (2026-08-23):** `AnalyticsBasis{BASE, TOTAL_TARGET_CASH}`; `?basis=` on
+  > `/analytics/payroll-cost` defaulting to `BASE`; `basis` echoed on `PayrollCostResponse` per
+  > FR-6.8 (a figure has to say what it counts). `payrollCost()` keeps a no-arg overload — `BASE`
+  > is what every existing caller meant.
+  >
+  > **Components had no normalised column, which is the whole difficulty.** They carry their own
+  > `amount` + `currency` but no `normalized_*` and no `fx_rate_id`, so they cannot simply be added
+  > to a USD total. Each is converted with the rate pinned for *its own currency in the month that
+  > employee's record pinned* (`LEFT JOIN LATERAL` through `compensation_records.fx_rate_id` →
+  > `fx_rates.rate_month`) — never a live rate, never today's month, so CLAUDE.md §6.4's "run it
+  > twice, get the same number" still holds. Every currency in use has a row per month including
+  > the identity USD→USD one, so the join cannot silently drop a component.
+  >
+  > **Only `is_recurring` components count.** A one-off payment is not part of what someone is paid
+  > annually, and including it would make two runs of the same report differ as one-offs age out.
+  >
+  > **Known naming wart, deliberately not fixed here:** `PayrollCostGroup.totalAnnualBase` holds
+  > total cash when `basis=TOTAL_TARGET_CASH`. Renaming it is a response-shape change, and
+  > `docs/STATE.md`'s standing gotcha is that those are invisible to `npm run typecheck` at every
+  > frontend call site — with no live stack this session to catch the fallout, the safer call is to
+  > leave the name and let `basis` disambiguate. **Rename it as part of `P10.7`**, when the UI is
+  > being touched anyway and can be verified.
+  >
+  > **Observed:** `TotalTargetCashBasisTest` 5/5 (BASE matches direct SQL; total cash = base +
+  > normalised recurring components; cash never below base and same headcount; response states its
+  > basis; every breakdown reconciles to `overall` on both bases). Full suite → `Tests run: 149,
+  > Failures: 0, Errors: 0`, `BUILD SUCCESS` (144 before).
 - [ ] **P10.7** Basis toggle beside the existing as-paid/normalised control (F2).
   *Verify:* `npm run verify` clean; toggling changes the figure **and** the URL (`?basis=`) per
   CLAUDE.md §9.
@@ -2229,7 +2262,7 @@ table.
 | | |
 |---|---|
 | **Last completed** | Post-P9 backlog sweep — closed 2 of P9.6's 3 acceptance-criteria gaps (employee-list `bandStatus` filter + `sortBy=compaRatio`, both server-side over the full 10k dataset, verified live). `133/133` backend, frontend `verify` clean (2026-08-22). |
-| **Current step** | **`P10.6`** — `basis=BASE\|TOTAL_TARGET_CASH`. Working backend-first: `P10.2`/`P10.4`/`P10.5`-UI need a live stack this session cannot reach, so they stay `[ ]` and are batched for a session that has one. |
+| **Current step** | **`P11.1`** — `data-health` endpoint. `P10.2`/`.4`/`.5`/`.7` need a live stack and stay `[ ]`. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._

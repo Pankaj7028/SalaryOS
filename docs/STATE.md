@@ -14,8 +14,8 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | **`P0`–`P9` all `[x]`. `P10`–`P14` appended 2026-08-23** (35 steps, post-v1 feature + market analysis) — see `docs/feature-roadmap.md` for why each exists. |
-| **Last completed** | **`P10.3`** — `saved_views` (`V14`) + `/api/saved-views`, the saved-question library the scope contract promised as the substitute for the excluded free-text assistant and never built. `144/144` backend. |
-| **Next step** | **`P10.6`** — `basis=BASE\|TOTAL_TARGET_CASH` on payroll-cost and compa-ratio-distribution. Working **backend-first**: `P10.2`, `P10.4`, `P10.5`'s UI half and `P10.7` need a live stack, so they remain `[ ]` — batch them for a session that has one. |
+| **Last completed** | **`P10.6`** — `?basis=BASE\|TOTAL_TARGET_CASH` on payroll-cost. FR-3.4's components were stored and read by no analytic since P5.1; now each is normalised at the rate its own record pinned. **Payroll-cost only** — a band is a base-pay range, so total cash over a base-pay midpoint would make compa-ratio meaningless. `149/149`. |
+| **Next step** | **`P11.1`** — `GET /api/analytics/data-health`. Backend-first continues; `P10.2`, `P10.4`, `P10.5`, `P10.7` still `[ ]` pending a live stack. |
 | **Live verification is unavailable this session** | `P10.1`'s `curl` half went unrun — no running service, and Docker/`application-local.yml` were not reachable. Several `P10`–`P14` Verify clauses need a live stack (`P10.2`, `P10.4`, `P10.5`, `P11.2`…). **Steps landed under this constraint carry an explicit "not verified" line in their done-note** — re-run those checks when a stack is next up rather than assuming they passed. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far — everything runs against local Postgres). |
 

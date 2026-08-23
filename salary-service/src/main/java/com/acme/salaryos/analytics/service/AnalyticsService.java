@@ -13,6 +13,7 @@ import com.acme.salaryos.analytics.dto.PayGapResponse;
 import com.acme.salaryos.analytics.dto.PayrollCostResponse;
 import com.acme.salaryos.analytics.query.CompaRatioDistributionQuery;
 import com.acme.salaryos.analytics.query.HeadcountQuery;
+import com.acme.salaryos.analytics.dto.AnalyticsBasis;
 import com.acme.salaryos.analytics.query.FxBasisQuery;
 import com.acme.salaryos.analytics.query.IncreaseCycleQuery;
 import com.acme.salaryos.analytics.query.OutOfBandQuery;
@@ -64,16 +65,21 @@ public class AnalyticsService {
 		this.baseCurrency = baseCurrency;
 	}
 
+	/** FR-6.1 on base pay — the basis every caller meant before P10.6 added the choice. */
 	public PayrollCostResponse payrollCost() {
-		var overall = payrollCostQuery.overall(baseCurrency);
+		return payrollCost(AnalyticsBasis.BASE);
+	}
+
+	public PayrollCostResponse payrollCost(AnalyticsBasis basis) {
+		var overall = payrollCostQuery.overall(baseCurrency, basis);
 		AnalyticsPopulation population = new AnalyticsPopulation(
 				overall.headcount(), Map.of("terminated", payrollCostQuery.terminatedCount()));
 
 		return new PayrollCostResponse(
-				LocalDate.now(clock), baseCurrency, population, fxBasisQuery.forCurrentComp(), overall,
-				payrollCostQuery.byCountry(baseCurrency),
-				payrollCostQuery.byDepartment(baseCurrency),
-				payrollCostQuery.byLevel(baseCurrency));
+				LocalDate.now(clock), baseCurrency, basis, population, fxBasisQuery.forCurrentComp(), overall,
+				payrollCostQuery.byCountry(baseCurrency, basis),
+				payrollCostQuery.byDepartment(baseCurrency, basis),
+				payrollCostQuery.byLevel(baseCurrency, basis));
 	}
 
 	public HeadcountResponse headcount() {

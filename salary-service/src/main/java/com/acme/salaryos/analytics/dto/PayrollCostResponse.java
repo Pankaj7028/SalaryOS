@@ -19,6 +19,7 @@ import java.util.List;
 public record PayrollCostResponse(
 		LocalDate asAtDate,
 		String baseCurrency,
+		AnalyticsBasis basis,
 		AnalyticsPopulation population,
 		FxBasis fxBasis,
 		PayrollCostGroup overall,
