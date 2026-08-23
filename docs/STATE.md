@@ -14,8 +14,8 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | **`P0`–`P9` all `[x]`. `P10`–`P14` appended 2026-08-23** (35 steps, post-v1 feature + market analysis) — see `docs/feature-roadmap.md` for why each exists. |
-| **Last completed** | **`P11.3`** — `GET /api/analytics/band-health`: range spread, midpoint progression, promotion-cliff detection, incumbents, staleness. Read-only, no migration. `166/166`. |
-| **Next step** | **`P11.5`** — `market_data_points` + market CSV import (backend half). Live-stack steps still `[ ]`: `P10.2`, `P10.4`, `P10.5`, `P10.7`, `P11.2`, `P11.6`. |
+| **Last completed** | **`P11.5`** — `market_data_points` (`V15`) + `POST /api/market-data/import`. The market feature as a **seam, not a dataset**: ACME loads the survey it already buys. `172/172`. |
+| **Next step** | **`P12.1`** — `compensation_cycles` migration (riskiest step in the plan: reshapes `compensation_changes`, where every lifecycle test lives). **Every backend-verifiable P10/P11 step is done**; `P10.2`, `P10.4`, `P10.5`, `P10.7`, `P11.2`, `P11.4`, `P11.6` are UI/live-stack and still `[ ]`. |
 | **Live verification is unavailable this session** | `P10.1`'s `curl` half went unrun — no running service, and Docker/`application-local.yml` were not reachable. Several `P10`–`P14` Verify clauses need a live stack (`P10.2`, `P10.4`, `P10.5`, `P11.2`…). **Steps landed under this constraint carry an explicit "not verified" line in their done-note** — re-run those checks when a stack is next up rather than assuming they passed. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far — everything runs against local Postgres). |
 

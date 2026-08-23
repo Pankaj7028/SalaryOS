@@ -2190,13 +2190,40 @@ table.
 - [ ] **P11.4** Band-health matrix on `/bands` (F9).
   *Verify:* `npm run verify`; flagged bands use `--attention`/`--critical` per CLAUDE.md §5.1 —
   no raw hex.
-- [ ] **P11.5** `market_data_points` (`V15`) + `POST /api/bands/market-import` (F10, **reframed**).
+- [x] **P11.5** `market_data_points` (`V15`) + `POST /api/market-data/import` (F10, **reframed**).
   Benchmark data is a data business and a single-tenant tool has no contributor network — so build
   the seam, not the dataset: source, job level, country, currency, p25/p50/p75, effective month.
   Same CSV discipline as the bands import (header row, per-row `CREATE`/`ERROR`, one bad row never
   blocks the rest). HR_ADMIN only, into the existing import hub.
   *Verify:* import 20 rows with 2 deliberate errors → 18 `CREATE` + 2 `ERROR`, error report
   downloadable, no partial-batch rollback.
+  > **Done (2026-08-23):** `V15__market_data_points.sql` + a `market` module.
+  > `POST /api/market-data/import` (not `/api/bands/import` as the plan said — it is its own
+  > resource, not a band), HR_ADMIN only per §7's single "Import / bulk upload" row. Columns
+  > `source,jobLevelId,countryCode,currency,p25,p50,p75,effectiveMonth`, same discipline as the
+  > bands importer (header row, plain line split, dry-run diff, one bad row never blocks the rest) —
+  > a second import shape that behaved differently would be a trap for whoever uses both.
+  >
+  > **Percentiles are stored in the survey's own currency and never normalised.** Normalising a
+  > benchmark at import time would bake in one month's FX rate and make the figure drift for reasons
+  > that have nothing to do with the market. The comparison that matters is band-to-market inside
+  > one country, and both sides are already in the same currency.
+  >
+  > **A real correctness bug caught while writing it, not after.** The importer is one
+  > `@Transactional` method, so an FK violation on one row would abort the whole Postgres
+  > transaction and every later row would fail too — silently breaking the importer's core promise.
+  > Fixed by looking up the job level and country *before* any insert, so no constraint violation
+  > ever reaches the database. `anUnknownJobLevelIsARowErrorAndDoesNotPoisonTheBatch` pins it.
+  >
+  > Re-importing a corrected survey updates in place (unique `source × level × country × month`) —
+  > two contradictory p50s for one cell is worse than replacing the older figure. Any day in the
+  > month normalises to the first, matching how surveys are published.
+  >
+  > **Country code `QM`** — deliberately not `ZZ` (V2's invalid-FK sentinel) and not `QX`
+  > (BandHealthTest's), per the collision recorded at P11.3.
+  >
+  > **Observed:** `MarketDataImportTest` 6/6. Full suite → `Tests run: 172, Failures: 0, Errors: 0`,
+  > `BUILD SUCCESS` (166 before).
 - [ ] **P11.6** Market tick on `<BandBar>` + "band mid vs market p50" in band health (F10).
   **`docs/salary-management-ui.md §7.1` governs this component change and its §12 checklist is not
   optional** — this is the signature component.
@@ -2323,7 +2350,7 @@ table.
 | | |
 |---|---|
 | **Last completed** | Post-P9 backlog sweep — closed 2 of P9.6's 3 acceptance-criteria gaps (employee-list `bandStatus` filter + `sortBy=compaRatio`, both server-side over the full 10k dataset, verified live). `133/133` backend, frontend `verify` clean (2026-08-22). |
-| **Current step** | **`P11.5`** — market-data import seam. Remaining `[ ]` in P10/P11 that need a live stack: `P10.2`, `P10.4`, `P10.5`, `P10.7`, `P11.2`, `P11.6`. |
+| **Current step** | **`P12.1`** — `compensation_cycles` migration. **All backend-verifiable steps in P10 and P11 are now done.** Remaining `[ ]` in those phases are UI/live-stack only: `P10.2`, `P10.4`, `P10.5`, `P10.7`, `P11.2`, `P11.4`, `P11.6`. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._

@@ -34,7 +34,8 @@ class RolePermissionMatrixTest {
 			com.acme.salaryos.audit.AuditController.class,
 			com.acme.salaryos.compensation.web.ProjectionAdminController.class,
 			com.acme.salaryos.fx.FxRateController.class,
-			com.acme.salaryos.savedview.web.SavedViewController.class);
+			com.acme.salaryos.savedview.web.SavedViewController.class,
+			com.acme.salaryos.market.web.MarketDataController.class);
 
 	private static final Set<String> MAPPING_ANNOTATIONS = Set.of(
 			"GetMapping", "PostMapping", "PatchMapping", "PutMapping", "DeleteMapping", "RequestMapping");
@@ -132,6 +133,9 @@ class RolePermissionMatrixTest {
 		for (String method : List.of("list", "save", "delete")) {
 			map.put("SavedViewController#" + method, VIEW_PAY);
 		}
+
+		// P11.5: §7 has ONE "Import / bulk upload" row and it is HR Admin only.
+		map.put("MarketDataController#importCsv", HR_ADMIN_ONLY);
 
 		map.put("AuditController#search", ADMIN_AND_AUDITOR);
 		map.put("AuditController#export", ADMIN_AND_AUDITOR);
