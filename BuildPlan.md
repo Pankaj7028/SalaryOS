@@ -2012,12 +2012,43 @@ table.
   actually in use by `employee_current_comp`, gaps in `--attention`.
   *Verify:* delete one month's rate for one in-use currency locally; the cell renders as missing
   **and** `missingCoverage` flips true on the analytics envelope.
-- [ ] **P10.3** `saved_views` (`V14`) + `GET/POST/DELETE /api/saved-views` (F1) — name, owner, route,
+- [x] **P10.3** `saved_views` (`V14`) + `GET/POST/DELETE /api/saved-views` (F1) — name, owner, route,
   query string, shared flag. This is an **unshipped contract line**, not an enhancement:
   `requirements-one-pager.md` excludes a free-text pay assistant and in the same sentence commits to
   "a saved-question library plus a structured query builder".
   *Verify:* save a filtered employee-list view; as another role, a shared view loads and reproduces
   the exact filter set; an unshared view is 404 for a non-owner.
+  > **Done (2026-08-23):** `V14__saved_views.sql` + a `savedview` module (domain/repository/dto/
+  > service/web) — `GET/POST/DELETE /api/saved-views`, all four roles.
+  >
+  > **The service holds no query logic, deliberately.** A saved view is a route plus a query
+  > string, replayed as the identical request the user could have typed — so RBAC, cohort
+  > suppression and demographic isolation stay exactly where they already are, in the endpoints and
+  > in SQL. That is the entire reason `requirements-one-pager.md` offered this as the safe
+  > substitute for the excluded free-text assistant ("the same questions, answered by queries that
+  > can be audited"), and it only stays true while nothing here parses the query string.
+  >
+  > **All four roles, and that is not a widening of access.** A view carries no data. An Auditor
+  > opening a view an HR Admin saved gets the *Auditor's* answer, because the replayed request hits
+  > the same `@PreAuthorize` it always would. CLAUDE.md §7 has no row for this because a personal
+  > bookmark over data you can already reach is not a capability in that table's sense.
+  >
+  > **No JPA relationship to `User`** — `ownerId` is a plain column. A relationship would let a
+  > fetch graph drag a user (and its password hash) into a saved-view response, the same class of
+  > accident §6.6 keeps `employee_demographics` away from. Owner *name* is resolved per request and
+  > exposed; owner id and email never are.
+  >
+  > Re-saving an existing name updates rather than inserting (unique `(owner_id, name)`): two views
+  > called "Below band, Germany" that a picker cannot tell apart is worse than replacing the older
+  > one. A non-owner deleting gets 404, not 403 — a 403 confirms the id names someone's real view.
+  >
+  > **Two Java-17 trips worth noting** (toolchain targets 17 per STATE.md, `Role` is not an enum):
+  > `auth.domain.Role` does not exist — `User.role` is a plain `String`; and `List.getFirst()` is
+  > Java 21+ `SequencedCollection`, so `get(0)` it is. Both caught at compile, neither reached a run.
+  >
+  > **Observed:** `SavedViewTest` 6/6. Full suite `./mvnw clean verify` →
+  > `Tests run: 144, Failures: 0, Errors: 0`, `BUILD SUCCESS` (138 before). Ran the full suite
+  > because this adds a migration — a module boundary per CLAUDE.md §2B.
 - [ ] **P10.4** Saved-view picker + structured query builder UI (F1). A typed UI over the filter
   params the endpoints already accept — never free text, so every cohort-suppression guardrail stays
   in SQL.
@@ -2198,7 +2229,7 @@ table.
 | | |
 |---|---|
 | **Last completed** | Post-P9 backlog sweep — closed 2 of P9.6's 3 acceptance-criteria gaps (employee-list `bandStatus` filter + `sortBy=compaRatio`, both server-side over the full 10k dataset, verified live). `133/133` backend, frontend `verify` clean (2026-08-22). |
-| **Current step** | **`P10.2`** — FX coverage matrix on `/admin/fx-rates`. `P10.1` done: `FxBasis` span replaces the scalar `fxRateMonth` on the four money-carrying analytics responses, closing the P9.6 criterion-#8 question. `138/138` backend. |
+| **Current step** | **`P10.6`** — `basis=BASE\|TOTAL_TARGET_CASH`. Working backend-first: `P10.2`/`P10.4`/`P10.5`-UI need a live stack this session cannot reach, so they stay `[ ]` and are batched for a session that has one. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._
