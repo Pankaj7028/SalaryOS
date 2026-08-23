@@ -74,6 +74,10 @@ public class EmployeeController {
 			// "compaRatio" for the FR-2.2 compa-ratio sort; anything else (including absent)
 			// keeps the default lastName order.
 			@RequestParam(required = false) String sortBy,
+			// P11.2's data-health drill-through: names a check rather than describing a condition,
+			// so `/employees` does not grow seven filters that serve one screen. Pins the sort to
+			// last name -- the compa-ratio sort is a native query that cannot take the predicate.
+			@RequestParam(required = false) String dataHealthCheck,
 			@RequestParam(required = false) String cursor,
 			// P10.5's page jump: a 0-based row index into the same ordering. A cursor cannot
 			// express "page 4" -- it names the last row you saw, and page 4 is defined by rows you
@@ -82,7 +86,7 @@ public class EmployeeController {
 			@RequestParam(defaultValue = "50") int limit,
 			@AuthenticationPrincipal UUID currentUserId) {
 		int pageSize = Math.min(Math.max(limit, 1), 200);
-		return employeeService.list(q, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, sortBy, cursor, offset, pageSize, currentUserId);
+		return employeeService.list(q, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, sortBy, dataHealthCheck, cursor, offset, pageSize, currentUserId);
 	}
 
 	@GetMapping("/{id}")

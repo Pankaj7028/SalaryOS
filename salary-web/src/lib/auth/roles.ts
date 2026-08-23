@@ -48,6 +48,12 @@ export const AREA_ACCESS = {
   // maps them (FxRateController's own comment): normalisation reference data, readable
   // by anyone who sees pay data, managed by HR Admin/HR Manager (`canManageFxRates` below).
   "/admin/fx-rates": ["HR_ADMIN", "HR_MANAGER", "COMP_ANALYST", "AUDITOR"],
+  // Data health is the analytics endpoint `/api/analytics/data-health`, so it maps to
+  // "Run insights (aggregate)" (CLAUDE.md §7) and not to any admin row — AUDITOR is absent
+  // for the same reason it is absent from every other insight. It sits under Admin in the
+  // sidebar because it is a migration/housekeeping tool, not because it is an admin right;
+  // where a screen lives and who may open it are different questions.
+  "/admin/data-health": ["HR_ADMIN", "HR_MANAGER", "COMP_ANALYST"],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Area = keyof typeof AREA_ACCESS;
@@ -72,6 +78,7 @@ export const NAV_VISIBILITY = {
   "/admin/import": ["HR_ADMIN"],
   "/admin/audit": ["HR_ADMIN", "AUDITOR"],
   "/admin/fx-rates": ["HR_ADMIN", "HR_MANAGER", "COMP_ANALYST", "AUDITOR"],
+  "/admin/data-health": ["HR_ADMIN", "HR_MANAGER", "COMP_ANALYST"],
 } as const satisfies Record<Area, readonly Role[]>;
 
 export function canAccess(role: Role, area: Area): boolean {

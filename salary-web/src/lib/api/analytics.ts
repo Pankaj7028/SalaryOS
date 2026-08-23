@@ -56,6 +56,46 @@ export type PayrollCostResponse = {
   byLevel: PayrollCostGroup[];
 };
 
+// ---- data health (FR-8.4 / P11.1-P11.2) --------------------------------------------------------
+
+export type DataHealthSeverity = "CRITICAL" | "WARNING" | "INFO";
+
+/**
+ * One named data-quality check and how many rows currently fail it.
+ *
+ * `filter` is the employee-list query string that reproduces the failing rows where one of the
+ * list's own filters expresses the check. Where none does, the drill-through uses
+ * `?dataHealthCheck=<key>` instead — a parameter that names the check rather than describing a
+ * condition, so `/employees` does not grow seven filters that serve one screen. Either way the
+ * drill-through is the ordinary employee list, so it inherits that endpoint's RBAC and its audit
+ * trail rather than needing its own.
+ */
+export type DataHealthCheck = {
+  key: string;
+  label: string;
+  explanation: string;
+  severity: DataHealthSeverity;
+  count: number;
+  filter: string | null;
+};
+
+export type DataHealthResponse = {
+  asAtDate: string;
+  totalEmployees: number;
+  failingChecks: number;
+  checks: DataHealthCheck[];
+};
+
+export async function fetchDataHealth(): Promise<DataHealthResponse> {
+  const response = await apiFetch("/api/analytics/data-health");
+  return (await response.json()) as DataHealthResponse;
+}
+
+/** The employee-list URL that shows the people failing a check. */
+export function dataHealthDrillThroughUrl(check: DataHealthCheck): string {
+  return `/employees?${check.filter ?? `dataHealthCheck=${encodeURIComponent(check.key)}`}`;
+}
+
 export type HeadcountGroup = { key: string; label: string; headcount: number };
 
 export type HeadcountResponse = {

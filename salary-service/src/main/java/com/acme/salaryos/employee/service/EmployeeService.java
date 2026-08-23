@@ -30,6 +30,8 @@ import com.acme.salaryos.employee.dto.InitialCompensationRequest;
 import com.acme.salaryos.employee.dto.PeerComparisonResponse;
 import com.acme.salaryos.employee.dto.PeerImpactPreview;
 import com.acme.salaryos.employee.repository.EmployeeRepository;
+import com.acme.salaryos.analytics.query.DataHealthQuery;
+import com.acme.salaryos.employee.spec.DataHealthDrillThrough;
 import com.acme.salaryos.employee.spec.EmployeeSpecifications;
 import com.acme.salaryos.reference.domain.Location;
 import com.acme.salaryos.reference.repository.DepartmentRepository;
@@ -89,6 +91,7 @@ public class EmployeeService {
 	private final AuditService auditService;
 	private final EffectiveDating effectiveDating;
 	private final JdbcTemplate jdbcTemplate;
+	private final DataHealthQuery dataHealthQuery;
 
 	private static final Set<String> VALID_EMPLOYMENT_TYPES = Set.of("FULL_TIME", "PART_TIME", "CONTRACT");
 
@@ -106,7 +109,8 @@ public class EmployeeService {
 			CursorCodec cursorCodec,
 			AuditService auditService,
 			EffectiveDating effectiveDating,
-			JdbcTemplate jdbcTemplate) {
+			JdbcTemplate jdbcTemplate,
+			DataHealthQuery dataHealthQuery) {
 		this.employeeRepository = employeeRepository;
 		this.employeeCurrentCompRepository = employeeCurrentCompRepository;
 		this.compensationRecordRepository = compensationRecordRepository;
@@ -121,6 +125,7 @@ public class EmployeeService {
 		this.auditService = auditService;
 		this.effectiveDating = effectiveDating;
 		this.jdbcTemplate = jdbcTemplate;
+		this.dataHealthQuery = dataHealthQuery;
 	}
 
 	/**
@@ -132,11 +137,17 @@ public class EmployeeService {
 	 */
 	public KeysetPage<EmployeeSummaryResponse> list(
 			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId,
-			String status, String bandStatus, String sortBy, String cursor, Integer offset, int limit, UUID currentUserId) {
+			String status, String bandStatus, String sortBy, String dataHealthCheck, String cursor, Integer offset,
+			int limit, UUID currentUserId) {
 
-		KeysetPage<EmployeeSummaryResponse> page = "compaRatio".equals(sortBy)
-				? listByCompaRatio(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, cursor, offset, limit)
-				: listByLastName(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, cursor, offset, limit);
+		// The data-health drill-through is a Criteria predicate, and the compa-ratio sort is a
+		// hand-rolled native query that cannot take one. Drilling through always wants "who are
+		// these people", never "rank them by compa-ratio", so the drill-through pins the sort
+		// rather than silently dropping the filter and showing the wrong list.
+		KeysetPage<EmployeeSummaryResponse> page =
+				"compaRatio".equals(sortBy) && (dataHealthCheck == null || dataHealthCheck.isBlank())
+						? listByCompaRatio(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, cursor, offset, limit)
+						: listByLastName(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus, dataHealthCheck, cursor, offset, limit);
 
 		auditService.recordListRead(currentUserId, "EMPLOYEE",
 				describeFilter(query, departmentId, locationId, countryCode, jobLevelId, status, bandStatus), page.items().size());
@@ -145,7 +156,7 @@ public class EmployeeService {
 
 	private KeysetPage<EmployeeSummaryResponse> listByLastName(
 			String query, UUID departmentId, UUID locationId, String countryCode, UUID jobLevelId,
-			String status, String bandStatus, String cursor, Integer offset, int limit) {
+			String status, String bandStatus, String dataHealthCheck, String cursor, Integer offset, int limit) {
 
 		// Specification.where/and reject a null argument outright (no longer the historical
 		// null-means-"no restriction" behaviour) — start unrestricted and fold in only the
@@ -157,7 +168,8 @@ public class EmployeeService {
 				.and(nonNullOrUnrestricted(EmployeeSpecifications.countryCode(countryCode)))
 				.and(nonNullOrUnrestricted(EmployeeSpecifications.jobLevelId(jobLevelId)))
 				.and(nonNullOrUnrestricted(EmployeeSpecifications.status(status)))
-				.and(nonNullOrUnrestricted(EmployeeSpecifications.bandStatus(bandStatus)));
+				.and(nonNullOrUnrestricted(EmployeeSpecifications.bandStatus(bandStatus)))
+				.and(nonNullOrUnrestricted(dataHealthDrillThrough(dataHealthCheck)));
 
 		long totalCount = employeeRepository.count(spec);
 
@@ -371,6 +383,26 @@ public class EmployeeService {
 		if (jobLevelId != null) sb.append("jobLevelId=").append(jobLevelId).append(' ');
 		if (status != null) sb.append("status=").append(status).append(' ');
 		return sb.isEmpty() ? "(none)" : sb.toString().trim();
+	}
+
+	/**
+	 * P11.2. Every check resolves to a Criteria predicate except {@code circularManagement}, which
+	 * needs a recursive CTE — that one is resolved to ids first (safe: a cycle set is tiny by
+	 * construction, see {@code DataHealthQuery#circularManagementEmployeeIds}).
+	 */
+	private Specification<Employee> dataHealthDrillThrough(String dataHealthCheck) {
+		if (dataHealthCheck == null || dataHealthCheck.isBlank()) {
+			return null;
+		}
+		if ("circularManagement".equals(dataHealthCheck)) {
+			List<UUID> ids = dataHealthQuery.circularManagementEmployeeIds();
+			// An empty IN () is not valid SQL and `id in (empty)` is not what we mean anyway: no
+			// cycles means no rows, said explicitly.
+			return ids.isEmpty()
+					? (root, cq, cb) -> cb.disjunction()
+					: (root, cq, cb) -> root.get("id").in(ids);
+		}
+		return DataHealthDrillThrough.forCheck(dataHealthCheck);
 	}
 
 	/** FR-2.7: same filters as {@link #list}, unpaginated — the export always matches the on-screen filter. */

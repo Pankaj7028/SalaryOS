@@ -2311,10 +2311,57 @@ table.
   > **Observed:** `DataHealthTest` 8/8. Full suite → `Tests run: 157, Failures: 0, Errors: 0`,
   > `BUILD SUCCESS` (149 before). One intermediate run was `157 / Failures: 1` — the matrix test
   > catching `dataHealth`, reported here because it was a real failure and not a flake.
-- [ ] **P11.2** `/admin/data-health` with drill-through and export (F11). Drill-through reuses the
+- [x] **P11.2** `/admin/data-health` with drill-through and export (F11). Drill-through reuses the
   employee list's existing filters wherever one exists.
   *Verify:* `npm run verify`; each check drills to a real row list; 375px card degradation per UI
   doc §12.10.
+  > **Done (2026-08-24).** `/admin/data-health` — failing checks first (severity, then size), a CSV
+  > export, and a drill-through on every check.
+  >
+  > **"Wherever one exists" turned out to be two checks out of nine**, and the Verify demands all
+  > nine drill through. The other seven test conditions nobody would ever want as a general-purpose
+  > list filter ("pay starts before hire date"), so adding seven filters to `/employees` would
+  > clutter the filter bar for every user forever to serve one screen. Instead one parameter,
+  > `?dataHealthCheck=<key>`, that **names a check rather than describing a condition**. It resolves
+  > to a Criteria predicate on the ordinary employee list, so the drill-through inherits that
+  > endpoint's RBAC and its per-read audit trail (CLAUDE.md §6.7) — a bespoke "show me the failing
+  > rows" endpoint would have inherited neither.
+  >
+  > `circularManagement` is the one exception: a recursive CTE, which the Criteria API cannot
+  > express, so it resolves to ids first. Safe only because a cycle set is tiny by construction, and
+  > worth the exception because it is the one defect here that makes an org drill-down loop forever.
+  >
+  > **A real P11.1 bug found by the reconciliation, live on the 10k.**
+  > `terminatedWithOpenPay` carried `filter = "status=TERMINATED"`, which matched **every one of the
+  > 420 terminated employees** while the check counted only those with an open ledger period (**0**).
+  > The console said 0 and the drill-through showed 420 — precisely the "two definitions of one
+  > defect" failure that makes a user stop believing both numbers. The approximate filter is gone;
+  > that check now uses the real predicate.
+  >
+  > **The test gap that let it through is closed too.** `DataHealthDrillThroughTest` was reconciling
+  > against `dataHealthCheck=` for every check — the parameter the UI *doesn't* use when a `filter`
+  > is present — so it proved the wrong thing correct. It now mirrors `dataHealthDrillThroughUrl`
+  > exactly. A `filter` is a claim that a list filter is *equivalent to* a check, and that claim is
+  > now held to account.
+  >
+  > **Passing checks stay on screen**, dimmed. A console that hides them is indistinguishable from
+  > one that never ran them, and "we checked and it's clean" is most of the value of a health check.
+  >
+  > **RBAC:** `/admin/data-health` maps to "Run insights (aggregate)" (HR_ADMIN, HR_MANAGER,
+  > COMP_ANALYST) because it *is* an analytics endpoint — AUDITOR is absent for the same reason it
+  > is absent from every other insight. It sits under Admin in the sidebar because it is a migration
+  > tool; where a screen lives and who may open it are different questions.
+  >
+  > **Observed:** `DataHealthDrillThroughTest` 4/4. Full backend suite → `Tests run: 193,
+  > Failures: 0, Errors: 0`, `BUILD SUCCESS` (189 before). Frontend `npm run verify` clean,
+  > `Tests 37 passed (37)` (36 before — `roles.test.ts` picks the new area up automatically), route
+  > `/admin/data-health` in the build output. **Live on the 10k: all nine checks reconcile**
+  > console-count to drill-through-count, using the exact URL the UI builds (0/0/0/0, 33/33, 0/0,
+  > 357/357, 0/0, 0/0).
+  >
+  > **Unrun:** 375px card degradation was *built* (the table becomes cards under 768px, since the
+  > explanation column is the first thing a horizontal scroll hides) but not *looked at* — browser
+  > automation still cannot reach this machine, re-checked this session.
 - [x] **P11.3** `GET /api/analytics/band-health` (F9) — range spread (`max/min − 1`), midpoint
   progression between adjacent levels, adjacent-level overlap, population by quartile,
   zero-incumbent bands, staleness (not versioned in N months).
@@ -2517,7 +2564,7 @@ table.
 | | |
 |---|---|
 | **Last completed** | **`P10.2`** — FX coverage matrix on `/admin/fx-rates`: currency × month over the currencies actually in use, gaps in `--attention`, riding on the existing list endpoint. `FxCoverageTest` 3/3; frontend `typecheck`/`lint`/`build` clean; live-verified against a restarted stack (16 months, 7 currencies, 9,580 people; adding a rate flipped exactly one cell). **Visual pass in both themes and at 375px still owed** — the paired Chrome is on another device and can't reach this machine (2026-08-23). |
-| **Current step** | **`P11.2`.** **P10 is closed** — `P10.4` (saved-view picker), `P10.5` (result count, page jump, bulk propose, plus a service-wide 401-on-validation bug found in QA and fixed), `P10.7` (basis toggle + P10.6's deferred rename). A live stack is up (backend `:8080`, web `:3100`), so `P11.2`, `P11.4`, `P11.6` are unblocked; `P12.1` follows them. |
+| **Current step** | **`P11.4`.** **P10 is closed** — `P10.4` (saved-view picker), `P10.5` (result count, page jump, bulk propose, plus a service-wide 401-on-validation bug found in QA and fixed), `P10.7` (basis toggle + P10.6's deferred rename). A live stack is up (backend `:8080`, web `:3100`), so `P11.2`, `P11.4`, `P11.6` are unblocked; `P12.1` follows them. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._

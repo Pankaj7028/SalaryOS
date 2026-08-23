@@ -123,6 +123,34 @@ public class DataHealthQuery {
 			SELECT count(DISTINCT root_id) FROM chain WHERE current_id = root_id
 			""";
 
+	/**
+	 * The employees in a management cycle, by id (P11.2's drill-through).
+	 *
+	 * <p>This is the one check whose predicate cannot be expressed as a Criteria specification —
+	 * it needs the recursive CTE above — so the drill-through resolves it to ids instead. That is
+	 * safe here and nowhere else on this list: a cycle set is tiny by construction (a cycle is a
+	 * handful of people pointing at each other), and it is worth the exception because a cycle is
+	 * the one defect here that makes anything walking the reporting line loop forever.
+	 */
+	private static final String CIRCULAR_MANAGEMENT_IDS_SQL = """
+			WITH RECURSIVE chain(root_id, current_id, depth) AS (
+			    SELECT e.id, e.manager_id, 1
+			      FROM salary_schema.employees e
+			     WHERE e.manager_id IS NOT NULL
+			    UNION
+			    SELECT c.root_id, e.manager_id, c.depth + 1
+			      FROM chain c
+			      JOIN salary_schema.employees e ON e.id = c.current_id
+			     WHERE e.manager_id IS NOT NULL
+			       AND c.depth < 50
+			)
+			SELECT DISTINCT root_id FROM chain WHERE current_id = root_id
+			""";
+
+	public List<java.util.UUID> circularManagementEmployeeIds() {
+		return jdbcTemplate.queryForList(CIRCULAR_MANAGEMENT_IDS_SQL, java.util.UUID.class);
+	}
+
 	public int totalEmployees() {
 		return count(TOTAL_EMPLOYEES_SQL);
 	}
@@ -133,9 +161,15 @@ public class DataHealthQuery {
 				check("noCompensation", "Active employees with no pay record",
 						"Every cost, compa-ratio and pay-gap figure silently omits them.",
 						DataHealthSeverity.CRITICAL, NO_COMPENSATION_SQL, null),
+				// filter is deliberately null: `status=TERMINATED` was here until P11.2 and was an
+				// approximation, not this check. It matched every terminated employee (420 on the
+				// local 10k) while the check counts only those whose ledger period is still open
+				// (0). The console said 0 and the drill-through showed 420 — the exact "two
+				// definitions of one defect" failure that makes a user stop believing both
+				// numbers. The `dataHealthCheck=` drill-through expresses the real predicate.
 				check("terminatedWithOpenPay", "Terminated employees still being paid",
 						"Their pay period was never closed, so they accrue cost indefinitely.",
-						DataHealthSeverity.CRITICAL, TERMINATED_WITH_OPEN_PAY_SQL, "status=TERMINATED"),
+						DataHealthSeverity.CRITICAL, TERMINATED_WITH_OPEN_PAY_SQL, null),
 				check("payBeforeHire", "Pay starting before the hire date",
 						"Usually two date columns transposed during an import.",
 						DataHealthSeverity.CRITICAL, PAY_BEFORE_HIRE_SQL, null),
