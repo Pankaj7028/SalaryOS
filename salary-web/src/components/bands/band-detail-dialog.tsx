@@ -16,6 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Money } from "@/components/comp/money";
 import { useBandVersionImpact, useUpdateBand } from "@/lib/api/bands-queries";
+import { useBandHealth } from "@/lib/api/analytics-queries";
+import { BandFlagList, BandShapeFigures, flagsFor } from "@/components/bands/band-health";
 import { bandFormSchema, type BandFormValues } from "@/components/bands/band-form-schema";
 import type { Band } from "@/lib/api/bands";
 
@@ -36,6 +38,11 @@ export function BandDetailDialog({
   countryName: string;
 }) {
   const current = versions[0];
+  // Whatever the dots on the cell were saying, said in words. A marker whose meaning lives only in
+  // a legend is a marker most people never decode.
+  const bandHealth = useBandHealth();
+  const health = bandHealth.data?.rows.find((row) => row.bandId === current.id) ?? null;
+  const staleAfterMonths = bandHealth.data?.staleAfterMonths ?? 18;
   const [versioning, setVersioning] = useState(false);
   const updateBand = useUpdateBand(current.id);
 
@@ -97,6 +104,13 @@ export function BandDetailDialog({
 
         {!versioning ? (
           <div className="mt-4 flex flex-col gap-4">
+            {health ? (
+              <section className="border-border bg-muted/20 flex flex-col gap-3 rounded-md border px-3 py-3">
+                <h3 className="type-label text-muted-foreground">Band health</h3>
+                <BandShapeFigures row={health} />
+                <BandFlagList flags={flagsFor(health, staleAfterMonths)} />
+              </section>
+            ) : null}
             <ol className="border-border flex flex-col gap-4 border-l pl-4">
               {versions.map((version) => (
                 <li key={version.id} className="relative">

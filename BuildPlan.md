@@ -2401,9 +2401,45 @@ table.
   >
   > **Observed:** `BandHealthTest` 9/9. Full suite → `Tests run: 166, Failures: 0, Errors: 0`,
   > `BUILD SUCCESS` (157 before). Two intermediate red runs, both real and both reported above.
-- [ ] **P11.4** Band-health matrix on `/bands` (F9).
+- [x] **P11.4** Band-health matrix on `/bands` (F9).
   *Verify:* `npm run verify`; flagged bands use `--attention`/`--critical` per CLAUDE.md §5.1 —
   no raw hex.
+  > **Done (2026-08-24).** A four-stat summary strip above the existing level × country grid, flag
+  > dots on any cell with a problem, and the health figures in words in the version-history dialog.
+  >
+  > **No new matrix was built — `/bands` already was one.** It renders level × country and was the
+  > right shape; what it could not say is whether the structure it displays is any good. So P11.3's
+  > judgement lands *on* it rather than beside it. A second matrix showing the same 470 bands with
+  > different columns would be two places to look for one answer.
+  >
+  > **Two severities, because the palette defines two** (CLAUDE.md §5.1) — and the mapping is the
+  > substance of the step, not decoration. A **promotion cliff is `--critical`**: someone promoted
+  > out of the top of the level below lands at the bottom of this band and goes *backwards*, which
+  > is a person's pay being wrong. **An empty or stale band is `--attention`**: the structure is
+  > untrustworthy but nobody is being paid incorrectly today. An *overlap* is not flagged at all —
+  > adjacent bands overlapping is normal and healthy, and P11.3 already established that the gap is
+  > the defect.
+  >
+  > **The dots explain themselves in the dialog.** A marker whose meaning lives only in a legend is
+  > one most people never decode, so opening a flagged cell shows the same flags in words plus range
+  > spread, progression from the level below, incumbents, and median compa-ratio.
+  >
+  > **Band health is not part of the screen's loading gate.** The matrix is useful without the
+  > overlay; a slow analytics query over 470 bands should not hold the bands themselves hostage.
+  >
+  > **Observed:** `npm run verify` clean — `check:tokens` passes, lint 0 errors,
+  > `Test Files 4 passed (4) / Tests 44 passed (44)` (37 before; `band-health.test.ts` adds 7),
+  > build clean. **No raw hex** in any of the new components (grepped explicitly for
+  > `#[0-9a-f]{3,8}`); the only tones used are `text-critical`, `text-attention`, and
+  > `text-muted-foreground`, and `--attention`/`--critical` are declared in both theme blocks.
+  >
+  > **The client's flag logic reproduces the server's summary exactly, on the live 470 bands:**
+  > 1 promotion cliff (Legal L6, Ireland — band starts at €180,000, above where L5 ends), 15 bands
+  > with no incumbents, 0 stale. All three match `bandsWithGapToPreviousLevel` /
+  > `bandsWithNoIncumbents` / `staleBands`. Nothing links the two implementations, so
+  > `band-health.test.ts` pins the thresholds on every build.
+  >
+  > **Unrun:** the visual pass. Browser automation is still unreachable.
 - [x] **P11.5** `market_data_points` (`V15`) + `POST /api/market-data/import` (F10, **reframed**).
   Benchmark data is a data business and a single-tenant tool has no contributor network — so build
   the seam, not the dataset: source, job level, country, currency, p25/p50/p75, effective month.
@@ -2564,7 +2600,7 @@ table.
 | | |
 |---|---|
 | **Last completed** | **`P10.2`** — FX coverage matrix on `/admin/fx-rates`: currency × month over the currencies actually in use, gaps in `--attention`, riding on the existing list endpoint. `FxCoverageTest` 3/3; frontend `typecheck`/`lint`/`build` clean; live-verified against a restarted stack (16 months, 7 currencies, 9,580 people; adding a rate flipped exactly one cell). **Visual pass in both themes and at 375px still owed** — the paired Chrome is on another device and can't reach this machine (2026-08-23). |
-| **Current step** | **`P11.4`.** **P10 is closed** — `P10.4` (saved-view picker), `P10.5` (result count, page jump, bulk propose, plus a service-wide 401-on-validation bug found in QA and fixed), `P10.7` (basis toggle + P10.6's deferred rename). A live stack is up (backend `:8080`, web `:3100`), so `P11.2`, `P11.4`, `P11.6` are unblocked; `P12.1` follows them. |
+| **Current step** | **`P11.6`.** **P10 is closed** — `P10.4` (saved-view picker), `P10.5` (result count, page jump, bulk propose, plus a service-wide 401-on-validation bug found in QA and fixed), `P10.7` (basis toggle + P10.6's deferred rename). A live stack is up (backend `:8080`, web `:3100`), so `P11.2`, `P11.4`, `P11.6` are unblocked; `P12.1` follows them. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._

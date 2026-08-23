@@ -96,6 +96,53 @@ export function dataHealthDrillThroughUrl(check: DataHealthCheck): string {
   return `/employees?${check.filter ?? `dataHealthCheck=${encodeURIComponent(check.key)}`}`;
 }
 
+// ---- band health (F9 / P11.3-P11.4) ------------------------------------------------------------
+
+/**
+ * One in-force band, judged rather than merely stored (P11.3).
+ *
+ * `midpointProgression` and `gapToPreviousLevel` are relative to the level below *within the same
+ * job family and country* — `job_levels` is unique per (family, level code), so "the level below"
+ * means nothing across families. Both are null on the lowest level of a family, which has no
+ * previous level to progress from.
+ */
+export type BandHealthRow = {
+  bandId: string;
+  jobFamily: string;
+  levelCode: string;
+  levelTitle: string;
+  countryCode: string;
+  countryName: string;
+  min: Money;
+  mid: Money;
+  max: Money;
+  /** `max / min - 1`. How wide the band is, as a fraction. */
+  rangeSpread: string;
+  /** This midpoint over the previous level's, minus one. Null on the lowest level. */
+  midpointProgression: string | null;
+  /** True when this band's minimum sits above the previous level's maximum — a promotion cliff. */
+  gapToPreviousLevel: boolean;
+  incumbents: number;
+  medianCompaRatio: string | null;
+  monthsSinceVersioned: number | null;
+};
+
+export type BandHealthResponse = {
+  asAtDate: string;
+  inForceBands: number;
+  bandsWithNoIncumbents: number;
+  bandsWithGapToPreviousLevel: number;
+  staleBands: number;
+  /** Not a request parameter — it states how fast pay moves, not something a caller should tune. */
+  staleAfterMonths: number;
+  rows: BandHealthRow[];
+};
+
+export async function fetchBandHealth(): Promise<BandHealthResponse> {
+  const response = await apiFetch("/api/analytics/band-health");
+  return (await response.json()) as BandHealthResponse;
+}
+
 export type HeadcountGroup = { key: string; label: string; headcount: number };
 
 export type HeadcountResponse = {

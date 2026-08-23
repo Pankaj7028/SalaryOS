@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { analyticsKeys } from "@/lib/api/keys";
 import {
   fetchCompaRatioDistribution,
+  fetchBandHealth,
   fetchDataHealth,
   fetchHeadcount,
   fetchIncreaseCycle,
@@ -23,6 +24,10 @@ export function usePayrollCost(basis: AnalyticsBasis = "BASE") {
     // while the new one loads reads as a figure that is still valid, which it is not.
     placeholderData: undefined,
   });
+}
+
+export function useBandHealth() {
+  return useQuery({ queryKey: analyticsKeys.bandHealth(), queryFn: fetchBandHealth });
 }
 
 export function useDataHealth() {

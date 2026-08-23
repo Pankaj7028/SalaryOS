@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Money } from "@/components/comp/money";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/feedback/states";
 import { useBands } from "@/lib/api/bands-queries";
+import { useBandHealth } from "@/lib/api/analytics-queries";
+import { BandFlagDots, BandHealthSummary, flagsFor, type BandFlag } from "@/components/bands/band-health";
 import { useCountries, useJobLevels } from "@/lib/api/reference-queries";
 import { CreateBandDialog } from "@/components/bands/create-band-dialog";
 import { BandDetailDialog } from "@/components/bands/band-detail-dialog";
@@ -22,6 +24,7 @@ type EmptyCell = { jobLevelId: string; countryCode: string };
  */
 export function BandsScreen() {
   const bands = useBands();
+  const bandHealth = useBandHealth();
   const jobLevels = useJobLevels();
   const countries = useCountries();
   const [emptyCell, setEmptyCell] = useState<EmptyCell | null>(null);
@@ -40,6 +43,20 @@ export function BandsScreen() {
     }
     return map;
   }, [bands.data]);
+
+  // Band health is looked up by band id, so a cell finds its own flags without a second pass over
+  // 470 rows per render. It is deliberately NOT part of the loading gate below: the matrix is
+  // useful without the health overlay, and a slow analytics query should not hold the bands hostage.
+  const flagsByBandId = useMemo(() => {
+    const map = new Map<string, BandFlag[]>();
+    const health = bandHealth.data;
+    if (!health) return map;
+    for (const row of health.rows) {
+      const flags = flagsFor(row, health.staleAfterMonths);
+      if (flags.length > 0) map.set(row.bandId, flags);
+    }
+    return map;
+  }, [bandHealth.data]);
 
   if (bands.isLoading || jobLevels.isLoading || countries.isLoading) {
     return (
@@ -91,6 +108,8 @@ export function BandsScreen() {
         </p>
       </header>
 
+      {bandHealth.data ? <BandHealthSummary health={bandHealth.data} /> : null}
+
       <div className="border-border hidden overflow-x-auto rounded-lg border md:block">
         <Table>
           <TableHeader className="bg-muted/40">
@@ -125,8 +144,14 @@ export function BandsScreen() {
                             {" – "}
                             <Money value={inForce.max} size="figure-sm" />
                           </span>
-                          <span className="type-caption text-muted-foreground">
+                          <span className="type-caption text-muted-foreground flex items-center gap-1.5">
                             {inForce.headcount} {inForce.headcount === 1 ? "employee" : "employees"}
+                            <BandFlagDots flags={flagsByBandId.get(inForce.id) ?? []} />
+                            {(flagsByBandId.get(inForce.id) ?? []).length > 0 ? (
+                              <span className="sr-only">
+                                {(flagsByBandId.get(inForce.id) ?? []).map((f) => f.label).join(", ")}
+                              </span>
+                            ) : null}
                           </span>
                         </button>
                       ) : (
@@ -171,8 +196,14 @@ export function BandsScreen() {
                           {" – "}
                           <Money value={inForce.max} size="figure-sm" />
                         </span>
-                        <span className="type-caption text-muted-foreground">
+                        <span className="type-caption text-muted-foreground flex items-center gap-1.5">
                           {inForce.headcount} {inForce.headcount === 1 ? "employee" : "employees"}
+                          <BandFlagDots flags={flagsByBandId.get(inForce.id) ?? []} />
+                          {(flagsByBandId.get(inForce.id) ?? []).length > 0 ? (
+                            <span className="sr-only">
+                              {(flagsByBandId.get(inForce.id) ?? []).map((f) => f.label).join(", ")}
+                            </span>
+                          ) : null}
                         </span>
                       </button>
                     ) : (
