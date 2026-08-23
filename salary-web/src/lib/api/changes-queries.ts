@@ -14,6 +14,7 @@ import {
   type ChangeStatus,
   type ProposeChangeInput,
 } from "@/lib/api/changes";
+import { bulkUploadChangesCsv } from "@/lib/api/changes-bulk-upload";
 import { ApiError } from "@/lib/api/client";
 import { failure, success } from "@/lib/notify";
 
@@ -96,5 +97,20 @@ export function useDiscardDraft() {
       success("Draft discarded");
     },
     onError: (error) => failure(error instanceof ApiError ? error.problem : error, "Couldn't discard draft"),
+  });
+}
+
+/** No success toast — the screen renders the per-row diff itself, a richer result than a toast
+ * could carry (same reasoning as `useImportEmployeesCsv`/`useImportBandsCsv`). */
+export function useBulkUploadChangesCsv() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, effectiveDate }: { file: File; effectiveDate: string }) => bulkUploadChangesCsv(file, effectiveDate),
+    onSuccess: (result) => {
+      if (result.proposed > 0) {
+        invalidateChangeLists(queryClient);
+      }
+    },
+    onError: (error) => failure(error instanceof ApiError ? error.problem : error, "Bulk upload failed"),
   });
 }

@@ -5,36 +5,33 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/feedback/states";
-import { useImportEmployeesCsv } from "@/lib/api/employee-import-queries";
-import type { EmployeeImportResult } from "@/lib/api/employee-import";
+import { useImportBandsCsv } from "@/lib/api/bands-queries";
+import type { BandImportResult } from "@/lib/api/bands-import";
 
-const CSV_COLUMNS =
-  "employeeNumber,firstName,lastName,workEmail,departmentId,locationId,jobFamilyId,jobLevelId,managerId,hireDate,employmentType,fte";
+const CSV_COLUMNS = "jobLevelId,countryCode,currency,minAmount,midAmount,maxAmount,effectiveFrom,note";
 
-function ActionBadge({ action }: { action: "CREATE" | "UPDATE" | "ERROR" }) {
+function ActionBadge({ action }: { action: "CREATE" | "VERSION" | "ERROR" }) {
   if (action === "ERROR") {
     return <Badge variant="outline" className="border-critical/30 text-critical">Error</Badge>;
   }
-  if (action === "UPDATE") {
-    return <Badge variant="outline" className="border-primary/30 text-primary">Update</Badge>;
+  if (action === "VERSION") {
+    return <Badge variant="outline" className="border-primary/30 text-primary">Version</Badge>;
   }
   return <Badge variant="outline" className="border-positive/30 text-positive">Create</Badge>;
 }
 
 /**
- * The "Employees" tab of `/admin/import` (ui doc §8.9, P8.4; became one of three tabs in a
- * post-P9 QA pass — see `ImportHubScreen`). "Import / bulk upload" is HR_ADMIN only (CLAUDE.md
- * §7) — the backend enforces that; this screen doesn't duplicate the check, it just has one
- * visitor. A file is always dry-run first: the diff renders, nothing has been written, and only
- * then does "Apply import" send the identical file with `dryRun=false` — matching the CSV bands
- * import's own contract (`BandImportResult`, P5.3) and this step's own Verify clause.
+ * The "Salary bands" tab of `/admin/import` (post-P9 QA pass). Backend has existed since P5.3
+ * (`BandService#importCsv`, dry-run diff) — P5.3's own done-note explicitly deferred the UI
+ * ("a UI renders/downloads it whenever a bulk-upload screen exists"); nothing ever built it. Same
+ * dry-run-first contract as the Employees tab: preview always runs before "Apply import" can.
  */
-export function EmployeeImportScreen() {
+export function BandsImportPanel() {
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<EmployeeImportResult | null>(null);
-  const [applied, setApplied] = useState<EmployeeImportResult | null>(null);
+  const [preview, setPreview] = useState<BandImportResult | null>(null);
+  const [applied, setApplied] = useState<BandImportResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const importCsv = useImportEmployeesCsv();
+  const importCsv = useImportBandsCsv();
 
   function handleFileChange(selected: File | null) {
     setFile(selected);
@@ -67,9 +64,9 @@ export function EmployeeImportScreen() {
   return (
     <div className="space-y-6">
       <p className="type-caption text-muted-foreground">
-        A CSV keyed by employee number — a new number creates, an existing one updates that
-        employee&rsquo;s profile (never their pay). Every file previews as a dry run before
-        anything is written.
+        A CSV of salary-band versions, one per (job level × country). A row always creates a new
+        version — bands are never edited in place (CLAUDE.md §6.3&rsquo;s insert-only rule applies
+        here too). Every file previews as a dry run before anything is written.
       </p>
 
       <section className="border-border bg-card space-y-3 rounded-lg border p-4">
@@ -90,7 +87,7 @@ export function EmployeeImportScreen() {
           </Button>
           {preview && !applied ? (
             <Button size="sm" variant="outline" disabled={importCsv.isPending || preview.errors === preview.totalRows} onClick={handleApply}>
-              {importCsv.isPending ? "Applying…" : `Apply import (${preview.rowsApplied || preview.created + preview.updated} rows)`}
+              {importCsv.isPending ? "Applying…" : `Apply import (${preview.rowsApplied || preview.created + preview.versioned} rows)`}
             </Button>
           ) : null}
           {file ? (
@@ -106,7 +103,7 @@ export function EmployeeImportScreen() {
           <div className="flex flex-wrap items-center gap-4">
             <h2 className="type-section">{result.dryRun ? "Preview" : "Applied"}</h2>
             <span className="type-body-sm text-muted-foreground">
-              {result.totalRows} rows · {result.created} to create · {result.updated} to update ·{" "}
+              {result.totalRows} rows · {result.created} to create · {result.versioned} to version ·{" "}
               {result.errors} error{result.errors === 1 ? "" : "s"}
               {result.dryRun ? " · nothing written yet" : ` · ${result.rowsApplied} written`}
             </span>
@@ -121,8 +118,9 @@ export function EmployeeImportScreen() {
                   <TableRow className="h-10">
                     <TableHead className="type-label text-muted-foreground">Row</TableHead>
                     <TableHead className="type-label text-muted-foreground">Action</TableHead>
-                    <TableHead className="type-label text-muted-foreground">Employee #</TableHead>
-                    <TableHead className="type-label text-muted-foreground">Name</TableHead>
+                    <TableHead className="type-label text-muted-foreground">Level</TableHead>
+                    <TableHead className="type-label text-muted-foreground">Country</TableHead>
+                    <TableHead className="type-label text-muted-foreground">Min / Mid / Max</TableHead>
                     <TableHead className="type-label text-muted-foreground">Error</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -131,9 +129,12 @@ export function EmployeeImportScreen() {
                     <TableRow key={row.rowNumber} className="h-10">
                       <TableCell className="figure-sm">{row.rowNumber}</TableCell>
                       <TableCell><ActionBadge action={row.action} /></TableCell>
-                      <TableCell className="figure-sm">{row.employeeNumber ?? "—"}</TableCell>
-                      <TableCell className="type-body-sm">
-                        {row.firstName || row.lastName ? `${row.firstName ?? ""} ${row.lastName ?? ""}`.trim() : "—"}
+                      <TableCell className="figure-sm">{row.jobLevelId ?? "—"}</TableCell>
+                      <TableCell className="type-body-sm">{row.countryCode ?? "—"}</TableCell>
+                      <TableCell className="figure-sm">
+                        {row.minAmount && row.midAmount && row.maxAmount
+                          ? `${row.minAmount} / ${row.midAmount} / ${row.maxAmount} ${row.currency ?? ""}`
+                          : "—"}
                       </TableCell>
                       <TableCell className="type-body-sm text-critical">{row.error ?? ""}</TableCell>
                     </TableRow>

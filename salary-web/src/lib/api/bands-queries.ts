@@ -10,6 +10,7 @@ import {
   type CreateBandInput,
   type UpdateBandInput,
 } from "@/lib/api/bands";
+import { importBandsCsv } from "@/lib/api/bands-import";
 import { ApiError } from "@/lib/api/client";
 import { failure, success } from "@/lib/notify";
 
@@ -49,5 +50,20 @@ export function useBandVersionImpact(id: string, amounts: { minAmount: string; m
     queryKey: ["bands", "versionImpact", id, amounts],
     queryFn: () => previewBandVersionImpact(id, amounts!),
     enabled: amounts !== null,
+  });
+}
+
+/** No success toast — the screen renders the diff itself, a richer result than a toast could
+ * carry (same reasoning as `useImportEmployeesCsv`). */
+export function useImportBandsCsv() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ file, dryRun }: { file: File; dryRun: boolean }) => importBandsCsv(file, dryRun),
+    onSuccess: (result) => {
+      if (!result.dryRun) {
+        queryClient.invalidateQueries({ queryKey: bandKeys.list() });
+      }
+    },
+    onError: (error) => failure(error instanceof ApiError ? error.problem : error, "Import failed"),
   });
 }

@@ -4,8 +4,10 @@ import { Money } from "@/components/comp/money";
 import { EmptyState, ErrorState, TableSkeleton } from "@/components/feedback/states";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { usePayGap } from "@/lib/api/analytics-queries";
 import { formatAmount, formatPercent } from "@/lib/money";
+import { downloadCsv } from "@/lib/csv";
 import type { PayGapGroupMedian } from "@/lib/api/analytics";
 
 /**
@@ -36,12 +38,34 @@ export function EquityReviewScreen() {
           <SuppressionNotice count={payGap.data.suppressedCohorts} />
 
           <section className="space-y-3">
-            <div>
-              <h2 className="type-section">Unadjusted</h2>
-              <p className="type-caption text-muted-foreground">
-                Org-wide median pay by group, ignoring job level entirely — a mix effect (who holds
-                senior roles) can dominate this number.
-              </p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="type-section">Unadjusted</h2>
+                <p className="type-caption text-muted-foreground">
+                  Org-wide median pay by group, ignoring job level entirely — a mix effect (who
+                  holds senior roles) can dominate this number.
+                </p>
+              </div>
+              {payGap.data.unadjustedGroups.length >= 2 ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    downloadCsv(
+                      `pay-gap-unadjusted-${payGap.data.asAtDate}.csv`,
+                      ["Group", "Count", "Median amount", "Currency"],
+                      payGap.data.unadjustedGroups.map((g) => [
+                        g.group,
+                        String(g.count),
+                        g.median.amount,
+                        g.median.currency,
+                      ]),
+                    )
+                  }
+                >
+                  Export CSV
+                </Button>
+              ) : null}
             </div>
             <UnadjustedPanel
               groups={payGap.data.unadjustedGroups}
@@ -51,12 +75,40 @@ export function EquityReviewScreen() {
           </section>
 
           <section className="space-y-3">
-            <div>
-              <h2 className="type-section">Level-adjusted</h2>
-              <p className="type-caption text-muted-foreground">
-                Median pay by group within each job level × country cohort — a like-for-like
-                comparison, controlling for level by construction.
-              </p>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="type-section">Level-adjusted</h2>
+                <p className="type-caption text-muted-foreground">
+                  Median pay by group within each job level × country cohort — a like-for-like
+                  comparison, controlling for level by construction.
+                </p>
+              </div>
+              {payGap.data.levelAdjustedCohorts.length > 0 ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    downloadCsv(
+                      `pay-gap-level-adjusted-${payGap.data.asAtDate}.csv`,
+                      ["Level", "Country", "Group", "Median amount", "Currency", "Count", "Spread amount", "Spread %"],
+                      payGap.data.levelAdjustedCohorts.flatMap((c) =>
+                        c.groups.map((g) => [
+                          c.jobLevelLabel,
+                          c.countryLabel,
+                          g.group,
+                          g.median.amount,
+                          g.median.currency,
+                          String(g.count),
+                          c.gapAmount.amount,
+                          c.gapPercent,
+                        ]),
+                      ),
+                    )
+                  }
+                >
+                  Export CSV
+                </Button>
+              ) : null}
             </div>
             <CohortTable cohorts={payGap.data.levelAdjustedCohorts} />
           </section>
