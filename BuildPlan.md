@@ -2109,7 +2109,7 @@ table.
 > Read-only, no migration except `P11.5`, cannot corrupt the ledger. **If only one phase gets built,
 > build this one** — it answers the two questions the HR Manager asks on their first real day.
 
-- [ ] **P11.1** `GET /api/analytics/data-health` (F11) — named checks, each `{key, label, severity,
+- [x] **P11.1** `GET /api/analytics/data-health` (F11) — named checks, each `{key, label, severity,
   count}`: no matching band, no compensation record at all, pay currency inconsistent with the
   location's country, hire date after first ledger period, terminated employee with an open period,
   FTE outliers, duplicate employee numbers, terminated managers, circular management chains. The
@@ -2117,6 +2117,33 @@ table.
   currently surfaces them.
   *Verify:* each count reconciles against its own direct SQL; FR-8.4's ~40 no-band employees land in
   the right check with the right count.
+  > **Done (2026-08-23):** `DataHealthQuery` + `DataHealthCheck`/`DataHealthSeverity`/
+  > `DataHealthResponse`, `GET /api/analytics/data-health`, same roles as every other analytics
+  > read (it counts rows needing attention, never a person's pay). Nine checks, ordered
+  > most-severe-first; passing checks are returned too, because a console that hides them can
+  > answer "what is broken" but not "is this data clean yet".
+  >
+  > **Three planned checks were dropped: the schema already makes them impossible.** Duplicate
+  > employee numbers (`employee_number` is `UNIQUE`), FTE outside 0.01–1.00 (a `CHECK`), and a
+  > termination date without `status = 'TERMINATED'` (`emp_termination_date_requires_status`).
+  > Reporting a check that is structurally always zero is noise pretending to be a safety net —
+  > same reasoning that dropped `missingCoverage` at P10.1. Replaced with checks that *can* fail:
+  > full-time employees below 1.0 FTE, and pay starting before the hire date.
+  >
+  > **The recursive circular-management check needs both guards.** `UNION` (not `UNION ALL`) plus a
+  > depth cap — with either missing, the query looking for the infinite loop *is* one.
+  >
+  > **A real pre-existing gap found and fixed, not routed around:** `RolePermissionMatrixTest`
+  > walks a hardcoded `CONTROLLERS` list, so **`SavedViewController` (added at P10.3) escaped the
+  > RBAC guard entirely** — P10.3's own full-suite run passed green while its three endpoints were
+  > unguarded. Added it to the list along with the expected role set, and added `dataHealth` to the
+  > analytics block. The test then failed exactly as designed on the new endpoint, which is how the
+  > gap surfaced. **Any future controller must be added to that list** — the guard is opt-in, which
+  > is itself worth knowing.
+  >
+  > **Observed:** `DataHealthTest` 8/8. Full suite → `Tests run: 157, Failures: 0, Errors: 0`,
+  > `BUILD SUCCESS` (149 before). One intermediate run was `157 / Failures: 1` — the matrix test
+  > catching `dataHealth`, reported here because it was a real failure and not a flake.
 - [ ] **P11.2** `/admin/data-health` with drill-through and export (F11). Drill-through reuses the
   employee list's existing filters wherever one exists.
   *Verify:* `npm run verify`; each check drills to a real row list; 375px card degradation per UI
@@ -2262,7 +2289,7 @@ table.
 | | |
 |---|---|
 | **Last completed** | Post-P9 backlog sweep — closed 2 of P9.6's 3 acceptance-criteria gaps (employee-list `bandStatus` filter + `sortBy=compaRatio`, both server-side over the full 10k dataset, verified live). `133/133` backend, frontend `verify` clean (2026-08-22). |
-| **Current step** | **`P11.1`** — `data-health` endpoint. `P10.2`/`.4`/`.5`/`.7` need a live stack and stay `[ ]`. |
+| **Current step** | **`P11.3`** — `band-health` endpoint. `P11.2` is the data-health UI and needs a live stack. |
 | **Blockers** | `P0.3` still needs Neon project + `DATABASE_URL` (not required by anything done so far — this repo runs entirely against local Postgres). |
 
 _Update both rows on every completed step._

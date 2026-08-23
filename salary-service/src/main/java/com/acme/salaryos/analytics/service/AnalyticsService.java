@@ -14,6 +14,9 @@ import com.acme.salaryos.analytics.dto.PayrollCostResponse;
 import com.acme.salaryos.analytics.query.CompaRatioDistributionQuery;
 import com.acme.salaryos.analytics.query.HeadcountQuery;
 import com.acme.salaryos.analytics.dto.AnalyticsBasis;
+import com.acme.salaryos.analytics.dto.DataHealthCheck;
+import com.acme.salaryos.analytics.dto.DataHealthResponse;
+import com.acme.salaryos.analytics.query.DataHealthQuery;
 import com.acme.salaryos.analytics.query.FxBasisQuery;
 import com.acme.salaryos.analytics.query.IncreaseCycleQuery;
 import com.acme.salaryos.analytics.query.OutOfBandQuery;
@@ -46,13 +49,15 @@ public class AnalyticsService {
 	private final PayGapQuery payGapQuery;
 	private final IncreaseCycleQuery increaseCycleQuery;
 	private final FxBasisQuery fxBasisQuery;
+	private final DataHealthQuery dataHealthQuery;
 	private final Clock clock;
 	private final String baseCurrency;
 
 	public AnalyticsService(
 			PayrollCostQuery payrollCostQuery, HeadcountQuery headcountQuery, OutOfBandQuery outOfBandQuery,
 			CompaRatioDistributionQuery compaRatioDistributionQuery, PayGapQuery payGapQuery,
-			IncreaseCycleQuery increaseCycleQuery, FxBasisQuery fxBasisQuery, Clock clock,
+			IncreaseCycleQuery increaseCycleQuery, FxBasisQuery fxBasisQuery,
+			DataHealthQuery dataHealthQuery, Clock clock,
 			@Value("${app.base-currency}") String baseCurrency) {
 		this.payrollCostQuery = payrollCostQuery;
 		this.headcountQuery = headcountQuery;
@@ -61,11 +66,24 @@ public class AnalyticsService {
 		this.payGapQuery = payGapQuery;
 		this.increaseCycleQuery = increaseCycleQuery;
 		this.fxBasisQuery = fxBasisQuery;
+		this.dataHealthQuery = dataHealthQuery;
 		this.clock = clock;
 		this.baseCurrency = baseCurrency;
 	}
 
 	/** FR-6.1 on base pay — the basis every caller meant before P10.6 added the choice. */
+	/**
+	 * P11.1. Every check, including the passing ones — a console that hides what passed cannot be
+	 * used to answer "is this data clean yet", only "what is broken right now".
+	 */
+	public DataHealthResponse dataHealth() {
+		List<DataHealthCheck> checks = dataHealthQuery.checks();
+		int failing = (int) checks.stream().filter(check -> check.count() > 0).count();
+
+		return new DataHealthResponse(
+				LocalDate.now(clock), dataHealthQuery.totalEmployees(), failing, checks);
+	}
+
 	public PayrollCostResponse payrollCost() {
 		return payrollCost(AnalyticsBasis.BASE);
 	}

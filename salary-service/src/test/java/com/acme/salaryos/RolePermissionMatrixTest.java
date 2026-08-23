@@ -33,7 +33,8 @@ class RolePermissionMatrixTest {
 			com.acme.salaryos.auth.web.UserAdminController.class,
 			com.acme.salaryos.audit.AuditController.class,
 			com.acme.salaryos.compensation.web.ProjectionAdminController.class,
-			com.acme.salaryos.fx.FxRateController.class);
+			com.acme.salaryos.fx.FxRateController.class,
+			com.acme.salaryos.savedview.web.SavedViewController.class);
 
 	private static final Set<String> MAPPING_ANNOTATIONS = Set.of(
 			"GetMapping", "PostMapping", "PatchMapping", "PutMapping", "DeleteMapping", "RequestMapping");
@@ -109,7 +110,8 @@ class RolePermissionMatrixTest {
 		map.put("ChangeController#bulkUpload", HR_ADMIN_ONLY);
 
 		for (String method : List.of(
-				"payrollCost", "outOfBand", "compaRatioDistribution", "payGap", "increaseCycle", "headcount")) {
+				"payrollCost", "outOfBand", "compaRatioDistribution", "payGap", "increaseCycle", "headcount",
+				"dataHealth")) {
 			map.put("AnalyticsController#" + method, ADMIN_MANAGER_ANALYST);
 		}
 
@@ -120,6 +122,15 @@ class RolePermissionMatrixTest {
 
 		for (String method : List.of("list", "create", "update", "issueResetToken")) {
 			map.put("UserAdminController#" + method, HR_ADMIN_ONLY);
+		}
+
+		// P10.3. Every role, and deliberately so: a saved view stores a route and a query string,
+		// never data. Replaying one issues the same request the user could have typed, answered by
+		// the endpoint that already enforces their own role's limits — an Auditor opening an HR
+		// Admin's view gets the Auditor's answer. CLAUDE.md §7 has no row for it because a personal
+		// bookmark over data you can already reach is not a capability in that table's sense.
+		for (String method : List.of("list", "save", "delete")) {
+			map.put("SavedViewController#" + method, VIEW_PAY);
 		}
 
 		map.put("AuditController#search", ADMIN_AND_AUDITOR);

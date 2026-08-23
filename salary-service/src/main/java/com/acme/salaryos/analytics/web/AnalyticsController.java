@@ -1,6 +1,7 @@
 package com.acme.salaryos.analytics.web;
 
 import com.acme.salaryos.analytics.dto.AnalyticsBasis;
+import com.acme.salaryos.analytics.dto.DataHealthResponse;
 import com.acme.salaryos.analytics.dto.CompaRatioDistributionResponse;
 import com.acme.salaryos.analytics.dto.HeadcountResponse;
 import com.acme.salaryos.analytics.dto.IncreaseCycleResponse;
@@ -31,6 +32,16 @@ public class AnalyticsController {
 
 	public AnalyticsController(AnalyticsService analyticsService) {
 		this.analyticsService = analyticsService;
+	}
+
+	/**
+	 * P11.1. Same roles as every other analytics read — it reports counts of rows that need
+	 * attention, never a person's pay.
+	 */
+	@GetMapping("/data-health")
+	@PreAuthorize("hasAnyRole('HR_ADMIN','HR_MANAGER','COMP_ANALYST')")
+	public DataHealthResponse dataHealth() {
+		return analyticsService.dataHealth();
 	}
 
 	@GetMapping("/payroll-cost")

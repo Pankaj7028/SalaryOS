@@ -14,8 +14,8 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | **`P0`–`P9` all `[x]`. `P10`–`P14` appended 2026-08-23** (35 steps, post-v1 feature + market analysis) — see `docs/feature-roadmap.md` for why each exists. |
-| **Last completed** | **`P10.6`** — `?basis=BASE\|TOTAL_TARGET_CASH` on payroll-cost. FR-3.4's components were stored and read by no analytic since P5.1; now each is normalised at the rate its own record pinned. **Payroll-cost only** — a band is a base-pay range, so total cash over a base-pay midpoint would make compa-ratio meaningless. `149/149`. |
-| **Next step** | **`P11.1`** — `GET /api/analytics/data-health`. Backend-first continues; `P10.2`, `P10.4`, `P10.5`, `P10.7` still `[ ]` pending a live stack. |
+| **Last completed** | **`P11.1`** — `GET /api/analytics/data-health`, nine checks. Also fixed a real guard gap: `RolePermissionMatrixTest` walks a **hardcoded controller list**, so `SavedViewController` (P10.3) was unguarded and the suite still passed green. `157/157`. |
+| **Next step** | **`P11.3`** — `GET /api/analytics/band-health`. `P10.2`/`.4`/`.5`/`.7` and `P11.2` are UI/live-stack steps, still `[ ]`. |
 | **Live verification is unavailable this session** | `P10.1`'s `curl` half went unrun — no running service, and Docker/`application-local.yml` were not reachable. Several `P10`–`P14` Verify clauses need a live stack (`P10.2`, `P10.4`, `P10.5`, `P11.2`…). **Steps landed under this constraint carry an explicit "not verified" line in their done-note** — re-run those checks when a stack is next up rather than assuming they passed. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far — everything runs against local Postgres). |
 
@@ -161,6 +161,11 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
 ---
 
 ## Gotchas found the hard way
+
+- **`RolePermissionMatrixTest`'s `CONTROLLERS` list is hardcoded — a new controller is NOT guarded
+  until you add it there.** `SavedViewController` shipped at P10.3 with three unguarded endpoints and
+  a green suite; caught only at P11.1 when a *different* new endpoint tripped the same test. Add
+  every new controller to that list in the same step that creates it.
 
 - **More than one `claude` CLI process can be pointed at this same repo at once** — check `ps aux
   | grep claude` before trusting a confusing `./mvnw clean verify` result. Two sessions running it
