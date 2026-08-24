@@ -119,11 +119,9 @@ below), `NEXT_PUBLIC_API_BASE_URL=http://localhost:8080` in `.env.local`.
 - **One `.gitignore`, at the root.** Add new ignores there, not in a package subdirectory.
 - **`getCurrentUser()` in `src/lib/auth/current-user.ts` is a placeholder**, the seam where
   `GET /api/auth/me` lands at P2.5. Change `role` there to view the app as another role.
-- **P4.3's Employees list omitted column sort, a "band status" filter, "page N" jump, saved views,
-  and bulk-select. The first two were closed post-P9 (`bandStatus` + `sortBy=compaRatio`, see the
-  gotcha above); "page N", saved views, and bulk-select are still absent — `KeysetPage` carries no
-  total count for the first, and nothing backs the other two anywhere in the API.** `GET
-  /employees/{id}/peers` (FR-6.6) was built at P4.4, not P7.5 (P7.5's real remaining scope was
+- **Every P4.3 omission is now closed** (band status + compa sort post-P9; saved views `P10.4`;
+  total count, page jump and bulk-select `P10.5`) — the code is the record, nothing to carry here.
+  `GET /employees/{id}/peers` (FR-6.6) was built at P4.4, not P7.5 (P7.5's real remaining scope was
   just `increase-cycle`, FR-6.5); `TooltipProvider` lives once in `query-provider.tsx`.
 - **FTE annualisation (P5.1, user-confirmed):** grossed to FTE = 1.0 (÷ FTE) for `ANNUAL`/`MONTHLY`;
   `HOURLY` is the exception — `amount × 2080` (documented nowhere else) already IS that figure, so
