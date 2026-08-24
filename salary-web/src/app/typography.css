@@ -24,6 +24,38 @@
     font-weight: 500;
     letter-spacing: -0.02em;
   }
+  /* A headline figure that must fit its card whatever the figure is.
+   *
+   * `.figure-xl` is a fixed 30px, which is right for a headcount ("9580") and
+   * wrong for a payroll total ("1,146,648,149") — thirteen mono glyphs at 30px
+   * is ~234px, and a stat card in the Overview's six-column grid is ~210px wide.
+   * The number then overflowed the card and rendered clipped, which on a money
+   * figure is the worst possible failure: "1,146,648,14" is not obviously broken,
+   * it just reads as a different, smaller, entirely plausible number.
+   *
+   * Sized against the card via container units so it shrinks only as far as it has
+   * to, never above `.figure-xl` (30px). The 1rem floor is set by the worst real
+   * case, not by taste: at 375px the stat grid is two columns, so a card is ~163px
+   * and its content box ~123px — thirteen mono glyphs need roughly 0.6em each, so
+   * anything above ~16px cannot fit there. A `.figure-lg` (20px) floor looks fine
+   * on desktop and overflows on a phone.
+   *
+   * `overflow-wrap: anywhere` is the last resort behind that: if a figure still
+   * cannot fit, it wraps onto a second line. That is ugly and it is deliberate —
+   * every digit stays on screen. The failure this replaced was a clipped
+   * "1,146,648,14", which does not look broken at all, it looks like a smaller
+   * number that happens to be wrong.
+   *
+   * Requires an ancestor with `container-type: inline-size`. */
+  .figure-fluid-xl {
+    font-family: var(--font-mono);
+    font-size: clamp(1rem, 8.5cqi, 1.875rem);
+    line-height: 1.2;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    overflow-wrap: anywhere;
+  }
+
   .figure-lg {
     font-family: var(--font-mono);
     font-size: 1.25rem; /* 20 */
@@ -91,6 +123,7 @@
  * anything mono, and to cells explicitly marked numeric.
  * ------------------------------------------------------------------------ */
 .figure-xl,
+.figure-fluid-xl,
 .figure-lg,
 .figure,
 .figure-sm,

@@ -16,13 +16,18 @@ export function Money({
   className,
 }: {
   value: MoneyValue;
-  size?: "figure-xl" | "figure-lg" | "figure" | "figure-sm";
+  /** `figure-fluid-xl` sizes against the nearest `@container` — for headline figures whose
+   * length varies wildly (a headcount and a payroll total share one card size). */
+  size?: "figure-xl" | "figure-fluid-xl" | "figure-lg" | "figure" | "figure-sm";
   whole?: boolean;
   showCurrency?: boolean;
   className?: string;
 }) {
   return (
-    <span className={cn("inline-flex items-baseline gap-1.5", className)}>
+    // `flex-wrap` + `min-w-0`: if the amount and its currency code together exceed the space,
+    // the code drops to the next line rather than shouldering the number out of its container.
+    // The figure itself is never the thing that gives way — it is the value being reported.
+    <span className={cn("inline-flex min-w-0 flex-wrap items-baseline gap-x-1.5", className)}>
       <span className={size}>{formatAmount(value, { whole })}</span>
       {showCurrency ? (
         <span className="figure-sm text-muted-foreground">{value.currency}</span>

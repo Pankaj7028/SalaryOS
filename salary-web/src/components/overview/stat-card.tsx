@@ -21,12 +21,20 @@ export function StatCard({
     <Wrapper
       href={href}
       className={cn(
-        "border-border bg-card flex flex-col gap-1 rounded-lg border p-5",
+        // `@container` so the headline figure can size against this card's own width — see
+        // `.figure-fluid-xl`. Deliberately NOT `overflow-hidden`: hiding an overflow is what
+        // turns a layout problem into a wrong number. The figure is made to fit instead, and
+        // wraps if it somehow cannot.
+        "border-border bg-card @container flex flex-col gap-1 rounded-lg border p-5",
         href && "hover:bg-muted/40 focus-visible:ring-ring/50 focus-visible:ring-3 focus-visible:outline-none",
       )}
     >
       <span className="type-label text-muted-foreground">{label}</span>
-      <span className="figure-xl">{value}</span>
+      {/* `min-w-0` lets this shrink inside the flex column instead of forcing the card wider,
+          and the fluid size keeps the whole figure legible rather than clipping it. A truncated
+          money value is the one thing this card must never render: "1,146,648,14" does not look
+          broken, it looks like a different number. */}
+      <span className="figure-fluid-xl min-w-0">{value}</span>
       {comparison ? <span className="figure-sm text-muted-foreground">{comparison}</span> : null}
     </Wrapper>
   );

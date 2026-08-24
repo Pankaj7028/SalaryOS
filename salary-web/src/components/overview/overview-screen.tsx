@@ -69,7 +69,7 @@ export function OverviewScreen() {
               <>
                 <StatCard
                   label="Total annualised base"
-                  value={<Money value={payrollCost.data!.overall.total} size="figure-xl" whole />}
+                  value={<Money value={payrollCost.data!.overall.total} size="figure-fluid-xl" whole />}
                   comparison={`${payrollCost.data!.overall.headcount} employees`}
                 />
                 <StatCard
@@ -102,7 +102,7 @@ export function OverviewScreen() {
                   label="Increase spend YTD"
                   value={
                     increaseCycle.data ? (
-                      <Money value={increaseCycle.data.totalIncrease} size="figure-xl" whole />
+                      <Money value={increaseCycle.data.totalIncrease} size="figure-fluid-xl" whole />
                     ) : (
                       <span>—</span>
                     )
