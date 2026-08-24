@@ -8,6 +8,15 @@ authoritative record of what everyone is paid.
 | `salary-service/` | Spring Boot 4.0.8 (Java 17+) | Domain, persistence, auth, analytics, seeding |
 | `salary-web/` | Next.js 16 (App Router) + shadcn/ui | The only user interface |
 
+## Architecture
+
+Deployment topology, the authentication flow, backend module layering, and the compensation
+change lifecycle, on one page:
+
+![Salary OS architecture — deployment topology, request flow, backend module layering, and the compensation change lifecycle](docs/architecture/salary-os-architecture.png)
+
+Print-quality version: [`docs/architecture/salary-os-architecture.pdf`](docs/architecture/salary-os-architecture.pdf).
+
 ## Documentation
 
 | Read this | For |
@@ -19,6 +28,7 @@ authoritative record of what everyone is paid.
 | `docs/salary-management-backend.md` | **Binding** for `salary-service/` |
 | `docs/salary-management-ui.md` | **Binding** for `salary-web/` (design system) |
 | `docs/STATE.md` | Current build state, decisions, and gotchas |
+| `docs/architecture/salary-os-architecture.png` / `.pdf` | Architecture & request-flow diagram (above) |
 
 Read one section instead of a whole doc: `scripts/doc.sh ui 7.1` · `scripts/doc.sh be 2.3` ·
 `scripts/doc.sh toc ui`.
