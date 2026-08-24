@@ -63,6 +63,35 @@ problem the proxy already solves.
 
 ---
 
+## Provisioned already (2026-08-24)
+
+| | |
+|---|---|
+| Vercel project | `pankajmandal7028-8091s-projects/salary-os`, linked from `salary-web/` |
+| Neon database | `salary-os-db`, Free plan, region `pdx1` — pooled endpoint in `us-west-2`, database `neondb` (the exact host and credentials live in the Vercel project's environment variables, not in this repository) |
+| Roles | `neondb_owner` (Flyway) and `salaryos_app` (the running service), created with a generated password |
+| Schema | All 16 migrations applied to `salary_schema` by running the production Docker image against Neon |
+
+Two things worth knowing about what was provisioned:
+
+- **Neon Auth was explicitly turned off** (`-m auth=false`). It defaults to *on* and would add a
+  second identity provider with profiles synced into Postgres — directly against CLAUDE.md §4's
+  "database-backed, no external identity provider".
+- **Neon runs PostgreSQL 18.6**, while the stack pins 17 and the Testcontainers suite runs 17. Every
+  feature the schema depends on (`btree_gist`, `daterange` exclusion constraints, `citext`) is stable
+  across that gap, and all 16 migrations applied cleanly — but it is a version skew between what is
+  tested and what runs, and it should be recorded rather than discovered later.
+
+### The `salaryos_app` password
+
+`V8` creates the role with a **hardcoded placeholder password** if it does not already exist — its own
+comment says the real credential is "issued out-of-band and never lives in this file". On a public
+repository that placeholder is a known password on a role with full CRUD over salary data, so the role
+was created on Neon **before** migrations ran, with a generated 32-character password. `V8`'s block
+saw it existed and no-opped, exactly as designed.
+
+---
+
 ## Step 1 — Neon (the database)
 
 The preferred path provisions Neon through the Vercel Marketplace, which creates the database and
