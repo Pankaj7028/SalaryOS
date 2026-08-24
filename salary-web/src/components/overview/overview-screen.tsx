@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Money } from "@/components/comp/money";
 import { EmptyState, ErrorState, GoodNewsState } from "@/components/feedback/states";
 import { ThemedBarChart, type BarDatum } from "@/components/charts/themed-bar-chart";
@@ -33,6 +34,20 @@ function yearToDateRange(): { fromDate: string; toDate: string } {
  * where filters live.
  */
 export function OverviewScreen() {
+  // §6.1 / ui doc §6.1: the topbar's currency toggle is a product control, not a preference. When
+  // "As paid" is active, an aggregate that would sum across currencies must say so rather than
+  // rendering a number — a total silently computed by summing incompatible currencies is a wrong
+  // number that looks like a right one, which is worse than the control doing nothing.
+  //
+  // Found in QA: the toggle wrote `?ccy=local` into the URL and nothing on this screen (or any
+  // other) ever read it back — a control that visibly changes state and changes nothing on screen
+  // is the exact "worse than no control" failure this file's own reasoning elsewhere warns about.
+  // This wires the mandated fallback for every USD-normalised aggregate on the Overview; the same
+  // gap exists on the other analytics screens and is not fixed here — see the note left in
+  // docs/STATE.md.
+  const searchParams = useSearchParams();
+  const asPaid = searchParams.get("ccy") === "local";
+
   const payrollCost = usePayrollCost();
   const headcount = useHeadcount();
   const compaRatio = useCompaRatioDistribution({});
@@ -45,7 +60,9 @@ export function OverviewScreen() {
   const anyError = payrollCost.isError || headcount.isError || compaRatio.isError || outOfBand.isError;
 
   const basisLine = payrollCost.data
-    ? `As at ${payrollCost.data.asAtDate} · normalised to ${payrollCost.data.baseCurrency} · ${payrollCost.data.population.headcount} employees`
+    ? asPaid
+      ? `As at ${payrollCost.data.asAtDate} · as paid · ${payrollCost.data.population.headcount} employees · aggregates show as mixed currencies`
+      : `As at ${payrollCost.data.asAtDate} · normalised to ${payrollCost.data.baseCurrency} · ${payrollCost.data.population.headcount} employees`
     : undefined;
 
   return (
@@ -69,8 +86,14 @@ export function OverviewScreen() {
               <>
                 <StatCard
                   label="Total annualised base"
-                  value={<Money value={payrollCost.data!.overall.total} size="figure-fluid-xl" whole />}
-                  comparison={`${payrollCost.data!.overall.headcount} employees`}
+                  value={
+                    asPaid ? (
+                      <span className="type-body-sm text-muted-foreground">Mixed currencies</span>
+                    ) : (
+                      <Money value={payrollCost.data!.overall.total} size="figure-fluid-xl" whole />
+                    )
+                  }
+                  comparison={asPaid ? "switch to USD to total" : `${payrollCost.data!.overall.headcount} employees`}
                 />
                 <StatCard
                   label="Headcount"
@@ -89,7 +112,11 @@ export function OverviewScreen() {
                 <StatCard
                   label="Outside band"
                   value={<span>{outOfBand.data!.belowMinCount + outOfBand.data!.aboveMaxCount}</span>}
-                  comparison={`cost to min ${formatAmount(outOfBand.data!.totalCostToMinimum, { whole: true })} ${outOfBand.data!.totalCostToMinimum.currency}`}
+                  comparison={
+                    asPaid
+                      ? "cost to min: switch to USD"
+                      : `cost to min ${formatAmount(outOfBand.data!.totalCostToMinimum, { whole: true })} ${outOfBand.data!.totalCostToMinimum.currency}`
+                  }
                   href="/insights/pay"
                 />
                 <StatCard
@@ -101,13 +128,21 @@ export function OverviewScreen() {
                 <StatCard
                   label="Increase spend YTD"
                   value={
-                    increaseCycle.data ? (
+                    asPaid ? (
+                      <span className="type-body-sm text-muted-foreground">Mixed currencies</span>
+                    ) : increaseCycle.data ? (
                       <Money value={increaseCycle.data.totalIncrease} size="figure-fluid-xl" whole />
                     ) : (
                       <span>—</span>
                     )
                   }
-                  comparison={increaseCycle.data ? `avg ${formatPercent(Number(increaseCycle.data.avgIncreasePercent) * 100)}` : undefined}
+                  comparison={
+                    asPaid
+                      ? "switch to USD to total"
+                      : increaseCycle.data
+                        ? `avg ${formatPercent(Number(increaseCycle.data.avgIncreasePercent) * 100)}`
+                        : undefined
+                  }
                 />
               </>
             )}
@@ -116,25 +151,31 @@ export function OverviewScreen() {
           <div className="grid gap-4 lg:grid-cols-2">
             <ChartCard
               title="Base pay by country"
-              basisLine={basisLine ?? ""}
+              basisLine={asPaid ? "As paid — this breakdown sums across currencies" : (basisLine ?? "")}
               chart={
-                payrollCost.data ? (
+                asPaid ? (
+                  <MixedCurrenciesNotice />
+                ) : payrollCost.data ? (
                   <ThemedBarChart data={toCountryBars(payrollCost.data.byCountry)} />
                 ) : (
                   <Skeleton className="h-[240px] w-full" />
                 )
               }
-              table={<PayrollByCountryTable rows={payrollCost.data?.byCountry ?? []} />}
-              csv={{
-                filename: "base-pay-by-country.csv",
-                headers: ["Country", "Headcount", "Total annual base", "Average annual base"],
-                rows: (payrollCost.data?.byCountry ?? []).map((r) => [
-                  r.label,
-                  String(r.headcount),
-                  `${r.total.amount} ${r.total.currency}`,
-                  `${r.average.amount} ${r.average.currency}`,
-                ]),
-              }}
+              table={asPaid ? <MixedCurrenciesNotice /> : <PayrollByCountryTable rows={payrollCost.data?.byCountry ?? []} />}
+              csv={
+                asPaid
+                  ? undefined
+                  : {
+                      filename: "base-pay-by-country.csv",
+                      headers: ["Country", "Headcount", "Total annual base", "Average annual base"],
+                      rows: (payrollCost.data?.byCountry ?? []).map((r) => [
+                        r.label,
+                        String(r.headcount),
+                        `${r.total.amount} ${r.total.currency}`,
+                        `${r.average.amount} ${r.average.currency}`,
+                      ]),
+                    }
+              }
             />
 
             <ChartCard
@@ -178,6 +219,22 @@ export function OverviewScreen() {
           </section>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * The mandated fallback for a would-be aggregate in "As paid" mode (ui doc §6.1): a total across
+ * mixed currencies is not a smaller or approximate number, it is not a number at all, so this is
+ * a message and never a `0` or a blank chart that could be mistaken for one.
+ */
+function MixedCurrenciesNotice() {
+  return (
+    <div className="flex h-[240px] flex-col items-center justify-center gap-1 text-center">
+      <p className="type-body-sm">Mixed currencies</p>
+      <p className="type-caption text-muted-foreground">
+        This total spans more than one currency. Switch the topbar to USD to see it.
+      </p>
     </div>
   );
 }

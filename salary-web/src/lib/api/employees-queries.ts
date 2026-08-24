@@ -29,6 +29,22 @@ export function useEmployees(params: EmployeeListParams) {
   });
 }
 
+/**
+ * ⌘K's live search (`CommandPalette`). Enabled only once there is a real query, so opening the
+ * palette never fires a request for "every employee" — the same intent `q` already serves on the
+ * list screen, just capped small and unfiltered otherwise (no department/status/band narrowing;
+ * the palette is a jump-to, not a saved question).
+ */
+export function useEmployeeSearch(query: string) {
+  const trimmed = query.trim();
+  return useQuery({
+    queryKey: employeeKeys.list({ q: trimmed, limit: 8 }),
+    queryFn: () => fetchEmployees({ q: trimmed, limit: 8 }),
+    enabled: trimmed.length > 0,
+    placeholderData: keepPreviousData,
+  });
+}
+
 export function useEmployee(id: string, opts?: { enabled?: boolean }) {
   return useQuery({
     queryKey: employeeKeys.detail(id),

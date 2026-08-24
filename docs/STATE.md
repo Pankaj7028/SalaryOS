@@ -107,6 +107,41 @@ header and 200 with it, and `/employees` server-renders the signed-in user's nam
 Seeding is a deliberate one-off (`-Dspring-boot.run.profiles=seed`), never part of a deploy;
 `APP_SEED_FORCE` is `false` in `render.yaml` so a redeploy can never regenerate over real data.
 
+**Update (later same day): the Neon database was seeded** — `-Dspring-boot.run.profiles=prod,seed`
+run once as the owner role against it (never `salaryos_app`, which is deliberately denied
+`UPDATE`/`DELETE` on `audit_events` and would have hit that wall mid-seed). All figures reconcile
+with the local seed under the same `APP_SEED_RANDOM_SEED`. The bootstrap admin was renamed to
+`bootstrap-admin@acme.test` rather than deleted, since the seeder inserts its own `admin@acme.test`
+and a plain `INSERT` would have collided. Six real logins now exist; see the deploy secrets file
+(kept outside git) for all of them — not `Password123!`, the seeder generates readable random
+passwords (`harbor-orbit-4853`-style) and logs them once.
+
+---
+
+## Two live-site bugs found and fixed post-seed (2026-08-24)
+
+**1. ⌘K search was a stub that never got wired.** `CommandPalette` rendered three hardcoded names
+under a heading that said so ("sample data — live search lands at P4"), and every result's
+`onSelect` just closed the dialog — clicking a person did nothing because there was nothing behind
+it. P4 shipped the employees module and its search API long ago; the palette was never revisited.
+Fixed: `useEmployeeSearch` (a small `useEmployees`-shaped hook in `employees-queries.ts`, debounced
+300ms, enabled only once there is a query) backs a real "People" group that navigates to
+`/employees/{id}` on select. `CommandDialog` gained a `shouldFilter` passthrough (`command.tsx` is
+ours to edit per CLAUDE.md §3) so cmdk's own fuzzy filter doesn't re-score an already
+server-filtered result set; the static "Workspace" nav group filters itself by substring instead.
+
+**2. The topbar currency toggle wrote `?ccy=local` into the URL and nothing ever read it, on any
+screen.** ui doc §6.1 is explicit that "As paid" must turn a would-be cross-currency aggregate into
+a "mixed currencies — switch to USD to total" message, never a wrong number — the backend has no
+as-paid basis for `payroll-cost`/`increase-cycle` at all, so there was never a real figure to show
+here in the first place. **Fixed on `/` (Overview) only** — the three money stat cards and the
+"Base pay by country" chart/table/CSV now render that fallback when `ccy=local`. **`/insights/pay`
+has the identical gap and is not fixed** — same `usePayrollCost()`/`useIncreaseCycle()` shape, same
+fallback needed, just not done in this pass. Nothing else in the app reads `ccy` either, but nothing
+else renders a cross-currency aggregate — `/employees` and `/employees/{id}` already show each
+person's own pay in their own currency, which *is* "as paid," so the toggle not touching them is
+correct rather than missing.
+
 ---
 
 ## Docker is unblocked — colima, not Docker Desktop

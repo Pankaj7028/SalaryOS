@@ -39,12 +39,18 @@ function CommandDialog({
   children,
   className,
   showCloseButton = false,
+  shouldFilter,
   ...props
 }: React.ComponentProps<typeof Dialog> & {
   title?: string
   description?: string
   className?: string
   showCloseButton?: boolean
+  /** Forwarded to the inner `Command`. Salary OS: a caller mixing a live server-searched group
+   * with a static nav group (CommandPalette) needs to turn cmdk's own fuzzy filter off and do
+   * both kinds of filtering itself — the original generated component had no way to reach this
+   * prop at all, since `Command` was hardcoded below with no passthrough. */
+  shouldFilter?: boolean
 }) {
   return (
     <Dialog {...props}>
@@ -63,7 +69,7 @@ function CommandDialog({
             DialogContent, leaving cmdk's Input/List with no Command context —
             they threw "Cannot read properties of undefined (reading
             'subscribe')" and the dialog never appeared. */}
-        <Command className="rounded-none bg-transparent">{children}</Command>
+        <Command className="rounded-none bg-transparent" shouldFilter={shouldFilter}>{children}</Command>
       </DialogContent>
     </Dialog>
   )
