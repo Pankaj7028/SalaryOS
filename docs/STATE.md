@@ -14,18 +14,55 @@ forever. When a fact becomes true in the code, delete it from here — the code 
 | | |
 |---|---|
 | **Phase** | **`P0`–`P9` all `[x]`. `P10`–`P14` appended 2026-08-23** (35 steps, post-v1 feature + market analysis) — see `docs/feature-roadmap.md` for why each exists. |
-| **Last completed** | **`P10.2`** — FX coverage matrix on `/admin/fx-rates`, currency × month over the currencies actually in use. `FxCoverageTest` 3/3, frontend `typecheck`/`lint`/`build` clean, live-verified. |
-| **Next step** | **`P10.4`**, then `P10.5`, `P10.7`, `P11.2`, `P11.4`, `P11.6` — all UI/live-stack, all now unblocked. `P12.1` (`compensation_cycles` migration) after them: the riskiest step in the plan, since it reshapes `compensation_changes`, where every lifecycle test lives. |
-| **A live stack IS up (2026-08-23)** | Backend `:8080` (`APP_JWT_SIGNING_KEY="local-dev-signing-key-at-least-32-bytes-long-ok" ./mvnw -o spring-boot:run -Dspring-boot.run.profiles=local`, log `/tmp/salaryos-backend.log`), web `:3100` (`npx next start`, log `/tmp/salaryos-web.log`). **A long-running backend goes stale silently** — the one up at the start of this session predated `P10.2`'s code and served the old response shape without any error; restart it after every backend change you intend to `curl`. `npm run build` likewise does not reach a running `next start`; restart that too. Sign in with `admin@acme.test` / `Password123!`; grab `sos_csrf` out of the cookie jar for any `POST` (`-H "X-CSRF-Token: $CSRF"`). |
-| **Browser automation can't reach this machine** | The paired Chrome error-pages on both `localhost:3100` and `127.0.0.1:3100` — it is on another device. `curl` works fine. **So every `[x]` UI step from this session has an unrun visual pass** (ui doc §12 items 6 and 10: both themes, 375px); `P10.2`'s done-note says so explicitly. Do that sweep when a local browser is available rather than assuming those screens were looked at. |
+| **Last completed** | **`P11.6`** — market tick on `<BandBar>` + mid-vs-market in band health. **`P10` and `P11` are both fully closed.** Backend `Tests run: 206, Failures: 0`, `BUILD SUCCESS`; frontend `npm run verify` clean, `Tests 45 passed (45)`. |
+| **Next step** | **`P12.1`** (`V16` — `compensation_cycles` + `cycle_budget_pools`, nullable `cycle_id`). **The riskiest step in the plan**: it reshapes `compensation_changes`, where every lifecycle test lives. Do it first within `P12`, and run the whole suite after it, not just its own Verify. `P12`–`P14` are 22 unstarted steps and four migrations (`V16`–`V19`) — a separate body of work, not an afternoon. |
+| **A live stack IS up (2026-08-24)** | Backend `:8080` (`APP_JWT_SIGNING_KEY="local-dev-signing-key-at-least-32-bytes-long-ok" ./mvnw -o spring-boot:run -Dspring-boot.run.profiles=local`, log `/tmp/salaryos-backend.log`), web `:3100` (`npm run build && npx next start -p 3100`, log `/tmp/salaryos-web.log`). **A long-running backend goes stale silently** — restart it after every backend change you intend to `curl`, and `pkill -f "spring-boot:run"` first or the new one cannot bind :8080. `npm run build` likewise does not reach a running `next start`; restart that too. Sign in with `admin@acme.test` / `Password123!` (also `manager@`, `analyst@`, `auditor@`, same password — all four roles exist, which is what makes a live RBAC sweep possible). **The access token TTL is 20 minutes**, so a script that logs in once and then runs a slow suite will start reporting 401 for everything — log in *inside* the script (see `qa_invariants.py`'s `login()`), or you will spend an hour debugging an RBAC failure that is a clock. |
+| **Browser automation still cannot reach this machine** | Re-checked 2026-08-24, not assumed: the extension reports "not connected". `curl` works fine. **Every `[x]` UI step from `P10.2` onward has an unrun visual pass** (ui doc §12 items 6 and 10: both themes, 375px). The one to do first is **`P11.6`'s market tick on `<BandBar>`** — that is the signature component and its own step named the visual check explicitly. |
 | **Blockers** | No Neon project yet (`P0.3`, not required by anything built so far — everything runs against local Postgres). |
 
 `BuildPlan.md` is the authority on step status; this row is the fast path. If they disagree,
 `BuildPlan.md` wins.
 
 Done: `P0.1` `P0.2` `P0.4` · `P1` · `P2` (all) · `P3.1`–`P3.7` · `P4` (all) · `P5` (all) · `P6` (all) ·
-`P7` (all) · `P8` (all) · `P9` (all).
+`P7` (all) · `P8` (all) · `P9` (all) · **`P10` (all) · `P11` (all)**.
+Not started: `P12` (12 steps) · `P13` (7 steps) · `P14` (3 steps).
 Blocked: `P0.3`.
+
+
+---
+
+## What the 2026-08-24 QA sweep found (all fixed — read this before adding an endpoint)
+
+Three defects, one root cause, none of which changed a status code you would notice:
+
+1. **Every error a signed-in user provoked came back as `401 "Authentication required"`.** The
+   container re-dispatches to `/error` to render an error body; that is a fresh `ERROR` dispatch,
+   `SessionCookieAuthFilter` is a `OncePerRequestFilter` and does not run again, so
+   `anyRequest().authenticated()` saw an empty `SecurityContext` and the entry point overwrote the
+   real status. A user who mistyped a URL or typed a bad percentage was told they were signed out.
+   Fixed in `SecurityConfig` with `.dispatcherTypeMatchers(ERROR, FORWARD).permitAll()` — **the root
+   fix; do not remove it**, or every error in the service silently becomes a 401 again.
+2. **An upload with no file was a 500**, on every importer. Now a 400 saying "Attach a CSV file".
+3. **`docs/salary-management-backend.md` §8 ("every failure is an RFC 7807 ProblemDetail with a
+   detail written for a human") held only for our own exceptions.** Spring's MVC exceptions fell
+   through to the container's default body, which has no `detail`, so `ApiError.problem` on the
+   client was undefined and the UI showed generic fallback copy on every malformed request.
+   `EveryFailureIsAProblemDetailTest` now pins the contract. **When you add an endpoint, a new
+   exception type it can throw needs a handler in `ApiExceptionHandler` or it silently breaks §8.**
+
+**Known, unfixed, and deliberately left for a decision:** `AREA_ACCESS` in
+`salary-web/src/lib/auth/roles.ts` is asserted by `roles.test.ts` but **nothing consumes it as a
+route guard** — `proxy.ts` is a cookie-presence gate by design, and `canAccess` is called in exactly
+one component. So an AUDITOR who types `/admin/users` gets a 200 shell that then errors, rather than
+"not available for your role". **Not a security hole** — the backend `@PreAuthorize` is the boundary
+and was verified to 403 correctly for all four roles — but a UX gap, and a cross-cutting UI change
+that should be a deliberate decision rather than a drive-by.
+
+**Seed-data observation, not a defect:** 6,696 of 9,580 non-terminated employees are `ABOVE_MAX`
+(70%), against 215 `BELOW_MIN` and 33 `NO_BAND`. It reconciles exactly with SQL, so the analytics are
+right — but the seeded bands sit far below the seeded salaries, which makes `/insights` and the
+out-of-band screen useless as a demo. Worth regenerating bands or salaries before showing this to
+anyone.
 
 ---
 

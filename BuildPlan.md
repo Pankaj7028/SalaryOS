@@ -2653,6 +2653,22 @@ table.
 
 _Update both rows on every completed step._
 
+**Phase close (2026-08-24), P10 and P11 both complete.** `P10.4` saved-view picker · `P10.5` result
+count, page jump, bulk propose · `P10.7` basis toggle + P10.6's deferred rename · `P11.2` data-health
+console with drill-through · `P11.4` band-health matrix · `P11.6` market tick on `<BandBar>`.
+Backend `./mvnw clean verify` → `Tests run: 206, Failures: 0, Errors: 0`, `BUILD SUCCESS` (149 at the
+start of the session). Frontend `npm run verify` clean → `Tests 45 passed (45)` (31 at the start).
+
+**A QA sweep over the live stack closed the phase** and found four real defects, three of them
+cross-cutting and none visible from a status code alone: every error a signed-in user provoked came
+back as `401 "Authentication required"` (ERROR-dispatch, fixed at the root in `SecurityConfig`); an
+upload with no file was a 500 on every importer; Spring's own MVC exceptions returned no
+`ProblemDetail`, silently breaking backend doc §8 for every malformed request; and
+`terminatedWithOpenPay`'s drill-through filter matched 420 people for a check that counted 0. The
+sweep also confirmed RBAC matches §7 for all four roles across 17 capabilities, 15/15 cross-cutting
+invariants hold, payroll cost and headcount reconcile with direct SQL, and all 15 frontend routes
+render signed in and redirect signed out.
+
 **Phase close (2026-08-21), P2 → P2.5:** backend `./mvnw clean verify` → `Tests run: 58, Failures: 0,
 Errors: 0`, `BUILD SUCCESS`. Frontend `npm run lint` / `npm run typecheck` / `npm run build` — all
 clean, no errors or warnings.
