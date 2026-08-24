@@ -1,0 +1,72 @@
+# Render blueprint for salary-service.
+#
+# Render hosts the Spring Boot service only. The Next.js frontend goes to Vercel, and the database
+# to Neon — see docs/DEPLOYMENT.md for how the three fit together.
+#
+# Deploy by pointing Render at this repository ("New > Blueprint"). Every value marked
+# `sync: false` is a secret you paste once in the Render dashboard; none of them belong in git.
+
+services:
+  - type: web
+    name: salary-service
+    runtime: docker
+    dockerfilePath: ./salary-service/Dockerfile
+    # The build context is the service directory, not the repo root — the Dockerfile copies `pom.xml`
+    # and `src` by relative path, and a repo-root context would also ship salary-web and node_modules
+    # into the build.
+    dockerContext: ./salary-service
+    plan: free
+    region: oregon
+    branch: main
+
+    # SecurityConfig permits /actuator/health unauthenticated, precisely so a platform health check
+    # does not need a credential. Render restarts the instance if this stops answering.
+    healthCheckPath: /actuator/health
+
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+
+      # ── Neon ────────────────────────────────────────────────────────────────────────────────────
+      # DATABASE_URL must be a JDBC URL against the POOLED endpoint (the host containing "-pooler"):
+      #   jdbc:postgresql://ep-xxxx-pooler.REGION.aws.neon.tech/salaryos?sslmode=require
+      # Neon's dashboard gives a postgresql:// URI with credentials inline. That is not a JDBC URL —
+      # convert it, and put the credentials in their own variables below.
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_USER
+        sync: false
+      - key: DATABASE_PASSWORD
+        sync: false
+
+      # Flyway runs as Neon's project-default OWNER role, not the application role. Postgres owners
+      # retain full DML on tables they create, so V8's REVOKE is a no-op when the app role owns the
+      # tables — the audit log silently stops being append-only. These are different credentials
+      # from DATABASE_USER/PASSWORD on purpose.
+      - key: FLYWAY_USER
+        sync: false
+      - key: FLYWAY_PASSWORD
+        sync: false
+
+      # ── Application ─────────────────────────────────────────────────────────────────────────────
+      # HS256 signing key, >= 32 bytes. Generate with:  openssl rand -base64 48
+      # The prod profile has no fallback for this, so a missing value fails startup loudly rather
+      # than signing production tokens with the dev key that is committed in application.yml.
+      - key: APP_JWT_SIGNING_KEY
+        generateValue: true
+
+      - key: DATABASE_SCHEMA
+        value: salary_schema
+      - key: APP_BASE_CURRENCY
+        value: USD
+
+      # Empty on purpose. The browser only ever talks to the Vercel origin; Next.js rewrites proxy
+      # /api/* through to this service, so there is no cross-origin request to allow. Set it only if
+      # something else calls this API directly, and never to a wildcard.
+      - key: APP_CORS_ORIGINS
+        value: ""
+
+      # Seeding is a deliberate, one-off action — never something a deploy does on its own. Leaving
+      # this false means a redeploy can never regenerate 10,000 employees over real data.
+      - key: APP_SEED_FORCE
+        value: "false"

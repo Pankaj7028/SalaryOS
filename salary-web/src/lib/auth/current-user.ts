@@ -7,7 +7,17 @@ export type CurrentUser = {
   role: Role;
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+/**
+ * This module runs on the server, so it needs an ABSOLUTE backend origin — the relative `/api/...`
+ * the browser uses in production has no host to resolve against here, and routing a server-side
+ * call back through our own rewrite would be a pointless round trip through Vercel's edge.
+ *
+ * `API_ORIGIN` is the server-only variable set in production (same value the rewrite in
+ * `next.config.ts` proxies to). Locally it is unset and this falls back to the public base URL,
+ * so development is unchanged.
+ */
+const API_BASE_URL =
+  process.env.API_ORIGIN ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
 /**
  * Server-side identity read: forwards the incoming `sos_session` cookie to

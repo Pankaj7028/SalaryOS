@@ -1,0 +1,79 @@
+# Production profile — activated by SPRING_PROFILES_ACTIVE=prod.
+#
+# Everything secret comes from the environment; nothing sensitive is in this file, which is why it
+# is safe to commit. See docs/DEPLOYMENT.md for the full variable list and where each value is
+# obtained.
+
+spring:
+  # ───────────────────────────────────────────────────────────────────────────────────────────────
+  # Undoes the P0.2 stub in application.yml, which excludes DataSource, JPA and Flyway
+  # autoconfiguration so the app can start with no database. That block's own comment says it must
+  # be deleted at P0.3; overriding it here does the same job without breaking the local no-database
+  # path that P0.2 still relies on.
+  #
+  # An empty list, NOT an absent key: Spring merges profile YAML into the base, so omitting this
+  # leaves the exclusions in force — the app boots cleanly, creates no repositories, and never runs
+  # Flyway. Which is exactly the silent failure application.yml warns about.
+  # ───────────────────────────────────────────────────────────────────────────────────────────────
+  autoconfigure:
+    exclude: []
+
+  datasource:
+    # Neon's POOLED endpoint (the host containing "-pooler"), as a JDBC URL:
+    #   jdbc:postgresql://ep-xxxx-pooler.REGION.aws.neon.tech/salaryos?sslmode=require
+    # Neon's dashboard shows a postgresql:// URI with the credentials inline — that is NOT a JDBC
+    # URL. Convert it: prefix "jdbc:", and move user/password into their own variables.
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USER}
+    password: ${DATABASE_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DATABASE_POOL_SIZE:10}
+      # Milliseconds, not Spring's Duration shorthand — HikariConfig's setters take a raw long, and
+      # "10s" here fails at startup with a NumberFormatException.
+      connection-timeout: 10000
+      # Neon recycles connections; a max-lifetime longer than this produces intermittent failures
+      # that only ever reproduce in production.
+      max-lifetime: 300000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate      # Flyway owns the schema. Never let Hibernate write DDL.
+    properties:
+      hibernate:
+        default_schema: ${DATABASE_SCHEMA:salary_schema}
+
+  flyway:
+    enabled: true
+    schemas: ${DATABASE_SCHEMA:salary_schema}
+    default-schema: ${DATABASE_SCHEMA:salary_schema}
+    locations: classpath:db/migration
+    # Migrations must NOT run as the application role. Postgres owners always retain full DML on
+    # tables they create, so V8's REVOKE against the app role is a no-op if that role is also the
+    # owner — the audit log stops being append-only and nothing tells you. Run Flyway as Neon's
+    # project-default owner role and let it GRANT the app role only what V8 grants it.
+    user: ${FLYWAY_USER}
+    password: ${FLYWAY_PASSWORD}
+
+app:
+  jwt:
+    # No default here on purpose. application.yml's dev fallback would otherwise silently sign
+    # production tokens with a key that is published in this repository.
+    signing-key: ${APP_JWT_SIGNING_KEY}
+  cors:
+    # Same-origin in the default deployment: the browser only ever talks to the Vercel domain, and
+    # Next.js rewrites proxy /api/* through to this service (see salary-web/next.config.ts). Set
+    # this only if something calls the API cross-origin, and never to a wildcard — allowCredentials
+    # forbids it.
+    allowed-origins: ${APP_CORS_ORIGINS:}
+
+server:
+  # Render terminates TLS at its edge and forwards over HTTP. Without this the app sees http://
+  # and builds redirect URLs on the wrong scheme.
+  forward-headers-strategy: framework
+  shutdown: graceful
+
+logging:
+  level:
+    root: INFO
+    com.acme.salaryos: INFO
