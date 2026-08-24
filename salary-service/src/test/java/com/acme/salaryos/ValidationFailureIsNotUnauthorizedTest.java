@@ -18,13 +18,15 @@ import jakarta.servlet.http.Cookie;
 import java.util.List;
 import java.util.UUID;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * A regression test for a bug found in QA during P10.5, which affected <b>every</b> validated
- * endpoint in the service rather than any one feature.
+ * Regression tests for a class of bug found in QA, which affected <b>every</b> endpoint in the
+ * service rather than any one feature: errors provoked by a signed-in user came back as
+ * {@code 401 "Authentication required"}.
  *
  * <p>A bean-validation failure used to reach the client as {@code 401 "Authentication required"}.
  * Spring's default resolver sets a bare 400, the container forwards to {@code /error}, that ERROR
@@ -82,6 +84,24 @@ class ValidationFailureIsNotUnauthorizedTest {
 				.andExpect(jsonPath("$.detail").value(
 						org.hamcrest.Matchers.containsString("not a bulk operation")))
 				.andExpect(jsonPath("$.errors.percentIncrease").exists());
+	}
+
+	/**
+	 * Found in the QA sweep: the same ERROR-dispatch cause, on a different exception. A signed-in
+	 * user who mistypes a URL was told "Authentication required" rather than "not found" — and a
+	 * frontend that treats 401 as "session expired" would sign them out over a typo.
+	 */
+	@Test
+	void aNotFoundPathFromASignedInUserIs404AndNot401() throws Exception {
+		mockMvc.perform(get("/api/definitely-not-a-real-path").with(authAs(seedUser())))
+				.andExpect(status().isNotFound());
+	}
+
+	/** A 404 from a real handler (an id that does not exist) must stay a 404 too. */
+	@Test
+	void aMissingResourceFromARealHandlerIsStill404() throws Exception {
+		mockMvc.perform(get("/api/employees/" + UUID.randomUUID()).with(authAs(seedUser())))
+				.andExpect(status().isNotFound());
 	}
 
 	/** The fix must not weaken the real thing: an unauthenticated request is still 401. */

@@ -27,7 +27,14 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.security.authentication.BadCredentialsException;
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.validation.FieldError;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -77,6 +84,75 @@ public class ApiExceptionHandler {
 	@ExceptionHandler(ConstraintViolationException.class)
 	public ProblemDetail handleConstraintViolation(ConstraintViolationException exception) {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+	}
+
+	/*
+	 * The handlers below close a gap found in the QA sweep: §8 of the backend doc says *every*
+	 * failure is an RFC 7807 ProblemDetail with a detail written for a human, because the UI shows
+	 * that string directly. Spring's own MVC exceptions were falling through to the container's
+	 * default error body -- `{"timestamp":...,"error":"Bad Request","path":...}` -- which has no
+	 * `detail` at all, so `ApiError.problem` on the client was undefined and the user got generic
+	 * fallback copy on every malformed request. The status codes were right; the contract was not.
+	 */
+
+	/** A path variable or query parameter that could not be parsed: a bad UUID, `limit=abc`, an
+	 * unknown enum value, an unparseable date. Names the parameter, since the client cannot
+	 * otherwise tell which of several it got wrong. */
+	@ExceptionHandler(MethodArgumentTypeMismatchException.class)
+	public ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException exception) {
+		Class<?> required = exception.getRequiredType();
+		String expected = required == null ? "a different type"
+				: required.isEnum()
+						? "one of " + String.join(", ", java.util.Arrays.stream(required.getEnumConstants())
+								.map(String::valueOf).toList())
+						: switch (required.getSimpleName()) {
+							case "UUID" -> "an id";
+							case "LocalDate" -> "a date as YYYY-MM-DD";
+							case "Integer", "int", "Long", "long" -> "a whole number";
+							case "BigDecimal" -> "a number";
+							default -> "a " + required.getSimpleName();
+						};
+		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+				"'" + exception.getName() + "' should be " + expected + ".");
+	}
+
+	/** A required query parameter that was not sent at all. */
+	@ExceptionHandler(MissingServletRequestParameterException.class)
+	public ProblemDetail handleMissingParameter(MissingServletRequestParameterException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+				"'" + exception.getParameterName() + "' is required.");
+	}
+
+	/** A body that is not parseable JSON at all — malformed, empty, or the wrong content type. */
+	@ExceptionHandler(HttpMessageNotReadableException.class)
+	public ProblemDetail handleUnreadableBody(HttpMessageNotReadableException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+				"The request body could not be read as JSON.");
+	}
+
+	/**
+	 * An upload with no file on it. This was a <b>500</b> before the QA sweep, on every importer in
+	 * the service — bands, employees, changes, and market data — because {@code MultipartException}
+	 * had no handler. Sending a form with an empty file input is a user mistake, not a server fault,
+	 * and 500 tells the user to contact someone rather than to attach a file.
+	 */
+	@ExceptionHandler({MultipartException.class, MissingServletRequestPartException.class})
+	public ProblemDetail handleMissingUpload(Exception exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+				"Attach a CSV file to upload.");
+	}
+
+	/** The method is wrong for this path — a POST where the resource only answers GET. */
+	@ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+	public ProblemDetail handleMethodNotSupported(HttpRequestMethodNotSupportedException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.METHOD_NOT_ALLOWED,
+				exception.getMethod() + " is not supported here.");
+	}
+
+	/** No handler at all — a mistyped URL. 404 with a body the client can read like any other. */
+	@ExceptionHandler(NoHandlerFoundException.class)
+	public ProblemDetail handleNoHandler(NoHandlerFoundException exception) {
+		return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, "Not found.");
 	}
 
 	@ExceptionHandler(BadCredentialsException.class)

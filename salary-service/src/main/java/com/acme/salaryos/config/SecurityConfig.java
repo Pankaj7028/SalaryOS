@@ -18,6 +18,7 @@ import org.springframework.security.crypto.password.DelegatingPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import jakarta.servlet.DispatcherType;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.web.cors.CorsConfiguration;
@@ -88,6 +89,17 @@ public class SecurityConfig {
 						new SessionCookieAuthFilter(jwtService, userSessionRepository),
 						UsernamePasswordAuthenticationFilter.class)
 				.authorizeHttpRequests(auth -> auth
+						// The container re-dispatches to /error to render any error response, and
+						// that is a fresh ERROR dispatch: SessionCookieAuthFilter is a
+						// OncePerRequestFilter and does not run again, so the SecurityContext is
+						// empty by the time authorization sees it. Without this line every error a
+						// signed-in user provokes -- a 404 on a mistyped path, a 400 from bean
+						// validation -- came back as 401 "Authentication required", telling them
+						// they were signed out and hiding the message that would have said what was
+						// actually wrong. Authorization has already run on the REQUEST dispatch that
+						// produced the error; re-running it on the render is not a second check, it
+						// is the same check against a context that has been thrown away.
+						.dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD).permitAll()
 						.requestMatchers("/api/auth/login", "/api/auth/refresh",
 								"/actuator/health", "/actuator/health/**").permitAll()
 						.anyRequest().authenticated())
