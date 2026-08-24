@@ -64,6 +64,39 @@ right — but the seeded bands sit far below the seeded salaries, which makes `/
 out-of-band screen useless as a demo. Worth regenerating bands or salaries before showing this to
 anyone.
 
+
+---
+
+## Deployment (2026-08-24) — two of three hosts are live
+
+**`P0.3` is unblocked: Neon exists.** Provisioned through the Vercel Marketplace as `salary-os-db`
+(Free plan), and all 15 migrations are applied — `salary_schema` is at `v15`.
+
+| Host | State |
+|---|---|
+| **Vercel** | `salary-os` project linked from `salary-web/`. **Live at https://salary-os.vercel.app.** |
+| **Neon** | Provisioned, migrated, one `HR_ADMIN` user (`admin@acme.test`) with a generated password. |
+| **Render** | **Not yet created — the one remaining step.** `render.yaml` is committed and ready. |
+
+`docs/DEPLOYMENT.md` is the runbook. Three things from it that are easy to get wrong:
+
+1. **`NEXT_PUBLIC_API_BASE_URL` must be EMPTY in production** (it is, in all three Vercel
+   environments). The cookies are `SameSite=Lax`, so a browser calling Render cross-site would
+   withhold the session on every request and every call would 401 with nothing in the console to
+   explain it. The `/api/*` rewrite in `next.config.ts` makes it same-origin instead. Setting that
+   variable to the Render URL is exactly what re-breaks it.
+2. **Flyway runs as the Neon owner role, the app as `salaryos_app`** — two different credentials, on
+   purpose. `V8` creates `salaryos_app` with a hardcoded placeholder password if it is absent, which
+   on a public repo would be a known password over salary data; the role was created with a generated
+   one first, so `V8` no-opped. Verified after migration: `salaryos_app` gets `permission denied` on
+   `UPDATE salary_schema.audit_events`.
+3. **Neon serves PostgreSQL 18.6; the suite tests against 17.** Everything the schema needs is stable
+   across that gap and all migrations applied cleanly, but it is a tested-vs-running skew.
+
+**The Neon database is empty apart from that one admin user** — no employees, no bands, no FX rates.
+Seeding is a deliberate one-off (`-Dspring-boot.run.profiles=seed`), never part of a deploy;
+`APP_SEED_FORCE` is `false` in `render.yaml` so a redeploy can never regenerate over real data.
+
 ---
 
 ## Docker is unblocked — colima, not Docker Desktop

@@ -70,7 +70,15 @@ problem the proxy already solves.
 | Vercel project | `pankajmandal7028-8091s-projects/salary-os`, linked from `salary-web/` |
 | Neon database | `salary-os-db`, Free plan, region `pdx1` — pooled endpoint in `us-west-2`, database `neondb` (the exact host and credentials live in the Vercel project's environment variables, not in this repository) |
 | Roles | `neondb_owner` (Flyway) and `salaryos_app` (the running service), created with a generated password |
-| Schema | All 16 migrations applied to `salary_schema` by running the production Docker image against Neon |
+| Schema | All 15 migrations applied to `salary_schema` (now at `v15`) by running the production Docker image against Neon |
+| Admin user | `admin@acme.test`, `HR_ADMIN`, with a generated 20-character password — **not** the seed's `Password123!` |
+| Vercel deployment | **https://salary-os.vercel.app** — live. Renders sign-in, redirects unauthenticated traffic, and serves all five security headers. `/api/*` 404s until `API_ORIGIN` is set, which is correct. |
+
+**Verified against the real Neon database, not assumed:** login succeeds with the generated password,
+`/api/auth/me` returns the admin, the employee list answers (0 rows — the database is empty), and
+`salaryos_app` gets `permission denied for table audit_events` on an `UPDATE`. That last one is the
+proof that the owner/app role split worked: had Flyway run as the app role, the `REVOKE` would have
+been a no-op and the tamper would have silently succeeded.
 
 Two things worth knowing about what was provisioned:
 
@@ -129,7 +137,7 @@ Credentials go in `DATABASE_USER` / `DATABASE_PASSWORD`, not inline in the URL.
 
 ---
 
-## Step 2 — Render (the backend)
+## Step 2 — Render (the backend) — **this is the remaining step**
 
 1. Push this branch to GitHub (Render deploys from a repository).
 2. Render dashboard → **New → Blueprint** → point at this repo. It reads `render.yaml`.
