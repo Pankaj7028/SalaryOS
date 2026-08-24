@@ -76,7 +76,12 @@ anyone.
 |---|---|
 | **Vercel** | `salary-os` project linked from `salary-web/`. **Live at https://salary-os.vercel.app.** |
 | **Neon** | Provisioned, migrated, one `HR_ADMIN` user (`admin@acme.test`) with a generated password. |
-| **Render** | **Not yet created — the one remaining step.** `render.yaml` is committed and ready. |
+| **Render** | **Live** at `https://salary-service-p209.onrender.com` (the name took a suffix — `salary-service` was taken). Free plan, Oregon. |
+
+**All three hosts are live and the full chain is verified end to end** (2026-08-24): the proxy
+returns the service's own `ProblemDetail`, login sets all three cookies on the Vercel origin, an
+authenticated read works, `/api/analytics/data-health` answers with 9 checks, CSRF is 403 without the
+header and 200 with it, and `/employees` server-renders the signed-in user's name.
 
 `docs/DEPLOYMENT.md` is the runbook. Three things from it that are easy to get wrong:
 

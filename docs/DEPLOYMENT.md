@@ -72,7 +72,8 @@ problem the proxy already solves.
 | Roles | `neondb_owner` (Flyway) and `salaryos_app` (the running service), created with a generated password |
 | Schema | All 15 migrations applied to `salary_schema` (now at `v15`) by running the production Docker image against Neon |
 | Admin user | `admin@acme.test`, `HR_ADMIN`, with a generated 20-character password — **not** the seed's `Password123!` |
-| Vercel deployment | **https://salary-os.vercel.app** — live. Renders sign-in, redirects unauthenticated traffic, and serves all five security headers. `/api/*` 404s until `API_ORIGIN` is set, which is correct. |
+| Vercel deployment | **https://salary-os.vercel.app** — live, with `API_ORIGIN` and an empty `NEXT_PUBLIC_API_BASE_URL` set across production, preview and development. |
+| Render service | **https://salary-service-p209.onrender.com** — live. Note the suffix: `salary-service` was taken, so the URL is not what `render.yaml` implies. Whatever Render assigns is what `API_ORIGIN` must be. |
 
 **Verified against the real Neon database, not assumed:** login succeeds with the generated password,
 `/api/auth/me` returns the admin, the employee list answers (0 rows — the database is empty), and
@@ -137,7 +138,7 @@ Credentials go in `DATABASE_USER` / `DATABASE_PASSWORD`, not inline in the URL.
 
 ---
 
-## Step 2 — Render (the backend) — **this is the remaining step**
+## Step 2 — Render (the backend)
 
 1. Push this branch to GitHub (Render deploys from a repository).
 2. Render dashboard → **New → Blueprint** → point at this repo. It reads `render.yaml`.
