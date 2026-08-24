@@ -49,8 +49,16 @@ header — no CORS error, no exception, just a signed-in user who appears signed
 The fix is the rewrite in `salary-web/next.config.ts`: the browser only ever talks to the Vercel
 origin, and `/api/*` is proxied to Render server-side. Requests become same-origin, the cookies are
 sent, `Set-Cookie` comes back through the proxy and binds to the Vercel host, and `sos_refresh`'s
-`Path=/api/auth` still lines up. CORS disappears entirely, which is why `APP_CORS_ORIGINS` is empty
-in the production profile.
+`Path=/api/auth` still lines up.
+
+**The proxy does not remove the need for CORS, and assuming it did cost a broken first sign-in.** A
+Next.js rewrite forwards the incoming `Origin` header, so the service still sees
+`Origin: https://<app>.vercel.app` and still runs its CORS check against it. With
+`APP_CORS_ORIGINS` empty that check fails and every mutating request — including login — comes back
+`403 Invalid CORS request`. Set `APP_CORS_ORIGINS` to the exact Vercel origin.
+
+The two mechanisms are independent and both are required: the proxy is what makes the browser *send*
+the cookie, and `APP_CORS_ORIGINS` is what makes the service *accept* the request it arrives on.
 
 This was tested end-to-end locally, not assumed. The alternative — reissuing the cookies as
 `SameSite=None` — also works, but widens their exposure to every cross-site context to solve a
@@ -146,6 +154,7 @@ Credentials go in `DATABASE_USER` / `DATABASE_PASSWORD`, not inline in the URL.
 
 | Variable | Value |
 |---|---|
+| `APP_CORS_ORIGINS` | The exact Vercel origin, e.g. `https://salary-os.vercel.app` — no trailing slash |
 | `DATABASE_URL` | The JDBC URL from step 1 (pooled endpoint, `sslmode=require`) |
 | `DATABASE_USER` / `DATABASE_PASSWORD` | The **app** role |
 | `FLYWAY_USER` / `FLYWAY_PASSWORD` | The **owner** role — different credentials, on purpose |
@@ -254,6 +263,7 @@ cookie problem: check that `NEXT_PUBLIC_API_BASE_URL` is **empty**, not the Rend
 
 | Symptom | Cause |
 |---|---|
+| **Login works from `curl` but the browser gets `403 Invalid CORS request`** | `APP_CORS_ORIGINS` is empty or wrong on Render. The `/api/*` proxy makes requests same-origin *to the browser*, which is what fixes the cookies — but the rewrite still forwards the browser's `Origin` header, so Spring's CORS filter sees it and rejects it against an empty allow-list. `curl` sends no `Origin`, which is why this passes every terminal check and fails on the first real sign-in. Set it to the exact Vercel origin, no trailing slash. |
 | Sign-in "succeeds" but every request 401s | `NEXT_PUBLIC_API_BASE_URL` is set to the Render URL. It must be empty so requests are relative and proxied. |
 | `502` from `/api/*` on Vercel | Render instance asleep (free plan) or `API_ORIGIN` wrong / has a trailing slash. |
 | App boots but every list is empty and no error | The `autoconfigure.exclude` override did not apply — confirm `SPRING_PROFILES_ACTIVE=prod`. Look for `HikariPool-1 - Start completed` in the logs; if it is absent, persistence is off. |

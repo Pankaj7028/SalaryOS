@@ -60,11 +60,22 @@ services:
       - key: APP_BASE_CURRENCY
         value: USD
 
-      # Empty on purpose. The browser only ever talks to the Vercel origin; Next.js rewrites proxy
-      # /api/* through to this service, so there is no cross-origin request to allow. Set it only if
-      # something else calls this API directly, and never to a wildcard.
+      # The Vercel origin — REQUIRED, and the reasoning for leaving it empty was wrong.
+      #
+      # The /api/* proxy makes requests same-origin *from the browser's point of view*, which is what
+      # makes the SameSite=Lax cookies work. It does NOT hide the browser from this service: a Next.js
+      # rewrite forwards the incoming `Origin` header, so Spring's CORS filter still sees
+      # `Origin: https://<app>.vercel.app` on every mutating request and rejects it against an empty
+      # allow-list with `403 Invalid CORS request`.
+      #
+      # It passed every curl check because curl does not send `Origin` and a browser always does —
+      # so login worked from the terminal and failed in the browser, with a 403 that looks like a
+      # permissions problem rather than a configuration one.
+      #
+      # Set this to the exact Vercel origin, scheme included, no trailing slash. Never a wildcard:
+      # allowCredentials forbids it.
       - key: APP_CORS_ORIGINS
-        value: ""
+        sync: false
 
       # Seeding is a deliberate, one-off action — never something a deploy does on its own. Leaving
       # this false means a redeploy can never regenerate 10,000 employees over real data.

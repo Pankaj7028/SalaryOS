@@ -85,6 +85,11 @@ header and 200 with it, and `/employees` server-renders the signed-in user's nam
 
 `docs/DEPLOYMENT.md` is the runbook. Three things from it that are easy to get wrong:
 
+0. **`APP_CORS_ORIGINS` must be set on Render to the exact Vercel origin.** The `/api/*` proxy fixes
+   the *cookies*; it does not remove CORS, because a Next.js rewrite forwards the browser's `Origin`
+   header and the service still checks it. Leaving it empty returns `403 Invalid CORS request` on
+   every mutating request including login — and it passes every `curl` check, because `curl` sends no
+   `Origin` and a browser always does.
 1. **`NEXT_PUBLIC_API_BASE_URL` must be EMPTY in production** (it is, in all three Vercel
    environments). The cookies are `SameSite=Lax`, so a browser calling Render cross-site would
    withhold the session on every request and every call would 401 with nothing in the console to
